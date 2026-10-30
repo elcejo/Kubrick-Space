@@ -1,0 +1,21 @@
+{
+  "engine": "ComfyUI",
+  "version": "0.43.0",
+  "repository": "https://github.com/Comfy-Org/ComfyUI",
+  "tag": "v0.43.0",
+  "commit": "426f5eea52a7ece1dd599fff4cb6cd1f352ddd24",
+  "archive": "https://codeload.github.com/Comfy-Org/ComfyUI/zip/426f5eea52a7ece1dd599fff4cb6cd1f352ddd24",
+  "archiveSha256": "01f381c8330f5c5bec9bd3d4c651e8b53b45ffb70020b9e1e947fc63f93a1548",
+  "python": "3.12",
+  "pytorchIndex": "https://download.pytorch.org/whl/cu130",
+  "license": "GPL-3.0",
+  "excludedPackages": ["comfyui-frontend-package", "comfyui-workflow-templates", "comfyui-embedded-docs"],
+  "customPackage": {
+    "name": "kubrick_space",
+    "version": "0.1.0",
+    "node": "KubrickToolGenerate",
+    "executesTools": false
+  },
+  "modelsConfigured": true,
+  "routingConfigured": false
+}

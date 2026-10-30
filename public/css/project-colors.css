@@ -1,0 +1,101 @@
+/* Single palette for project creation and workspace nodes. */
+:root {
+  --project-color-default: #6366f1;
+  --project-color-character: #a78bfa;
+  --project-color-book: #f97316;
+  --project-color-stage: #2dd4bf;
+  --project-color-video: #3b82f6;
+  --project-color-song: #ec4899;
+  --project-color-story-book: #18002e;
+  --project-color-screenplay: #34021b;
+  --project-color-protagonist: #a78bfa;
+  --project-color-antagonist: #6366f1;
+  --project-color-secondary: #38bdf8;
+  --project-color-custom: #64748b;
+  --project-color-interior: #2dd4bf;
+  --project-color-exterior: #4ade80;
+  --project-color-single: #ec4899;
+  --project-color-album: #f43f5e;
+  --project-color-soundtrack: #10b981;
+  --project-color-short-film: #3b82f6;
+  --project-color-feature: #6366f1;
+  --project-color-documentary: #06b6d4;
+  --project-color-music-video: #d946ef;
+  --project-color-animation: #eab308;
+}
+
+.workspace {
+  --project-color: var(--project-color-default);
+  --project-node-opacity: 18%;
+}
+
+.workspace[data-project-type='character'] {
+  --project-color: var(--project-color-character);
+  --project-node-opacity: 8%;
+}
+.workspace[data-project-type='book'] {
+  --project-color: var(--project-color-book);
+}
+.workspace[data-project-type='stage'] {
+  --project-color: var(--project-color-stage);
+}
+.workspace[data-project-type='video'] {
+  --project-color: var(--project-color-video);
+}
+.workspace[data-project-type='song'] {
+  --project-color: var(--project-color-song);
+}
+
+.workspace[data-project-type='book'][data-project-category='story-book'] {
+  --project-color: var(--project-color-story-book);
+}
+.workspace[data-project-type='book'][data-project-category='screenplay'] {
+  --project-color: var(--project-color-screenplay);
+}
+.workspace[data-project-type='character'][data-project-category='protagonist'] {
+  --project-color: var(--project-color-protagonist);
+}
+.workspace[data-project-type='character'][data-project-category='antagonist'] {
+  --project-color: var(--project-color-antagonist);
+}
+.workspace[data-project-type='character'][data-project-category='secondary'] {
+  --project-color: var(--project-color-secondary);
+}
+.workspace[data-project-type='character'][data-project-category='custom'] {
+  --project-color: var(--project-color-custom);
+}
+.workspace[data-project-type='stage'][data-project-category='interior'] {
+  --project-color: var(--project-color-interior);
+}
+.workspace[data-project-type='stage'][data-project-category='exterior'] {
+  --project-color: var(--project-color-exterior);
+}
+.workspace[data-project-type='song'][data-project-category='single'] {
+  --project-color: var(--project-color-single);
+}
+.workspace[data-project-type='song'][data-project-category='album'] {
+  --project-color: var(--project-color-album);
+}
+.workspace[data-project-type='song'][data-project-category='soundtrack'] {
+  --project-color: var(--project-color-soundtrack);
+}
+.workspace[data-project-type='video'][data-project-category='short-film'] {
+  --project-color: var(--project-color-short-film);
+}
+.workspace[data-project-type='video'][data-project-category='feature'] {
+  --project-color: var(--project-color-feature);
+}
+.workspace[data-project-type='video'][data-project-category='documentary'] {
+  --project-color: var(--project-color-documentary);
+}
+.workspace[data-project-type='video'][data-project-category='music-video'] {
+  --project-color: var(--project-color-music-video);
+}
+.workspace[data-project-type='video'][data-project-category='animation'] {
+  --project-color: var(--project-color-animation);
+}
+
+/* Only control nodes are tinted. Portraits, covers, ingredient photos and menus keep their material. */
+.workspace :is(.editor-node, .character-node, .video-board-node, .editor-index-container, .generation-card) {
+  --liquid-glass-tint: color-mix(in srgb, var(--project-color) var(--project-node-opacity), transparent);
+}

@@ -1,0 +1,25 @@
+/* ============================================
+   LIGHT THEME — Glassmorphism overrides
+   ============================================ */
+
+[data-theme='light'] .workspace-toolbar {
+  background: transparent;
+}
+
+[data-theme='light'] .chat-panel {
+  background: rgba(248, 250, 252, 0.7);
+}
+
+/* ============================================
+   EDITOR SURFACE UTILITIES
+   ============================================ */
+
+.editor-surface {
+  position: relative !important;
+  outline: none;
+  min-height: 360px;
+}
+
+.editor-surface--wysiwyg {
+  cursor: text;
+}

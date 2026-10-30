@@ -1,0 +1,156 @@
+<section class="studio-home" id="home-view-container" aria-label="Inicio de Kubrick Space">
+  <aside class="studio-nav">
+    <div class="studio-nav-content">
+      <a class="studio-brand" href="#/" aria-label="Kubrick Space, inicio"
+        ><span class="brand-logo" aria-hidden="true"
+          ><span class="brand-logo__initial">K</span>ubrick</span
+        ></a
+      >
+      <div class="studio-nav-label">ESPACIO CREATIVO</div>
+      <nav id="home-type-nav" aria-label="Tipos de proyecto"></nav>
+      <div class="studio-home-tools">
+        <button class="studio-button" data-action="settings">
+          <svg
+            class="kai-icon"
+            data-icon="settings"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              d="M10.4 4.47 10.51 2.62h2.98l.11 1.85 2.59 1.07 1.39-1.23 2.11 2.11-1.23 1.39 1.07 2.59 1.85.11v2.98l-1.85.11-1.07 2.59 1.23 1.39-2.11 2.11-1.39-1.23-2.59 1.07-.11 1.85h-2.98l-.11-1.85-2.59-1.07-1.39 1.23-2.11-2.11 1.23-1.39-1.07-2.59-1.85-.11v-2.98l1.85-.11 1.07-2.59-1.23-1.39 2.11-2.11 1.39 1.23 2.59-1.07Z"
+            />
+            <circle cx="12" cy="12" r="3.25" />
+          </svg>
+          Configuración</button
+        ><button class="studio-button" data-action="trash">
+          <svg
+            class="kai-icon"
+            data-icon="trash"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" /></svg
+          >Papelera
+        </button>
+      </div>
+      <div class="studio-nav-bottom">
+        <span class="studio-local-dot"></span> Espacio personal
+        <span class="studio-local-label">Guardado en tu computadora</span>
+      </div>
+    </div>
+  </aside>
+  <main class="studio-main">
+    <header class="studio-heading">
+      <div>
+        <p class="studio-eyebrow">TU ESTUDIO · TUS HISTORIAS</p>
+        <h1>Tu universo creativo<span>.</span></h1>
+        <p class="studio-description">Historias, personajes y mundos. Todo comienza aquí.</p>
+      </div>
+      <button class="studio-button studio-primary" id="btn-new-project">
+        <span aria-hidden="true"
+          ><svg
+            class="kai-icon"
+            data-icon="plus"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M12 5v14M5 12h14" /></svg
+        ></span>
+        Nuevo proyecto
+      </button>
+    </header>
+    <div id="home-load-error" role="alert" hidden></div>
+    <section id="home-resume" aria-label="Continuar trabajando"></section>
+    <section class="studio-library" aria-labelledby="home-library-title">
+      <div class="studio-library-heading">
+        <div>
+          <h2 id="home-library-title">Todos los proyectos <span id="project-count"></span></h2>
+          <p id="home-library-description">Cada pieza de tu próximo gran relato.</p>
+        </div>
+        <div class="studio-view-switch" role="group" aria-label="Vista de proyectos">
+          <button data-view="library" aria-pressed="true">Biblioteca</button
+          ><button data-view="map" aria-pressed="false">Mapa</button>
+        </div>
+      </div>
+      <div class="studio-tools">
+        <label class="studio-search"
+          ><svg
+            class="kai-icon"
+            data-icon="search"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="10.5" cy="10.5" r="6" />
+            <path d="m15 15 5 5" /></svg
+          ><input
+            id="home-search"
+            type="search"
+            placeholder="Buscar por nombre o categoría…"
+            aria-label="Buscar proyectos"
+            autocomplete="off"
+        /></label>
+        <label class="studio-sort"
+          >Ordenar por
+          <select id="home-sort">
+            <option value="recent">Última modificación</option>
+            <option value="name">Nombre: A–Z</option>
+            <option value="oldest">Más antiguos</option>
+          </select></label
+        >
+      </div>
+      <p id="home-result-count" class="studio-result-count" role="status" aria-live="polite"></p>
+      <div id="project-list-container" class="studio-grid"></div>
+      <div id="home-map" class="studio-map-layout" hidden>
+        <div class="studio-map-stage">
+          <div class="studio-map-caption">
+            CONEXIONES DE TU UNIVERSO<span>Selecciona un proyecto para explorar sus relaciones.</span>
+          </div>
+          <div id="bubble-map-canvas-container">
+            <svg id="bubble-map-svg" aria-hidden="true"></svg>
+            <div id="bubble-map-nodes"></div>
+          </div>
+          <div id="home-map-legend" class="studio-map-legend" aria-label="Leyenda del mapa"></div>
+        </div>
+        <aside
+          id="home-map-detail"
+          class="studio-map-detail"
+          aria-label="Detalle del proyecto seleccionado"
+        ></aside>
+      </div>
+      <div id="home-empty" class="studio-empty" hidden></div>
+    </section>
+    <footer class="studio-footer">Un espacio para imaginar. Un lugar para crear.</footer>
+  </main>
+</section>

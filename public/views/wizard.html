@@ -1,0 +1,73 @@
+<section class="wizard-overlay" id="wizard-overlay-container">
+  <div class="wizard-header" id="wizard-header-nav">
+    <button class="wizard-back-btn wizard-header__layer btn-ghost" id="wizard-back">
+      <svg
+        class="kai-icon"
+        data-icon="chevron-left"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.75"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="m15 5-7 7 7 7" />
+      </svg>
+      Atrás
+    </button>
+    <div class="wizard-steps wizard-header__layer" id="wizard-dots">
+      <span class="wizard-step-dot active"></span>
+      <span class="wizard-step-dot"></span>
+      <span class="wizard-step-dot"></span>
+    </div>
+    <button
+      class="wizard-close-btn wizard-header__layer btn-ghost"
+      id="wizard-close"
+      title="Cerrar y volver a Inicio"
+    >
+      <svg
+        class="kai-icon"
+        data-icon="close"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.75"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path d="m6 6 12 12M18 6 6 18" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="wizard-content">
+    <!-- Main text headers (step titles & description) -->
+    <div id="wizard-text-stage" class="wizard-text-stage">
+      <!-- Title & Description injected here -->
+    </div>
+
+    <!-- Persistent Bubble Canvas (positioned absolutely in background) -->
+    <div
+      id="wizard-canvas-container"
+      class="wizard-canvas absolute inset-0 w-full h-full z-10 overflow-hidden pointer-events-none"
+    >
+      <!-- SVG connections layer -->
+      <svg id="wizard-svg" class="absolute inset-0 w-full h-full pointer-events-none"></svg>
+      <!-- HTML bubbles layer -->
+      <div id="wizard-bubbles" class="absolute inset-0 w-full h-full pointer-events-none"></div>
+    </div>
+
+    <!-- Step 3 naming form overlay -->
+    <div id="wizard-form-stage" class="wizard-form-stage">
+      <!-- Naming form injected here -->
+    </div>
+  </div>
+</section>

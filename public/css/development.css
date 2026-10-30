@@ -1,0 +1,340 @@
+.development-document {
+  width: min(1080px, calc(100% - 32px));
+  margin: 28px auto;
+  padding: clamp(20px, 4vw, 48px);
+  overflow-wrap: anywhere;
+}
+
+.development-page a {
+  color: var(--text-primary);
+  text-underline-offset: 3px;
+}
+
+.development-page a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.development-document table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-block: 20px;
+}
+
+.development-document th,
+.development-document td {
+  padding: 12px;
+  border-bottom: 1px solid var(--glass-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.development-document th {
+  background: rgb(127 127 127 / 8%);
+}
+
+.development-document h1,
+.development-document h2,
+.development-document h3 {
+  line-height: 1.25;
+  margin-block: 1.5em 0.6em;
+}
+
+.development-document p,
+.development-document li {
+  line-height: 1.65;
+}
+
+.development-document pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  background: rgb(127 127 127 / 8%);
+}
+
+.development-index {
+  display: grid;
+  gap: 16px;
+  padding-left: 20px;
+}
+
+.development-index small {
+  display: block;
+  opacity: 0.7;
+}
+
+/* One technical document; the outline and reference disclosures handle its scale. */
+.spec-shell {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 64px);
+  width: min(1500px, calc(100% - 48px));
+  margin: 36px auto 80px;
+}
+
+.spec-sidebar {
+  position: sticky;
+  top: 90px;
+  align-self: start;
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  padding: 0 12px 16px 0;
+}
+
+.spec-sidebar > a {
+  display: block;
+  margin-top: 16px;
+  font-size: 12px;
+}
+
+.spec-navigation > summary {
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 600;
+  padding-block: 8px 16px;
+}
+
+.spec-sidebar .docs-nav a {
+  font-size: 12px;
+  padding: 7px 10px;
+  line-height: 1.4;
+}
+
+.spec-content {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.spec-content h1 {
+  font-size: clamp(28px, 4vw, 48px);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+  margin-bottom: 20px;
+  max-width: 24ch;
+}
+
+.spec-content h2 {
+  font-size: clamp(21px, 2.5vw, 28px);
+  line-height: 1.3;
+  margin: 56px 0 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.spec-content h3,
+.spec-content h4 {
+  line-height: 1.4;
+  margin: 32px 0 16px;
+}
+
+.spec-content :is(h2, h3, h4),
+.spec-match {
+  scroll-margin-top: 100px;
+}
+
+.spec-content p,
+.spec-content ul,
+.spec-content ol {
+  margin-block: 16px;
+  line-height: 1.8;
+}
+
+.spec-content :is(ul, ol) {
+  padding-left: 24px;
+}
+
+.spec-content li {
+  margin-bottom: 8px;
+}
+
+.spec-content :not(pre) > code {
+  background: var(--glass-bg-active);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.spec-content pre {
+  max-width: 100%;
+  max-height: 70dvh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 20px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  tab-size: 2;
+}
+
+.spec-reference {
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 28px;
+}
+
+.spec-reference summary {
+  padding: 16px;
+  cursor: pointer;
+  color: var(--text-accent);
+  font-size: 13px;
+}
+
+.spec-reference pre {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.spec-content table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-block: 24px;
+}
+
+.spec-content :is(th, td) {
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--glass-border);
+  overflow-wrap: anywhere;
+}
+
+.spec-content th {
+  background: var(--glass-bg-active);
+}
+
+.spec-search {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 20px;
+}
+
+.spec-search label,
+.spec-search output {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.spec-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font: inherit;
+  box-shadow: none;
+  outline: none;
+}
+
+.spec-search-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.spec-search button {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.spec-search button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.spec-match {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-primary));
+}
+
+.spec-match.is-current {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.specification-page :is(a, button, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.spec-skip {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 300;
+  padding: 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transform: translateY(-200%);
+}
+
+.spec-skip:focus {
+  transform: none;
+}
+
+@media (max-width: 800px) {
+  .spec-shell {
+    grid-template-columns: minmax(0, 1fr);
+    width: calc(100% - 32px);
+    margin-top: 20px;
+    gap: 24px;
+  }
+
+  .spec-sidebar {
+    position: static;
+    max-height: none;
+    padding-right: 0;
+  }
+
+  .spec-sidebar .docs-nav {
+    max-height: 40dvh;
+    overflow: auto;
+  }
+
+  .specification-page .docs-topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+  }
+
+  .specification-page .docs-topbar-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .spec-content :is(th, td) {
+    padding: 8px 5px;
+    font-size: 11px;
+  }
+}
+
+@media print {
+  .spec-sidebar,
+  .specification-page .docs-topbar,
+  .spec-skip {
+    display: none;
+  }
+
+  .spec-shell {
+    display: block;
+    width: 100%;
+    margin: 0;
+  }
+
+  .spec-content pre {
+    max-height: none;
+    overflow: visible;
+  }
+}

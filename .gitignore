@@ -1,0 +1,37 @@
+# Dependencies and local runtimes
+node_modules/
+.system_generated/
+local-generation/comfyui/engine/
+local-generation/comfyui/.venv/
+local-generation/comfyui/data/
+local-generation/comfyui/headless-web/
+local-generation/comfyui/requirements-installed.txt
+
+# Local data, credentials and generations: never published
+projects/
+projects.json
+jobs/
+api_keys.json*
+llm_config.json*
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.log
+
+# Model weights are downloaded by the user (see README.md); the folder skeleton is kept with .gitkeep
+*.safetensors
+*.gguf
+*.ckpt
+*.pt
+*.pth
+*.onnx
+public/models/*
+!public/models/README.md
+
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

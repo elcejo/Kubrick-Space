@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "documentFields": [
+    "name",
+    "content",
+    "ingredients",
+    "traits",
+    "production",
+    "covers",
+    "currentCoverIndex",
+    "lastCharacterImage",
+    "characterImageGeneration",
+    "characterImageTrash",
+    "characterVisualLibrary",
+    "characterMediaDeletions",
+    "coverVersions",
+    "lastCoverPrompt",
+    "lastCoverGenerationMode"
+  ],
+  "mediaFields": [
+    "covers",
+    "currentCoverIndex",
+    "lastCharacterImage",
+    "characterImageGeneration",
+    "characterImageTrash",
+    "characterVisualLibrary",
+    "characterMediaDeletions",
+    "coverVersions",
+    "lastCoverPrompt",
+    "lastCoverGenerationMode"
+  ]
+}

@@ -1,0 +1,1197 @@
+/* Character sheets share the workspace controls and keep editing tools out of content. */
+
+.character-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.character-sheet-actions button {
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.character-sheet-actions button:hover {
+  background: var(--glass-bg-hover);
+}
+
+.character-sheet-actions button:focus-visible {
+  outline: 2px solid var(--color-accent, #818cf8);
+  outline-offset: 2px;
+}
+
+.character-traits-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.character-traits-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.character-traits-form legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.character-traits-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.character-traits-form .input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+.character-traits-form textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.character-traits-form p {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+[data-theme='dark'] .floating-tab-card .character-traits-form,
+[data-theme='dark'] .floating-tab-card .character-traits-form label,
+[data-theme='dark'] .floating-tab-card .character-traits-form p,
+[data-theme='dark'] .floating-tab-card .character-traits-form legend,
+[data-theme='dark'] .floating-tab-card .character-traits-form input,
+[data-theme='dark'] .floating-tab-card .character-traits-form textarea,
+[data-theme='dark'] .floating-tab-card .character-traits-form .kai-select__trigger,
+[data-theme='dark'] .floating-tab-card .character-traits-form .kai-select__arrow {
+  color: #fff !important;
+}
+
+.character-proposal {
+  max-height: 60dvh;
+  overflow: auto;
+}
+
+.character-proposal table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.character-proposal th,
+.character-proposal td {
+  padding: 10px;
+  border-bottom: 1px solid var(--glass-border);
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.editor-node--character lore,
+.editor-node--character psychology,
+.editor-node--character clothing {
+  white-space: pre-wrap;
+}
+
+/* ============================================
+   EDITOR CORE CLASSES (Migrated from JS)
+   ============================================ */
+
+.editor-node {
+  position: relative;
+  width: 780px;
+  min-height: 420px;
+  background: var(--color-surface, #1a1a24);
+  border: 0;
+  border-radius: 12px;
+  padding: 32px 40px;
+  color: var(--color-text, #e4e4e7);
+  font-family: var(--font-body, 'Inter', sans-serif);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.kai-character-tooltip {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: var(--modal-glass-bg);
+  border: 0;
+  z-index: 99999;
+  pointer-events: none;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+  transform: translateY(4px);
+  opacity: 0;
+}
+
+.kai-tooltip-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1.5px solid var(--accent, #6366f1);
+  flex-shrink: 0;
+  display: none;
+}
+
+.kai-tooltip-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.kai-tooltip-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Sticky headers in Book Editor (WYSIWYG and Preview modes) with Glassmorphism */
+
+.editor-node.editor-node--story-book .editor-surface h1,
+.editor-node.editor-node--story-book .editor-surface h2,
+.editor-node.editor-node--story-book .editor-surface h3 {
+  position: sticky !important;
+  /* Premium Glassmorphism styling */
+  background: rgba(26, 26, 36, 0.95) !important;
+  border-width: 0.8px !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.5) !important;
+}
+
+.editor-node.editor-node--story-book .editor-surface h1 {
+  top: 0 !important;
+  z-index: 15 !important;
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+.editor-node.editor-node--story-book .editor-surface h2 {
+  top: var(--h1-height, 72px) !important;
+  /* Dynamically bound to H1 rendered height */
+  z-index: 14 !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+.editor-node.editor-node--story-book .editor-surface h3 {
+  top: calc(var(--h1-height, 72px) + var(--h2-height, 52px)) !important;
+  /* Dynamically bound to H1 + H2 rendered heights */
+  z-index: 13 !important;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+/* Align spacing in Preview mode to match WYSIWYG editor */
+
+.editor-surface--preview h1,
+.editor-surface--preview h2,
+.editor-surface--preview h3 {
+  padding: 6px 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+.editor-surface--preview p {
+  padding: 6px 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  margin: 8px 0 !important;
+  box-sizing: border-box !important;
+  color: var(--color-text, #e4e4e7) !important;
+}
+
+/* Add margin-top only to paragraphs following a heading in the editor to avoid overlaps and preserve border visibility */
+
+.editor-surface h1 + p,
+.editor-surface h2 + p,
+.editor-surface h3 + p,
+.editor-surface--preview h1 + p,
+.editor-surface--preview h2 + p,
+.editor-surface--preview h3 + p {
+  margin-top: 22px !important;
+}
+
+/* Project navigation: the inspector can grow with the work being reviewed. */
+
+.workspace-inspector {
+  min-width: 240px;
+  max-width: min(420px, calc(100vw - 32px));
+  resize: horizontal;
+}
+
+/* Legacy tool panels keep their established controls, but share the navigator's
+   placement and visual structure so only one workspace panel reads as active. */
+
+.floating-tab-card {
+  position: absolute !important;
+  left: calc(var(--workspace-navigator-width) + 14px) !important;
+  top: calc(var(--workspace-toolbar-height) + 14px) !important;
+  z-index: 18 !important;
+  width: min(340px, calc(100vw - var(--workspace-navigator-width) - 32px)) !important;
+  max-height: calc(100dvh - var(--workspace-toolbar-height) - 28px) !important;
+  background: rgba(25, 23, 33, 0.4) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+}
+
+.floating-tab-card > :first-child {
+  padding: 15px !important;
+  border-bottom-color: var(--glass-border) !important;
+}
+
+.floating-tab-card .floating-card__content {
+  padding: 15px !important;
+}
+
+/* Keep the catalogue clickable where it overlaps the collapsed agent. */
+:is(.floating-card-ingredients, .floating-card-ingredientes) {
+  z-index: 22 !important;
+  width: min(428px, calc(100vw - var(--workspace-navigator-width) - 32px)) !important;
+}
+
+:is(.floating-card-ingredients, .floating-card-ingredientes) .floating-card__content {
+  overflow: auto;
+}
+
+/* The new navigation was introduced with dark glass colors. These overrides
+   use the existing light-theme tokens instead of forcing a dark interface. */
+
+html[data-theme='light'] .workspace-nav {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+}
+
+html[data-theme='light'] .workspace-nav__sections button[aria-current='true'],
+html[data-theme='light'] .workspace-nav__modes > button[aria-pressed='true'] {
+  color: var(--text-accent);
+  background: rgba(79, 70, 229, 0.1);
+}
+
+html[data-theme='light'] .workspace-inspector {
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.16);
+}
+
+html[data-theme='light'] .workspace-inspector__header {
+  color: var(--text-accent);
+}
+
+html[data-theme='light'] .workspace-inspector__intro button {
+  color: var(--text-accent);
+  border-color: rgba(79, 70, 229, 0.24);
+  background: rgba(79, 70, 229, 0.08);
+}
+
+html[data-theme='light'] .workspace-inspector__outline li,
+html[data-theme='light'] .workspace-inspector__links li {
+  color: var(--text-secondary);
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
+html[data-theme='light'] .workspace-inspector__outline li::before {
+  color: #6758a6;
+}
+
+html[data-theme='light'] .floating-tab-card {
+  --color-text: var(--text-primary) !important;
+  --color-text-secondary: var(--text-secondary) !important;
+  --color-text-muted: var(--text-muted) !important;
+  --color-border: rgba(15, 23, 42, 0.12) !important;
+  --color-glass: rgba(15, 23, 42, 0.04) !important;
+  color: var(--text-primary) !important;
+  background: rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.16) !important;
+}
+
+html[data-theme='light'] .floating-tab-card .label,
+html[data-theme='light'] .floating-tab-card label,
+html[data-theme='light'] .floating-tab-card .cat-label {
+  color: var(--text-secondary) !important;
+}
+
+html[data-theme='light'] .floating-tab-card .ingredient-item,
+html[data-theme='light'] .floating-tab-card .ingredient-item span {
+  color: var(--text-primary) !important;
+}
+
+html[data-theme='light'] .floating-tab-card select.input,
+html[data-theme='light'] .floating-tab-card input.input,
+html[data-theme='light'] .floating-tab-card textarea.input,
+html[data-theme='light'] .floating-tab-card select,
+html[data-theme='light'] .floating-tab-card input,
+html[data-theme='light'] .floating-tab-card textarea {
+  color: var(--text-primary) !important;
+  background-color: rgba(15, 23, 42, 0.04) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+html[data-theme='light'] .floating-tab-card option {
+  color: var(--text-primary) !important;
+  background-color: var(--bg-secondary) !important;
+}
+
+html[data-theme='light'] .workspace--focus .workspace-nav,
+html[data-theme='light'] .workspace--focus .workspace__toolbar {
+  background: transparent;
+}
+
+/* Story-book rows separate text editing from temporal and drag controls. */
+.editor-node.editor-node--story-book .editor-surface .story-book-row {
+  display: flex;
+  position: relative;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  width: 100%;
+  padding: 6px 10px;
+  margin: 8px 0;
+  border: 1px dotted rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  transition: border-color 0.2s ease;
+}
+
+.editor-node.editor-node--story-book .editor-surface .story-book-row > .story-book-row__text {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  position: static !important;
+  z-index: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  overflow-wrap: anywhere;
+}
+
+.editor-node.editor-node--story-book .editor-surface .story-book-row[data-story-row-kind='paragraph'] {
+  margin: 10px 0;
+}
+
+.story-book-row__ports {
+  flex: 0 0 18px;
+  align-self: stretch;
+}
+
+.editor-node.editor-node--story-book .editor-surface .story-book-row > :is(ul, ol).story-book-row__text {
+  padding-left: 24px !important;
+}
+
+.story-book-row__drag {
+  display: flex;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-left: 8px;
+}
+
+.story-book-row__drag > .story-book-tree-drag-handle {
+  width: 16px;
+  margin: 0;
+}
+
+.story-book-row__ports > .story-book-node-port--in {
+  left: 8px;
+  top: 8px;
+  transform: none;
+}
+
+.editor-node.editor-node--story-book
+  .editor-surface
+  .story-book-row:is(
+    [data-story-row-kind='title'],
+    [data-story-row-kind='chapter'],
+    [data-story-row-kind='theme']
+  ) {
+  position: sticky;
+  margin: 0;
+  border-width: 0.8px;
+  background: rgba(26, 26, 36, 0.95);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.5);
+}
+
+.editor-node.editor-node--story-book .editor-surface .story-book-row[data-story-row-kind='title'] {
+  top: 0;
+  z-index: 15;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  --story-row-active-border: rgba(6, 182, 212, 0.6);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.editor-node.editor-node--story-book .editor-surface .story-book-row[data-story-row-kind='chapter'] {
+  top: var(--h1-height, 72px);
+  z-index: 14;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  --story-row-active-border: rgba(245, 158, 11, 0.6);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.editor-node.editor-node--story-book .editor-surface .story-book-row[data-story-row-kind='theme'] {
+  top: calc(var(--h1-height, 72px) + var(--h2-height, 52px));
+  z-index: 13;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  --story-row-active-border: rgba(168, 85, 247, 0.6);
+  border-color: rgba(168, 85, 247, 0.4);
+}
+
+.editor-node.editor-node--story-book .editor-surface.editor-surface--preview .story-book-row {
+  border-color: transparent;
+}
+
+.editor-node.editor-node--story-book .editor-surface--wysiwyg .story-book-row:hover {
+  border-color: var(--story-row-active-border, var(--accent));
+}
+
+.editor-node.editor-node--story-book
+  .editor-surface--wysiwyg
+  .story-book-row:has(> .story-book-row__text:focus) {
+  border-color: var(--story-row-active-border, var(--accent));
+}
+
+html[data-theme='light']
+  .editor-node.editor-node--story-book
+  .editor-surface
+  .story-book-row:not([data-story-row-kind='paragraph']) {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.22);
+}
+
+/* Sticky book headings previously kept their dark glass background in light
+   mode, making the title treatment hard to read. Match the active theme. */
+
+html[data-theme='light'] .editor-node.editor-node--story-book .editor-surface h1,
+html[data-theme='light'] html[data-theme='light'] .editor-node.editor-node--story-book .editor-surface h2,
+html[data-theme='light'] .editor-node.editor-node--story-book .editor-surface h3,
+html[data-theme='light'] .editor-node.editor-node--book .editor-surface h1,
+html[data-theme='light'] .editor-node.editor-node--book .editor-surface h2,
+html[data-theme='light'] .editor-node.editor-node--book .editor-surface h3 {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.22) !important;
+}
+
+html[data-theme='light'] .story-book-timeline {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+html[data-theme='light'] .story-book-timeline-entry {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme='light'] .story-book-timeline-entry--range {
+  border: 1px solid color-mix(in srgb, var(--timeline-range-color, #7c3aed) 62%, transparent);
+  background: color-mix(in srgb, var(--timeline-range-color, #7c3aed) 14%, transparent);
+}
+
+html[data-theme='light'] .story-book-timeline-date-popover {
+  background: var(--modal-glass-bg, rgba(255, 255, 255, 0.65));
+  color: var(--text-primary);
+  box-shadow: 0 18px 42px rgba(79, 70, 229, 0.16);
+}
+
+html[data-theme='light'] .story-book-timeline-date-tooltip {
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-primary);
+}
+
+html[data-theme='light'] .story-book-timeline-calendar__summary:not(.is-invalid) {
+  color: #315c9c;
+}
+
+@media (max-width: 760px) {
+  .workspace-nav {
+    height: auto;
+    min-height: 56px;
+    padding: 6px 8px;
+    gap: 6px;
+    overflow-x: auto;
+    align-items: center;
+  }
+  .workspace-nav__sections,
+  .workspace-nav__utilities,
+  .workspace-nav__modes {
+    flex-shrink: 0;
+  }
+  .workspace-nav__section,
+  .workspace-nav__mode,
+  .workspace-nav__focus {
+    min-height: 36px;
+    padding-inline: 8px;
+  }
+  .workspace-inspector {
+    top: 124px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-width: none;
+    max-height: min(48dvh, 420px);
+    resize: none;
+  }
+  .floating-tab-card {
+    top: 124px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-height: min(48dvh, 420px) !important;
+  }
+}
+
+.video-scene-card textarea[data-script] {
+  display: block;
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  background: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 10px;
+  font: inherit;
+  line-height: 1.6;
+}
+
+/* ============================================
+   PROJECT CHAT — Right-side collapsible panel
+   ============================================ */
+
+.workspace__chat {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: var(--workspace-chat-expanded-width);
+  height: auto;
+  transition: width var(--transition-slow) ease;
+  pointer-events: auto;
+}
+
+.workspace__chat.is-collapsed {
+  width: var(--workspace-chat-collapsed-width);
+}
+
+.workspace__chat.is-open {
+  width: var(--workspace-chat-expanded-width);
+}
+
+.workspace:has(.workspace__chat.is-open) .workspace__toolbar {
+  right: var(--workspace-chat-expanded-width);
+}
+
+.workspace__chat .chat-header {
+  min-height: 54px;
+  flex: 0 0 54px;
+  border-bottom: 0;
+}
+
+.workspace__chat .chat-header__toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 7px;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  transition:
+    transform var(--transition-base),
+    color var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.workspace__chat .chat-panel.is-open .chat-header__toggle {
+  transform: rotate(180deg);
+}
+
+.workspace__chat .chat-panel.is-collapsed .chat-header {
+  height: 100%;
+  min-height: 100%;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 18px 0;
+  border-bottom: 0;
+}
+
+.workspace__chat .chat-panel.is-collapsed .chat-header__copy,
+.workspace__chat .chat-panel.is-collapsed .chat-menu-button {
+  display: none;
+}
+
+.workspace__chat .chat-panel.is-collapsed .chat-header__toggle {
+  margin-top: auto;
+}
+
+.workspace__chat .chat-panel.is-collapsed .chat-messages,
+.workspace__chat .chat-panel.is-collapsed .chat-input-row {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    --workspace-chat-collapsed-width: 46px;
+    --workspace-chat-expanded-width: min(360px, calc(100vw - var(--workspace-navigator-width) - 76px));
+  }
+  .workspace__chat {
+    top: 0;
+    width: var(--workspace-chat-collapsed-width);
+  }
+  .workspace__chat.is-open {
+    width: var(--workspace-chat-expanded-width);
+  }
+}
+
+/* ============================================
+   PROJECT NAVIGATOR — Vertical left rail
+   ============================================ */
+
+.workspace__navigator {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: auto;
+  width: var(--workspace-navigator-width);
+  pointer-events: none;
+}
+
+.workspace__navigator .workspace-nav {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px 6px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.workspace__navigator .workspace-nav__back {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
+}
+
+.workspace__navigator .workspace-nav__back:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.workspace__navigator .workspace-nav__back svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace__navigator .workspace-nav__sections,
+.workspace__navigator .workspace-nav__utilities,
+.workspace__navigator .workspace-nav__modes {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  overflow: visible;
+}
+
+.workspace__navigator .workspace-nav__sections {
+  flex: 0 1 auto;
+}
+
+.workspace__navigator .workspace-nav__modes {
+  margin: auto 0 0;
+}
+
+.workspace__navigator .workspace-nav__sections button,
+.workspace__navigator .workspace-nav__utilities button,
+.workspace__navigator .workspace-nav__modes > button,
+.workspace__navigator .workspace-nav__focus {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 54px;
+  box-sizing: border-box;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 3px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.workspace__navigator .workspace-nav__sections button svg,
+.workspace__navigator .workspace-nav__utilities button svg,
+.workspace__navigator .workspace-nav__modes > button svg,
+.workspace__navigator .workspace-nav__focus svg {
+  width: 18px;
+  height: 18px;
+}
+
+.workspace__navigator .workspace-nav__focus {
+  margin: 4px 0 0;
+  border-top: 0;
+  border-left: 0;
+  border-radius: 0;
+  padding-top: 8px;
+}
+
+.workspace--focus .workspace__navigator .workspace-nav {
+  justify-content: flex-start;
+}
+
+.workspace--focus .workspace__navigator .workspace-nav__focus {
+  margin-top: auto;
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    --workspace-navigator-width: var(--workspace-chat-collapsed-width);
+  }
+  .workspace__navigator {
+    width: var(--workspace-navigator-width);
+  }
+  .workspace__navigator .workspace-nav {
+    padding-inline: 5px;
+  }
+  .workspace__navigator .workspace-nav__sections button,
+  .workspace__navigator .workspace-nav__utilities button,
+  .workspace__navigator .workspace-nav__modes > button,
+  .workspace__navigator .workspace-nav__focus {
+    min-height: 48px;
+    padding-inline: 1px;
+  }
+  .workspace__navigator .workspace-nav__back {
+    min-height: 36px;
+    padding-inline: 4px;
+  }
+}
+
+/* Keep the right-side chat and navigator-owned panels aligned with the fixed
+   workspace chrome. These rules intentionally come last so legacy bottom-bar
+   and mobile declarations cannot restore the old offsets or height. */
+
+.workspace__chat {
+  top: 0;
+  bottom: 0;
+  height: auto;
+  max-height: none;
+}
+
+.workspace-inspector,
+.floating-tab-card {
+  left: calc(var(--workspace-navigator-width) + 14px) !important;
+  top: calc(var(--workspace-toolbar-height) + 14px) !important;
+  max-height: calc(100dvh - var(--workspace-toolbar-height) - 28px) !important;
+}
+
+@media (max-width: 760px) {
+  .workspace__chat {
+    top: 0;
+  }
+  .floating-tab-card {
+    right: 8px !important;
+    width: auto !important;
+  }
+}
+
+/* Shared liquid glass remains; no dotted texture is painted inside the chat. */
+
+.workspace__chat .chat-panel {
+  --liquid-glass-tint: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  border-top: 0;
+  border-left: 0;
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.18);
+  transition:
+    width var(--transition-slow) ease,
+    background var(--transition-base) ease;
+  background-color: transparent;
+  background-image: none;
+}
+
+.workspace__chat .chat-panel.is-open .chat-messages {
+  min-height: 0;
+  background-color: transparent;
+  background-image: none;
+}
+
+.workspace__chat .chat-msg-bubble {
+  position: relative;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+  background: #000;
+  color: #f5f5f7;
+}
+
+.workspace__chat .chat-msg-content {
+  position: relative;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+html[data-theme='light'] .workspace__chat .chat-msg-bubble {
+  background: #fff;
+  color: #17171b;
+}
+
+.workspace__chat .chat-msg--ai .chat-msg-content {
+  white-space: normal;
+}
+
+.workspace__chat .chat-msg-content > :first-child {
+  margin-top: 0;
+}
+
+.workspace__chat .chat-msg-content > :last-child {
+  margin-bottom: 0;
+}
+
+.workspace__chat .chat-msg-content p {
+  margin: 0 0 0.7em;
+  line-height: 1.6;
+}
+
+.workspace__chat .chat-msg-content h1,
+.workspace__chat .chat-msg-content h2,
+.workspace__chat .chat-msg-content h3,
+.workspace__chat .chat-msg-content h4,
+.workspace__chat .chat-msg-content h5,
+.workspace__chat .chat-msg-content h6 {
+  margin: 0.9em 0 0.45em;
+  color: var(--text-primary);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.workspace__chat .chat-msg-content h1 {
+  font-size: 1.25em;
+}
+
+.workspace__chat .chat-msg-content h2 {
+  font-size: 1.16em;
+}
+
+.workspace__chat .chat-msg-content h3,
+.workspace__chat .chat-msg-content h4 {
+  font-size: 1.08em;
+}
+
+.workspace__chat .chat-msg-content strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.workspace__chat .chat-msg-content ul,
+.workspace__chat .chat-msg-content ol {
+  margin: 0.45em 0 0.8em;
+  padding-left: 1.45em;
+  list-style-position: outside;
+}
+
+.workspace__chat .chat-msg-content ul {
+  list-style-type: disc;
+}
+
+.workspace__chat .chat-msg-content ol {
+  list-style-type: decimal;
+}
+
+.workspace__chat .chat-msg-content li {
+  display: list-item;
+  margin: 0.25em 0;
+  padding-left: 0.15em;
+}
+
+.workspace__chat .chat-msg-content blockquote {
+  margin: 0.7em 0;
+  padding: 0.15em 0 0.15em 0.8em;
+  border-left: 2px solid var(--accent);
+  color: var(--text-secondary);
+}
+
+.workspace__chat .chat-msg-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.6em 0;
+  padding: 0.7em 0.85em;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-primary, #101016) 72%, transparent);
+  white-space: pre;
+}
+
+.workspace__chat .chat-msg-content code {
+  border-radius: 4px;
+  padding: 0.08em 0.3em;
+  background: color-mix(in srgb, var(--bg-primary, #101016) 58%, transparent);
+  font:
+    0.92em/1.5 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+}
+
+.workspace__chat .chat-msg-content pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.workspace__chat .chat-msg-content hr {
+  margin: 0.8em 0;
+  border-top: 1px solid var(--glass-border);
+}
+
+.chat-menu {
+  --liquid-glass-tint: var(--modal-glass-bg);
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 5px);
+  right: 12px;
+  width: max-content;
+  min-width: 210px;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--modal-glass-bg);
+}
+
+.chat-menu[hidden] {
+  display: none !important;
+}
+
+.chat-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 7px;
+  padding: 9px 10px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat-menu button:hover,
+.chat-menu button:focus-visible {
+  outline: none;
+  background: var(--glass-bg-hover);
+}
+
+.chat-menu button.is-danger {
+  color: #f87171;
+}
+
+.chat-menu button.is-danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.chat-menu__separator {
+  height: 1px;
+  margin: 7px 5px;
+  background: var(--glass-border);
+}
+
+.chat-library-dialog {
+  --liquid-glass-tint: var(--modal-glass-bg);
+  height: fit-content;
+  width: min(560px, calc(100vw - 28px));
+  max-width: none;
+  max-height: min(76dvh, 700px);
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: var(--modal-glass-bg, var(--bg-secondary));
+  color: var(--text-primary);
+}
+
+.chat-library-dialog::backdrop {
+  background: rgba(5, 5, 10, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.chat-library-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-library__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--glass-border);
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.chat-library__header > div {
+  min-width: 0;
+}
+
+.chat-library__header span {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.chat-library__header h2 {
+  margin: 4px 0 0;
+  font-size: 17px;
+}
+
+.chat-library__close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 22px;
+  cursor: pointer;
+  flex: 0 0 30px;
+}
+
+.chat-library__close:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-library__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 14px 14px;
+}
+
+.chat-library__empty {
+  margin: 0;
+  padding: 22px 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.chat-library__empty.is-error {
+  color: #f87171;
+}
+
+.chat-library__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 7px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.chat-library__details {
+  min-width: 0;
+}
+
+.chat-library__details h3 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-library__details p {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.chat-library__item > button {
+  flex: 0 0 auto;
+  min-width: 58px;
+  padding: 6px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.chat-library__item > button:hover {
+  background: var(--glass-bg-hover);
+}
+
+.border-b {
+  border-bottom: 0 !important;
+}

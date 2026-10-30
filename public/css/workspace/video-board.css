@@ -1,0 +1,385 @@
+/* Video projects use a production board as their primary workspace. */
+
+.video-board-node {
+  position: absolute;
+  top: 140px;
+  left: calc(50% - 180px);
+  width: 360px;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.video-import-button {
+  font: 600 11px var(--font-ui);
+  color: var(--text-primary);
+  cursor: pointer;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: var(--glass-bg);
+}
+
+.video-scene-card footer button {
+  padding: 5px 7px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.video-board__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.video-scene-card,
+.video-scene-add {
+  min-height: 245px;
+  box-sizing: border-box;
+  border-radius: 13px;
+  border: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--bg-secondary) 86%, transparent);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+}
+
+.video-scene-card {
+  display: flex;
+  flex-direction: column;
+  padding: 14px;
+  cursor: grab;
+}
+
+.video-scene-card.is-dragging {
+  opacity: 0.45;
+}
+
+.video-scene-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.video-scene-card__top button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.video-scene-card [data-title] {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 13px 0 9px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: 600 14px var(--font-ui);
+}
+
+.video-scene-card [data-script] {
+  flex: 1;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+}
+
+.video-scene-card footer {
+  margin-top: 13px;
+  padding-top: 10px;
+  border-top: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.video-scene-card label {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.video-scene-card [data-duration] {
+  width: 76px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--glass-bg-hover);
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  padding: 3px;
+  text-align: center;
+}
+
+.video-scene-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+}
+
+.video-scene-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.video-scene-add span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 23px;
+  font-weight: 300;
+}
+
+@media (max-width: 760px) {
+  .video-board-node {
+    width: 300px;
+    left: calc(50% - 150px);
+  }
+}
+
+.surface-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.surface-gap-10 {
+  gap: 10px;
+}
+
+.surface-gap-12 {
+  gap: 12px;
+}
+
+.surface-gap-14 {
+  gap: 14px;
+}
+
+.surface-gap-16 {
+  gap: 16px;
+}
+
+.surface-gap-20 {
+  gap: 20px;
+}
+
+.surface-p-8 {
+  padding: 8px;
+}
+
+.surface-p-12 {
+  padding: 12px;
+}
+
+.surface-align-center {
+  align-items: center;
+}
+
+.surface-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* ============================================
+   CANVAS CSS CLASSES (Migrated from JS)
+   ============================================ */
+
+.canvas-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background-color: var(--color-bg, #0f0f14);
+}
+
+.canvas-wrapper--panning,
+.canvas-wrapper--panning * {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+.canvas-transform {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.canvas-zoom-badge {
+  position: fixed;
+  bottom: 16px;
+  right: calc(var(--workspace-chat-collapsed-width) + 16px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-secondary, #a1a1aa);
+  background: var(--color-glass, rgba(255, 255, 255, 0.06));
+  pointer-events: none;
+  user-select: none;
+  z-index: 30;
+  transition: right var(--transition-slow) ease;
+}
+
+.workspace:has(.workspace__chat.is-open) .canvas-zoom-badge {
+  right: calc(var(--workspace-chat-expanded-width) + 16px);
+}
+
+/* ============================================
+   DRAG AND DROP CSS CLASSES (Migrated from JS)
+   ============================================ */
+
+.drop-indicator {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  border: 2px dashed var(--color-accent, #818cf8);
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.drop-indicator.is-visible {
+  opacity: 1;
+}
+
+.drag-image-ghost {
+  position: absolute;
+  top: -9999px;
+  opacity: 0.55;
+}
+
+.canvas-node:hover {
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.canvas-node.is-reordering {
+  z-index: 10;
+  cursor: grabbing;
+}
+
+.canvas-node {
+  position: absolute;
+  min-width: 160px;
+  min-height: 48px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--color-surface, #1a1a24);
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  color: var(--color-text, #e4e4e7);
+  font-size: 13px;
+  cursor: grab;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  user-select: none;
+  transition: box-shadow 0.15s;
+}
+
+.canvas-node-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.canvas-node-preview {
+  font-size: 12px;
+  opacity: 0.6;
+  max-height: 60px;
+  overflow: hidden;
+}
+
+.editor-layout-wrapper.is-video-board-hidden {
+  display: none !important;
+}
+
+.video-board__script-select {
+  width: 100%;
+}
+.production-shots {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.production-shot {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.production-shot :is(input, textarea),
+.video-scene-prompt textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.production-shot__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.production-shot__controls input {
+  flex: 1;
+}
+
+.production-shot__controls button {
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  border: 0;
+  border-radius: 8px;
+  min-height: 32px;
+}
+
+.production-shot img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+
+.video-scene-source {
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.video-scene-card .screenplay-preview {
+  max-height: 260px;
+  overflow: auto;
+}

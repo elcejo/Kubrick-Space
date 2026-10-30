@@ -1,0 +1,304 @@
+/* ============================================
+   CHAT UI CLASSES (Migrated from JS)
+   ============================================ */
+
+.chat-msg {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 10px;
+}
+
+.chat-msg--user {
+  align-items: flex-end;
+}
+
+.chat-msg--ai {
+  align-items: flex-start;
+}
+
+.chat-msg-bubble {
+  max-width: 80%;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text, #e4e4e7);
+}
+
+.chat-msg--user .chat-msg-bubble {
+  background: var(--color-accent-alpha, rgba(99, 102, 241, 0.18));
+}
+
+.chat-msg--ai .chat-msg-bubble {
+  background: var(--color-glass, rgba(255, 255, 255, 0.06));
+}
+
+.chat-msg-time {
+  font-size: 10px;
+  opacity: 0.4;
+  margin-top: 3px;
+}
+
+.chat-panel {
+  z-index: var(--z-chat);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: height 0.25s ease;
+  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+  border-top: 1px solid var(--glass-border);
+}
+
+.chat-header {
+  flex: 0 0 42px;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 10px;
+  position: relative;
+}
+
+.chat-messages {
+  flex: 1 1 0%;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-input-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding: 9px 14px 11px;
+  gap: 9px;
+  border-top: 1px solid var(--color-border, rgba(255, 255, 255, 0.06));
+}
+
+.chat-input {
+  flex: 1;
+  background: var(--color-glass, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--color-text, #e4e4e7);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  transition: all var(--transition-base);
+  min-height: 38px;
+  max-height: 94px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.chat-input::placeholder {
+  color: var(--text-muted);
+}
+
+.chat-input:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.chat-send {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-accent, #818cf8);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-loader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.chat-loader--book {
+  flex-wrap: wrap;
+  opacity: 1;
+}
+
+.chat-loader--book progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--color-accent, #818cf8);
+}
+
+/* Project assistant: guidance and context stay visible without interrupting
+   the canvas. All colors come from the application theme tokens. */
+
+.chat-header__mark {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.chat-header__copy {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.chat-header__copy b {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.chat-header__copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.chat-menu-button {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.chat-menu-button:hover,
+.chat-menu-button[aria-expanded='true'] {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-welcome {
+  max-width: 740px;
+  margin: auto;
+  padding: 12px 2px;
+}
+
+.chat-welcome__eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+.chat-welcome h2 {
+  margin: 5px 0 4px;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.chat-welcome p {
+  margin: 0;
+  max-width: 650px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.chat-suggestions button {
+  max-width: 310px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--glass-bg);
+  color: var(--text-secondary);
+  padding: 7px 9px;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+.chat-suggestions button:hover {
+  background: var(--color-accent-alpha, rgba(99, 102, 241, 0.14));
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+html[data-theme='light'] .chat-panel {
+  box-shadow: 0 -12px 34px rgba(15, 23, 42, 0.07);
+}
+
+@media (max-width: 640px) {
+  .chat-header__copy small {
+    max-width: 190px;
+  }
+  .chat-suggestions {
+    flex-direction: column;
+  }
+  .chat-suggestions button {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* Independent native controls: the conversation menu is outside the toggle. */
+.chat-toggle-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.chat-toggle-button .chat-header__toggle {
+  margin-left: auto;
+}
+
+.chat-menu-button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.workspace__chat .chat-panel.is-collapsed .chat-toggle-button {
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workspace__chat .chat-panel.is-collapsed .chat-header__toggle {
+  margin-left: 0;
+}

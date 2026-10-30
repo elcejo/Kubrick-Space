@@ -1,0 +1,120 @@
+.icons-content {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 40px 24px 64px;
+}
+
+.icons-heading h1 {
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  margin: 10px 0 16px;
+}
+.icons-heading p,
+.icons-guidelines p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 80ch;
+}
+.icons-spec {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 28px 0;
+}
+.icons-spec div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.icons-spec span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.icons-guidelines {
+  background: var(--glass-bg);
+  border-radius: 16px;
+  padding: 18px;
+}
+.icons-guidelines summary {
+  cursor: pointer;
+}
+.icons-tools {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 30px 0 20px;
+}
+.icons-tools label {
+  flex: 1;
+  max-width: 480px;
+  display: grid;
+  gap: 8px;
+}
+.icons-tools p {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.icons-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.icon-specimen {
+  padding: 22px;
+  border-radius: 16px;
+  background: var(--glass-bg);
+}
+.icon-specimen__samples {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  margin-bottom: 20px;
+}
+.icon-specimen h2 {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+.icon-specimen--illustration .icon-specimen__samples {
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  color: #263442;
+  background: radial-gradient(ellipse at 40% 26%, #e2e8df, #bdcbc8 75%, #aabdbd);
+}
+.icon-specimen--illustration .icon-specimen__samples svg {
+  width: 100%;
+  height: 100%;
+}
+.icon-specimen code {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.icon-specimen p {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  min-height: 38px;
+  margin: 14px 0;
+}
+.icon-specimen a {
+  color: var(--text-accent);
+  font-size: 12px;
+}
+.icons-history {
+  margin-top: 40px;
+  line-height: 1.7;
+}
+.icons-history p {
+  color: var(--text-secondary);
+}
+@media (max-width: 600px) {
+  .icons-spec {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .icons-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

@@ -1,0 +1,409 @@
+/* Dotted grid background */
+
+.canvas-wrapper {
+  background-image: radial-gradient(circle, var(--canvas-dot-color) 1px, transparent 1px);
+  background-size: var(--canvas-grid-size, 24px 24px);
+  background-position: var(--canvas-grid-position, 0 0);
+}
+
+.canvas-wrapper--fx {
+  background-image: none;
+}
+
+.canvas-wrapper--fx::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    rgba(102, 0, 255, 0.5) 0%,
+    rgba(247, 227, 85, 0.5) 46%,
+    rgba(233, 14, 14, 0.5) 100%
+  );
+  background-size: 220% 220%;
+  background-position: 0% 50%;
+  -webkit-mask-image: radial-gradient(circle, #000 0 1px, transparent 1px);
+  mask-image: radial-gradient(circle, #000 0 1px, transparent 1px);
+  -webkit-mask-size: var(--canvas-grid-size, 24px 24px);
+  mask-size: var(--canvas-grid-size, 24px 24px);
+  -webkit-mask-position: var(--canvas-grid-position, 0 0);
+  mask-position: var(--canvas-grid-position, 0 0);
+  opacity: 0.3;
+  animation: aurora-move 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-wrapper--fx::before {
+    animation: none;
+  }
+}
+
+.canvas-grid {
+  background-image: radial-gradient(circle, var(--canvas-dot-color) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-color: var(--bg-primary);
+  min-height: 100%;
+  min-width: 100%;
+  position: relative;
+}
+
+/* Canvas inner content wrapper — centered editing area */
+
+.canvas-content {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 48px 40px;
+  min-height: 100%;
+}
+
+/* ============================================
+   ZOOM INDICATOR
+   ============================================ */
+
+.zoom-indicator {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  z-index: 5;
+  cursor: default;
+  user-select: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.zoom-indicator button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 0.75rem;
+  transition: color var(--transition-fast);
+  font-family: inherit;
+}
+
+.zoom-indicator button:hover {
+  color: var(--text-primary);
+}
+
+/* ============================================
+   EDITOR — Contenteditable Area
+   ============================================ */
+
+.editor-area {
+  min-height: 200px;
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  caret-color: var(--accent);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.editor-area:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* Editor typography */
+
+.editor-area h1,
+.editor-surface h1,
+.editor-surface--wysiwyg h1 {
+  font-size: 2.25rem !important;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+  margin: 24px 0 12px;
+  color: var(--text-primary);
+  display: block;
+}
+
+.editor-area:not(:is(.screenplay-wysiwyg, .screenplay-preview)) h2,
+.editor-surface:not(:is(.screenplay-wysiwyg, .screenplay-preview)) h2,
+.editor-surface--wysiwyg:not(.screenplay-wysiwyg) h2 {
+  font-size: 1.75rem !important;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.4;
+  margin: 20px 0 10px;
+  color: var(--text-primary);
+  display: block;
+}
+
+.editor-area:not(:is(.screenplay-wysiwyg, .screenplay-preview)) h3,
+.editor-surface:not(:is(.screenplay-wysiwyg, .screenplay-preview)) h3,
+.editor-surface--wysiwyg:not(.screenplay-wysiwyg) h3 {
+  font-size: 1.35rem !important;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.4;
+  margin: 16px 0 8px;
+  color: var(--text-primary);
+  display: block;
+}
+
+.editor-area p {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+}
+
+.editor-surface--wysiwyg p {
+  border: 1px dotted rgba(255, 255, 255, 0.12);
+  padding: 6px 10px;
+  margin: 8px 0;
+  border-radius: 6px;
+  transition: border-color 0.2s ease;
+}
+
+.editor-surface--wysiwyg p:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.editor-surface--wysiwyg p:focus-within {
+  border-color: var(--color-accent, rgba(99, 102, 241, 0.5));
+}
+
+.editor-area strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.editor-area em {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.editor-area ul,
+.editor-area ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.editor-area li {
+  margin: 4px 0;
+}
+
+.editor-area blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 16px;
+  margin: 12px 0;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.editor-area a {
+  color: var(--text-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.editor-area a:hover {
+  color: var(--accent-hover);
+}
+
+/* ============================================
+   KAI-TAG & KAI-BLOCK — AI-generated inline capsules
+   ============================================ */
+
+.kai-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.2em 1.6em 0.2em 0.8em;
+  border-radius: 9999px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+  vertical-align: middle;
+  position: relative;
+  transition: all var(--transition-fast);
+  box-sizing: border-box;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.1);
+}
+
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.kai-tag {
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  font-family: inherit !important;
+  line-height: inherit !important;
+  padding: 0 !important;
+  /* No extra padding needed since close button is removed */
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  display: inline-block !important;
+  position: relative !important;
+  vertical-align: baseline !important;
+  cursor: text !important;
+  /* Visual cursor feedback for editable text */
+  user-select: text !important;
+  /* Allow users to click and select text within the tag */
+  margin: 0 !important;
+  box-sizing: border-box;
+  /* Animated dynamic text-only gradient using custom properties */
+  background: linear-gradient(
+    90deg,
+    var(--grad-color1, #6366f1),
+    var(--grad-color2, #a855f7),
+    var(--grad-color1, #6366f1)
+  ) !important;
+  background-size: 200% auto !important;
+  animation: gradientMove 4s linear infinite !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.kai-tag:hover {
+  filter: brightness(1.2) !important;
+}
+
+.kai-block:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(16, 185, 129, 0.25) 100%);
+  border-color: rgba(34, 197, 94, 0.6);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Close button on hover */
+
+.kai-remove-btn {
+  transform: translateY(-50%) !important;
+  width: 0.8em !important;
+  height: 0.8em !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  color: #ef4444 !important;
+  -webkit-text-fill-color: #ef4444 !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.7em !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast) !important;
+  user-select: none !important;
+  border: none !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: 50% !important;
+}
+
+.kai-tag:hover .kai-remove-btn,
+.kai-block:hover .kai-remove-btn {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.kai-remove-btn:hover {
+  color: #ff4444 !important;
+  -webkit-text-fill-color: #ff4444 !important;
+}
+
+.kai-tag-icon {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+}
+
+/* ============================================
+   WYSIWYG FORMATTING TOOLBAR
+   ============================================ */
+
+.format-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.format-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.format-toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--glass-border);
+  margin: 0 6px;
+}
+
+.format-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.8125rem;
+  font-family: inherit;
+}
+
+.format-btn:hover {
+  background: var(--glass-bg-hover);
+  color: var(--text-primary);
+}
+
+.format-btn.active {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent);
+}
+
+.format-btn svg {
+  width: 16px;
+  height: 16px;
+}

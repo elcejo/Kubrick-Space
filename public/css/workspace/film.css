@@ -1,0 +1,292 @@
+/* Feature film workspace: one row per scene, a video node and its generation parameters side by side.
+   Rows stack vertically. It reuses the character node material so every workspace shares one look. */
+.editor-layout-wrapper--film {
+  display: grid;
+  grid-template-columns: 1240px auto;
+  grid-template-rows: auto;
+  gap: 24px;
+  justify-content: start;
+  align-items: start;
+}
+.editor-layout-wrapper--film-empty {
+  grid-template-columns: 900px auto;
+}
+.editor-layout-wrapper--film > .film-anchor {
+  display: none;
+}
+.editor-layout-wrapper--film > .film-board {
+  grid-column: 1;
+  grid-row: 1;
+}
+.editor-layout-wrapper--film > .editor-drawers-sidebar {
+  grid-column: 2;
+  grid-row: 1;
+  position: static;
+}
+
+.film-board {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+.film-board.is-working .film-row {
+  opacity: 0.85;
+}
+
+.film-header {
+  display: grid;
+  gap: 16px;
+}
+.film-header__heading {
+  margin: 8px 0 0;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.film-header__text,
+.film-header__hint,
+.film-header__status {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.film-header__status {
+  color: var(--text-primary);
+}
+.film-header__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.film-header__hint[hidden],
+.film-header__status[hidden],
+.film-header__controls [hidden] {
+  display: none;
+}
+
+.film-row {
+  display: grid;
+  grid-template-columns: 640px 580px;
+  gap: 20px;
+  align-items: stretch;
+}
+.film-row.is-removed {
+  opacity: 0.6;
+}
+.film-node {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: auto;
+}
+.film-node__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.film-node--video .film-node__header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.film-node__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.film-node__meta {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.film-node__notice,
+.film-node__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.film-node__notice {
+  color: var(--text-muted);
+}
+.film-node__error {
+  color: var(--status-error, #e5484d);
+}
+.film-node__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.film-video-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-secondary) 30%, transparent);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.film-video-frame__icon {
+  display: inline-flex;
+}
+
+.film-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-secondary) 40%, transparent);
+  white-space: nowrap;
+}
+.film-chip--ready {
+  color: var(--status-success, #30a46c);
+}
+.film-chip--failed {
+  color: var(--status-error, #e5484d);
+}
+
+.film-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.film-field__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.film-field__help {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.film-prompt {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.film-params {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.film-references {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.film-references__empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.film-references__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.film-reference {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 12px 6px 6px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 30%, transparent);
+}
+.film-reference__image {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+}
+.film-reference__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.film-reference__text small {
+  color: var(--text-muted);
+}
+
+.film-action__icon {
+  display: inline-flex;
+  margin-right: 6px;
+}
+.film-notice {
+  display: grid;
+  gap: 16px;
+}
+.film-notice p {
+  margin: 0;
+}
+
+.film-video-frame.has-video {
+  background: #000;
+  overflow: hidden;
+}
+.film-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #000;
+}
+.film-video-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.film-video-actions .film-node__meta {
+  margin-left: auto;
+}
+.film-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 12px;
+}
+.film-icon-button .film-action__icon {
+  margin: 0;
+}
+.film-icon-button.is-approved {
+  color: var(--status-success, #30a46c);
+  background: color-mix(in srgb, var(--status-success, #30a46c) 18%, transparent);
+}
+.film-node__state {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.film-node__state[hidden] {
+  display: none;
+}
+.film-node__state.is-working {
+  color: var(--text-primary);
+}

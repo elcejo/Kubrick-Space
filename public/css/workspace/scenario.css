@@ -1,0 +1,376 @@
+/* Scenario workspace: design, references, 360° panorama and four angles; composer below all four.
+   It reuses the character node, composer and overlay classes so both workspaces share one material. */
+.editor-layout-wrapper--scenario {
+  display: grid;
+  grid-template-columns: 480px 480px 720px 720px auto;
+  grid-template-rows: 720px auto;
+  gap: 24px;
+  justify-content: start;
+}
+.editor-layout-wrapper--scenario > .scenario-workspace {
+  grid-column: 1;
+  grid-row: 1;
+}
+.editor-layout-wrapper--scenario > .scenario-node--references {
+  grid-column: 2;
+  grid-row: 1;
+}
+.editor-layout-wrapper--scenario > .scenario-node--panorama {
+  grid-column: 3;
+  grid-row: 1;
+}
+.editor-layout-wrapper--scenario > .scenario-node--views {
+  grid-column: 4;
+  grid-row: 1;
+}
+.editor-layout-wrapper--scenario > .editor-drawers-sidebar {
+  grid-column: 5;
+  grid-row: 1 / 3;
+  position: static;
+}
+.editor-layout-wrapper--scenario > .scenario-composer {
+  grid-column: 1 / 5;
+  grid-row: 2;
+}
+.editor-layout-wrapper--scenario-single-node {
+  grid-template-columns: 900px;
+  grid-template-rows: auto;
+}
+.editor-layout-wrapper--scenario.editor-layout-wrapper--scenario-single-node > :not(.scenario-composer) {
+  display: none;
+}
+.editor-layout-wrapper--scenario-single-node > .scenario-composer {
+  grid-column: 1;
+  grid-row: 1;
+}
+.editor-layout-wrapper--scenario-single-node > .editor-drawers-sidebar {
+  display: block;
+}
+.scenario-composer.character-creation-picker .character-methods {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 24px 0 0;
+}
+
+.editor-node.scenario-workspace,
+.scenario-node {
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  height: 720px;
+  min-height: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.editor-node.scenario-workspace {
+  width: 480px;
+}
+.scenario-node__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.scenario-workspace .scenario-design {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.scenario-action__icon {
+  display: inline-flex;
+}
+
+/* References */
+.scenario-references {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+.scenario-references__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0 4px 0 0;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
+  list-style: none;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+.scenario-composer .scenario-references__grid {
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  max-height: 220px;
+  flex: none;
+}
+.scenario-references__empty {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.scenario-reference {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--glass-bg);
+}
+.scenario-reference img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scenario-reference__remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  padding: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgb(0 0 0 / 55%);
+}
+.scenario-reference__remove > span:last-child,
+.scenario-view__redo > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.scenario-references__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* Panorama viewer */
+.scenario-pano {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.scenario-pano__stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
+}
+.scenario-pano__surface {
+  position: absolute;
+  inset: 0;
+  display: block;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.scenario-pano__surface[hidden] {
+  display: none;
+}
+.scenario-pano__surface.is-dragging {
+  cursor: grabbing;
+}
+.scenario-pano__surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.scenario-pano__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.scenario-pano__flat {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.scenario-pano__flat[hidden] {
+  display: none;
+}
+.scenario-pano__status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.scenario-pano__status[hidden] {
+  display: none;
+}
+.scenario-pano__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Angles */
+.scenario-views {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: min-content;
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  margin-top: 8px;
+}
+.scenario-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+.scenario-view__open,
+.scenario-view__empty {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  cursor: zoom-in;
+}
+.scenario-view__open img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scenario-view__empty {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  cursor: default;
+}
+.scenario-view__caption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.scenario-view__redo {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  min-width: 0;
+  padding: 0;
+}
+.scenario-lightbox img {
+  display: block;
+  max-width: min(90vw, 1280px);
+  max-height: 78vh;
+  margin: 0 auto;
+  border-radius: 12px;
+}
+.scenario-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.scenario-notice p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scenario-pano__stage {
+    scroll-behavior: auto;
+  }
+}
+
+/* Trash */
+.scenario-trash {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 16px;
+  min-height: 0;
+  margin: 8px 0 0;
+  padding: 0 4px 0 0;
+  overflow: auto;
+  list-style: none;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+.scenario-trash__empty-state {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.scenario-trash__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.scenario-trash__open {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 14px;
+  background: var(--glass-bg);
+  cursor: zoom-in;
+}
+.scenario-trash__open img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scenario-trash__caption {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.scenario-trash__caption strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.scenario-trash__actions {
+  display: flex;
+  gap: 8px;
+}
+.scenario-trash__delete > span:last-child {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.scenario-trash__delete {
+  position: relative;
+}

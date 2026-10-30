@@ -1,0 +1,28 @@
+<div class="workspace" id="workspace-layout">
+  <div class="workspace__toolbar" id="workspace-toolbar"></div>
+  <div class="workspace__navigator" id="workspace-navigator"></div>
+  <div class="workspace__middle" id="workspace-middle">
+    <div class="workspace__sidebar-left" id="workspace-sidebar-left"></div>
+    <div class="workspace__canvas" id="workspace-canvas"></div>
+  </div>
+  <div class="workspace__chat" id="workspace-chat"></div>
+</div>
+
+<!-- Shared editor surfaces. Feature renderers clone these shells and provide
+     sanitized document content or feature-specific preview markup. -->
+<template id="editor-surface-preview-template">
+  <div class="editor-surface editor-surface--preview" data-editor-surface></div>
+</template>
+<template id="editor-surface-wysiwyg-template">
+  <div class="editor-surface editor-surface--wysiwyg" data-editor-surface></div>
+</template>
+<template id="editor-code-surface-template">
+  <div class="code-editor-container" data-editor-code-surface>
+    <pre class="code-editor-highlight" aria-hidden="true"><code class="language-html"></code></pre>
+    <textarea
+      class="code-editor-textarea"
+      spellcheck="false"
+      aria-label="Código HTML del documento"
+    ></textarea>
+  </div>
+</template>

@@ -1,0 +1,1021 @@
+/* Story-book writing tree. The structure belongs to the editor surface;
+   the index below remains a lightweight list of headings only. */
+
+.story-book-tree-chapter,
+.story-book-tree-theme {
+  position: relative;
+  min-width: 0;
+}
+
+/* Story-book temporal graph. It stays narrow so the manuscript remains the
+   primary surface while chapters, themes and paragraphs can link to dates. */
+
+.story-book-timeline {
+  position: relative;
+  display: flex;
+  flex: 0 0 calc(104px + var(--timeline-range-depth, 0) * 36px);
+  flex-direction: column;
+  width: calc(104px + var(--timeline-range-depth, 0) * 36px);
+  height: var(--book-canvas-height, 1170px);
+  min-height: var(--book-canvas-height, 1170px);
+  overflow: visible;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.story-book-timeline__track {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  padding: 30px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(117, 178, 255, 0.55) transparent;
+}
+
+.story-book-timeline__spine {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  z-index: 2;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 99px;
+  background: linear-gradient(180deg, #22d3ee 0%, #4f8cff 42%, #a855f7 100%);
+  box-shadow:
+    0 0 12px rgba(72, 160, 255, 0.65),
+    0 0 22px rgba(168, 85, 247, 0.32);
+  pointer-events: none;
+}
+
+.story-book-timeline-port,
+.story-book-node-port {
+  position: absolute;
+  z-index: 3;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5ed9ff;
+  box-shadow: 0 0 8px rgba(74, 198, 255, 0.85);
+  cursor: crosshair;
+  opacity: 0.76;
+  touch-action: none;
+  user-select: none;
+}
+
+.story-book-timeline-port:hover,
+.story-book-node-port:hover,
+[data-story-node-id].has-timeline-link .story-book-node-port {
+  opacity: 1;
+  color: #c084fc;
+  box-shadow: 0 0 10px rgba(192, 132, 252, 0.95);
+}
+
+.story-book-timeline-port--in {
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.story-book-timeline-port--out {
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.story-book-node-port--in {
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.story-book-node-port--out {
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+[data-story-node-id] {
+  position: relative;
+}
+
+[data-story-node-id] .story-book-node-port--in {
+  /* Every narrative node uses the same inset so the port stays fully inside
+     its own bordered box, independent of chapter/theme indentation. */
+  left: 8px;
+  top: 8px;
+  right: auto;
+  transform: none;
+  /* Paragraph ports must remain in the editor's normal layer. Sticky chapter
+     and theme headings get their own higher layer below so their controls can
+     cover the scrolling prose just like the heading text does. */
+  z-index: 3;
+}
+
+[data-story-node-id] > h2 > .story-book-node-port--in,
+[data-story-node-id] > h3 > .story-book-node-port--in {
+  z-index: 21;
+}
+
+[data-story-node-id] > .story-book-node-port--out {
+  display: none;
+}
+
+.story-book-node-port.is-link-dragging,
+[data-story-node-id].is-link-dragging {
+  opacity: 0.45;
+}
+
+.story-book-timeline-links {
+  position: absolute;
+  inset: 0;
+  /* Above sticky chapter/theme headings (20/21), including the last
+     segment inside their text box. Paths do not intercept editor clicks. */
+  z-index: 22;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.story-book-timeline-link {
+  fill: none;
+  stroke: url(#story-book-timeline-gradient);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(79, 180, 255, 0.72));
+  opacity: 0.9;
+}
+
+.story-book-timeline-port > .kai-icon,
+.story-book-node-port > .kai-icon,
+.story-book-timeline-virgin-point > .kai-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+[data-timeline-fused] > .kai-icon {
+  visibility: hidden;
+}
+
+.story-book-timeline-port[data-timeline-fused],
+.story-book-node-port[data-timeline-fused],
+.story-book-timeline-virgin-point[data-timeline-fused] {
+  box-shadow: none;
+}
+
+.story-book-timeline-fusion {
+  stroke: none;
+  pointer-events: none;
+}
+
+.story-book-timeline__content {
+  position: relative;
+  width: 100%;
+  min-height: 440px;
+}
+
+.story-book-timeline__content > .story-book-timeline-anchor--virgin,
+.story-book-timeline__content > .story-book-timeline-entry,
+.story-book-timeline-group,
+.story-book-timeline-group > .story-book-timeline-anchor--virgin,
+.story-book-timeline-group > .story-book-timeline-entry,
+.story-book-timeline-entry--range > .story-book-timeline-entry {
+  position: absolute;
+  left: 0;
+}
+
+.story-book-timeline-group {
+  width: 100%;
+}
+
+.story-book-timeline-entry--range > .story-book-timeline-entry--range {
+  left: 18px;
+  width: calc(100% - 36px);
+}
+
+.story-book-timeline-entry--range > .story-book-timeline-entry--moment > .story-book-timeline-port {
+  pointer-events: auto;
+}
+
+.story-book-timeline-group > .story-book-timeline-entry--range.story-book-timeline-entry--shared {
+  left: var(--timeline-shared-inset, 0px);
+  width: calc(100% - var(--timeline-shared-inset, 0px) * 2);
+}
+
+.story-book-timeline-links.is-hidden {
+  display: none !important;
+}
+
+.story-book-timeline-anchor {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--timeline-anchor-height, 42px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  transition: background 0.16s ease;
+}
+
+.story-book-timeline-anchor:hover {
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.story-book-timeline-anchor:focus-visible,
+.story-book-timeline-port:focus-visible,
+.story-book-node-port:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 4px;
+}
+
+.story-book-timeline-picker__field {
+  display: grid;
+  gap: 8px;
+}
+
+.story-book-timeline-picker__field > .kai-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.story-book-timeline-picker__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.story-book-timeline-anchor--virgin {
+  touch-action: none;
+  user-select: none;
+}
+
+.story-book-timeline-virgin-point {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5ed9ff;
+  box-shadow: 0 0 10px rgba(74, 198, 255, 0.86);
+  cursor: crosshair;
+}
+
+.story-book-timeline-invalid-date {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block: 8px;
+}
+
+.story-book-timeline-invalid-date > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.story-book-timeline-entry {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 20px;
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.story-book-timeline-entry--moment {
+  z-index: 3;
+  height: 24px;
+  margin: 0;
+}
+
+.story-book-timeline-entry--moment.story-book-timeline-entry--distributed {
+  min-height: 0;
+}
+
+.story-book-timeline-entry > .story-book-timeline-port--in {
+  left: 50%;
+  top: 50%;
+  right: auto;
+  transform: translate(-50%, -50%);
+}
+
+.story-book-timeline-entry--moment > .story-book-timeline-port--in {
+  width: 13px;
+  height: 13px;
+  color: #60d9ff;
+  box-shadow: 0 0 12px rgba(80, 213, 255, 0.95);
+}
+
+.story-book-timeline-entry--range {
+  z-index: 1;
+  pointer-events: none;
+  min-height: var(--timeline-range-height, 72px);
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--timeline-range-color, #a855f7) 74%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--timeline-range-color, #a855f7) 17%, transparent);
+  box-shadow:
+    inset 0 0 18px color-mix(in srgb, var(--timeline-range-color, #a855f7) 10%, transparent),
+    0 0 14px color-mix(in srgb, var(--timeline-range-color, #a855f7) 20%, transparent);
+}
+
+.story-book-timeline-entry--range > .story-book-timeline-anchor--range {
+  position: absolute;
+  left: 50%;
+  z-index: 3;
+  width: 42px;
+  min-height: var(--timeline-anchor-height, 42px);
+  height: var(--timeline-anchor-height, 42px);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.story-book-timeline-entry--range > .story-book-timeline-port--range {
+  /* A range is its own temporal resource. Keep its port on the right edge
+     so links from narrative nodes cannot be mistaken for fixed-date links.
+     Keep it inside the card, like the ports on narrative boxes, so nested
+     ranges never collide at their shared vertical centre. */
+  left: auto;
+  right: 8px;
+  top: 8px;
+  z-index: 4;
+  transform: none;
+  width: 14px;
+  height: 14px;
+  color: var(--timeline-range-color, #a855f7);
+  box-shadow: 0 0 12px var(--timeline-range-color, #a855f7);
+  pointer-events: auto;
+}
+
+.story-book-timeline-entry--range.story-book-timeline-entry--distributed > .story-book-timeline-port--range {
+  /* Offset the card's border so its port follows the same evenly spaced
+     coordinates as fixed dates, independently of the enclosing range box. */
+  top: calc(var(--timeline-range-port-position) - 1px);
+  transform: translateY(-50%);
+}
+
+.story-book-timeline-range-label {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 5px;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--timeline-range-color, #a855f7) 75%, white);
+  font-size: 8px;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.story-book-timeline-entry.has-connections {
+  filter: brightness(1.08);
+}
+
+.story-book-timeline-date-tooltip {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  z-index: 10;
+  width: max-content;
+  max-width: 180px;
+  padding: 5px 8px;
+  border: 1px solid rgba(151, 211, 255, 0.28);
+  border-radius: 7px;
+  background: rgba(12, 16, 34, 0.9);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25);
+  color: #eaf5ff;
+  font-size: 10px;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-4px);
+  transition:
+    opacity 0.14s ease,
+    transform 0.14s ease;
+  white-space: nowrap;
+}
+
+.story-book-timeline-entry:hover > .story-book-timeline-date-tooltip,
+.story-book-timeline-entry:focus-within > .story-book-timeline-date-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.story-book-timeline-date-tooltip--portal {
+  left: 0;
+  top: 0;
+  display: block;
+}
+
+.story-book-timeline-date-tooltip--portal.is-visible {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.story-book-timeline-connection {
+  pointer-events: auto;
+}
+
+.story-book-timeline-connection--preview {
+  pointer-events: none;
+}
+
+.story-book-timeline-link--preview {
+  stroke-dasharray: 8 6;
+  opacity: 0.82;
+}
+
+.story-book-timeline-connection-remove {
+  fill: url(#story-book-timeline-gradient);
+  stroke: rgba(216, 246, 255, 0.95);
+  stroke-width: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    fill 0.14s ease,
+    r 0.14s ease,
+    stroke 0.14s ease;
+}
+
+.story-book-timeline-connection-remove:hover,
+.story-book-timeline-connection-remove:focus {
+  fill: #ef4444;
+  stroke: #fff;
+  outline: none;
+  r: 6.5;
+}
+
+.story-book-timeline-connection-remove-mark {
+  fill: #fff;
+  font: 700 9px/1 sans-serif;
+  opacity: 0;
+  pointer-events: none;
+  text-anchor: middle;
+}
+
+.story-book-timeline-connection:hover .story-book-timeline-connection-remove-mark,
+.story-book-timeline-connection:focus-within .story-book-timeline-connection-remove-mark {
+  opacity: 1;
+}
+
+.story-book-timeline-date-popover {
+  --liquid-glass-tint: var(--modal-glass-bg);
+  position: fixed;
+  z-index: calc(var(--z-chat, 30) + 1);
+  width: min(248px, var(--timeline-calendar-max-width, calc(100vw - 24px)));
+  max-height: var(--timeline-calendar-max-height, calc(100dvh - 24px));
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 13px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--modal-glass-bg, rgba(18, 18, 26, 0.62));
+  color: var(--text-primary);
+}
+
+.story-book-timeline-date-popover strong {
+  display: block;
+  font-size: 12px;
+}
+
+.story-book-timeline-date-popover > p {
+  margin: 4px 0 10px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.story-book-timeline-calendar__header,
+.story-book-timeline-calendar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.story-book-timeline-calendar__header button,
+.story-book-timeline-calendar__actions button {
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+}
+
+.story-book-timeline-calendar__header button {
+  width: 24px;
+  height: 24px;
+  font-size: 17px;
+}
+
+.story-book-timeline-calendar__header button:hover,
+.story-book-timeline-calendar__actions button:hover {
+  background: rgba(113, 179, 255, 0.2);
+}
+
+.story-book-timeline-calendar__header strong {
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.story-book-timeline-calendar__navigation,
+.story-book-timeline-calendar__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.story-book-timeline-calendar__navigation {
+  grid-template-columns: minmax(0, 1fr) 60px 60px;
+}
+
+.story-book-timeline-calendar__navigation .kai-select__trigger {
+  min-height: 30px;
+  padding: 4px 6px;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.story-book-timeline-calendar__fields label {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.story-book-timeline-calendar__navigation input,
+.story-book-timeline-calendar__fields input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--input-bg, rgba(255, 255, 255, 0.03));
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+}
+
+.story-book-timeline-calendar__summary.is-invalid {
+  color: var(--color-danger, #f87171);
+}
+
+.story-book-timeline-date-popover :focus-visible,
+.story-book-timeline-date-warning:focus-visible {
+  outline: 2px solid var(--color-accent, #a78bfa);
+  outline-offset: 2px;
+}
+
+.story-book-timeline-date-warning {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  color: var(--color-danger, #f87171);
+  cursor: pointer;
+}
+
+.story-book-timeline-calendar__weekdays,
+.story-book-timeline-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.story-book-timeline-calendar__weekdays {
+  color: var(--text-secondary);
+  font-size: 9px;
+}
+
+.story-book-timeline-calendar__grid button,
+.story-book-timeline-calendar__grid span {
+  min-height: 25px;
+  border-radius: 6px;
+}
+
+.story-book-timeline-calendar__grid button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.story-book-timeline-calendar__grid button:hover:not(:disabled),
+.story-book-timeline-calendar__grid button.is-start,
+.story-book-timeline-calendar__grid button.is-end {
+  background: #60a5fa;
+  color: #07111f;
+  font-weight: 700;
+}
+
+.story-book-timeline-calendar__grid button.is-between {
+  border-radius: 0;
+  background: rgba(96, 165, 250, 0.22);
+}
+
+.story-book-timeline-calendar__grid button:disabled {
+  color: rgba(148, 163, 184, 0.34);
+  cursor: not-allowed;
+}
+
+.story-book-timeline-calendar__summary {
+  height: 25px;
+  overflow: auto;
+  margin: 8px 0;
+  color: #bcecff;
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.story-book-timeline-calendar__actions {
+  justify-content: flex-end;
+}
+
+.story-book-timeline-calendar__actions button {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.story-book-timeline-calendar__confirm {
+  background: linear-gradient(135deg, #22d3ee, #a855f7);
+  color: #fff;
+}
+
+.story-book-timeline-calendar__confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.story-book-tree-chapter {
+  margin: 18px 0 26px;
+}
+
+.story-book-tree-theme {
+  margin: 12px 0 18px 18px;
+  padding-left: 0;
+}
+
+.story-book-tree-content {
+  min-height: 8px;
+  margin-top: 4px;
+}
+
+.story-book-tree-chapter[data-story-implicit='true'],
+.story-book-tree-theme[data-story-implicit='true'] {
+  margin: 0;
+}
+
+.story-book-tree-content[hidden] {
+  display: none;
+}
+
+.story-book-tree-toggle {
+  display: inline-flex;
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  z-index: 21;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #fff;
+  font: 600 12px/1 var(--font-ui, Inter, sans-serif);
+  vertical-align: middle;
+  transform: translateY(-50%);
+  cursor: pointer;
+  user-select: none;
+}
+
+.story-book-tree-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  mask: url('/icons/chevron-down.svg') center / contain no-repeat;
+  background: currentColor;
+  transition: transform 140ms ease;
+}
+
+.story-book-tree-chapter.is-collapsed
+  > .story-book-row
+  > .story-book-row__ports
+  > .story-book-tree-toggle::before,
+.story-book-tree-theme.is-collapsed
+  > .story-book-row
+  > .story-book-row__ports
+  > .story-book-tree-toggle::before {
+  transform: rotate(-90deg);
+}
+
+.story-book-tree-toggle:hover {
+  color: #fff;
+}
+
+.story-book-tree-drag-handle {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 20px;
+  margin: 0 5px 0 15px;
+  padding: 0;
+  background-color: currentColor;
+  mask: url('/icons/grip.svg') center / 20px 20px no-repeat;
+  color: var(--text-primary);
+  vertical-align: middle;
+  cursor: grab;
+  user-select: none;
+}
+
+.story-book-tree-drag-handle:active {
+  cursor: grabbing;
+}
+
+.story-book-tree-drag-handle:hover {
+  color: var(--color-accent, #a78bfa);
+  border-color: var(--color-accent, #a78bfa);
+}
+
+.story-book-tree-content > p,
+.story-book-tree-content > blockquote,
+.story-book-tree-content > pre,
+.story-book-tree-content > ul,
+.story-book-tree-content > ol,
+.story-book-tree-content > h4 {
+  position: relative;
+}
+
+.story-book-tree-theme[draggable='true'] {
+  cursor: grab;
+}
+
+.story-book-tree-theme[draggable='true'] > h3 {
+  cursor: grab;
+}
+
+.story-book-tree-chapter.is-dragging,
+.story-book-tree-theme.is-dragging,
+.story-book-tree-content .is-dragging {
+  opacity: 0.45;
+}
+
+/* Mini-editor index container */
+
+.story-book-insertion {
+  --story-book-insertion-ink: #fff;
+
+  position: absolute;
+  z-index: 40;
+  height: 0;
+  pointer-events: none;
+}
+
+.story-book-insertion[hidden] {
+  display: none;
+}
+
+.story-book-insertion::before,
+.story-book-insertion::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  transform: translateY(-50%);
+  width: calc(50% - 32px);
+  height: 2.5px;
+  background: var(--story-book-insertion-ink);
+}
+
+.story-book-insertion::before {
+  left: 0;
+}
+
+.story-book-insertion::after {
+  right: 0;
+}
+
+html[data-theme='light'] .story-book-insertion {
+  --story-book-insertion-ink: #000;
+}
+
+.story-book-insertion__button {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--story-book-insertion-ink);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.story-book-insertion__button > .kai-icon {
+  display: block;
+  width: 64px;
+  height: 32px;
+  pointer-events: none;
+}
+
+.editor-index-container {
+  position: absolute !important;
+  bottom: calc(100% + 20px) !important;
+  left: 0 !important;
+  width: 100% !important;
+  background: rgba(15, 15, 20, 0.1) !important;
+  border: 0 !important;
+  border-radius: var(--radius-md) !important;
+  padding: 16px 20px !important;
+  box-sizing: border-box !important;
+  height: auto !important;
+  overflow: visible !important;
+  z-index: 10 !important;
+}
+
+.index-header-label {
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  color: var(--color-accent, #818cf8) !important;
+  letter-spacing: 0.1em !important;
+  margin-bottom: 12px !important;
+  text-transform: uppercase !important;
+  opacity: 0.8 !important;
+}
+
+.index-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.story-book-json-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 450px;
+  background: #11131d !important;
+  color: #d4d4d4;
+  overflow: hidden;
+}
+
+.story-book-json-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a9a2d9;
+  font: 600 11px/1.3 var(--font-ui, Inter, sans-serif);
+  letter-spacing: 0.02em;
+}
+
+.story-book-json-copy {
+  border: 1px solid rgba(169, 154, 255, 0.35);
+  border-radius: 7px;
+  padding: 5px 9px;
+  background: rgba(129, 140, 248, 0.14);
+  color: #e8e4ff;
+  font: 600 11px var(--font-ui, Inter, sans-serif);
+  cursor: pointer;
+}
+
+.story-book-json-copy:hover {
+  background: rgba(129, 140, 248, 0.25);
+}
+
+.story-book-json-code {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 16px;
+  overflow: auto;
+  user-select: text;
+  white-space: pre;
+  tab-size: 2;
+  font:
+    13px/1.55 'JetBrains Mono',
+    'Fira Code',
+    Consolas,
+    Monaco,
+    monospace;
+  color: #d4d4d4;
+}
+
+html[data-theme='light'] .story-book-json-view {
+  background: #f7f7fb !important;
+  color: #27243a;
+}
+
+html[data-theme='light'] .story-book-json-header {
+  border-bottom-color: rgba(61, 51, 105, 0.14);
+  color: #594d9b;
+}
+
+html[data-theme='light'] .story-book-json-copy {
+  color: #413477;
+  background: rgba(129, 140, 248, 0.12);
+  border-color: rgba(61, 51, 105, 0.22);
+}
+
+html[data-theme='light'] .story-book-json-code {
+  color: #3b355b;
+}
+
+.index-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  background: transparent;
+  font-family: var(--font-body, 'Inter', sans-serif) !important;
+  line-height: 1.5 !important;
+  box-sizing: border-box;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer !important;
+  transition: color var(--transition-fast) !important;
+}
+
+.index-item:hover {
+  color: var(--color-accent, #818cf8) !important;
+}
+
+.index-item--h1 {
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: #f1f5f9 !important;
+  border-left: 2px solid #06b6d4 !important;
+  padding-left: 8px !important;
+  margin-bottom: 6px !important;
+}
+
+.index-item--h2 {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #cbd5e1 !important;
+  border-left: 2px solid #f59e0b !important;
+  padding-left: 8px !important;
+  margin-left: 20px !important;
+  /* 1 tab indentation */
+}
+
+.index-item--h3 {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: #94a3b8 !important;
+  border-left: 2px solid #a855f7 !important;
+  padding-left: 8px !important;
+  margin-left: 40px !important;
+  /* 2 tabs indentation */
+}

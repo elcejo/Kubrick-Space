@@ -1,0 +1,14 @@
+[
+  {
+    "name": "tiny_face_detector_model-weights_manifest.json",
+    "url": "https://unpkg.com/@vladmandic/face-api@1.7.15/model/tiny_face_detector_model-weights_manifest.json",
+    "bytes": 3219,
+    "sha256": "5d1af4849ac48d5b985f4a9b16010c512353ddd6fcc63d50fd0bc9e9e64296e5"
+  },
+  {
+    "name": "tiny_face_detector_model.bin",
+    "url": "https://unpkg.com/@vladmandic/face-api@1.7.15/model/tiny_face_detector_model.bin",
+    "bytes": 193321,
+    "sha256": "b7503ce7df31039b1c43316a9b865cab6a70dd748cc602d3fa28b551503c3871"
+  }
+]

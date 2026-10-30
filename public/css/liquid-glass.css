@@ -1,0 +1,80 @@
+/* Edit the material here for every node, menu and dialog. Components only set --liquid-glass-tint. */
+.liquid-glass {
+  --liquid-glass-blur: 2px;
+  --liquid-glass-finish-blur: 1px;
+  --liquid-glass-saturation: 1.5;
+  --liquid-glass-brightness: 1.1;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: var(--liquid-glass-tint, color-mix(in srgb, var(--bg-secondary) 18%, transparent)) !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.liquid-glass--positioned {
+  position: relative;
+}
+
+.liquid-glass--stacked {
+  z-index: 0;
+}
+
+/* Blur the dimming layer without making the modal's ancestor a backdrop root. */
+.modal-overlay {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.modal-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.liquid-glass-definitions {
+  position: absolute;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.liquid-glass-layer {
+  /* Private geometry from the SVG engine; material values above stay in full-size CSS pixels. */
+  --_liquid-glass-backdrop: blur(calc(var(--liquid-glass-blur) * var(--_liquid-glass-resolution)))
+    var(--_liquid-glass-filter) blur(calc(var(--liquid-glass-finish-blur) * var(--_liquid-glass-resolution)))
+    saturate(var(--liquid-glass-saturation)) brightness(var(--liquid-glass-brightness));
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--_liquid-glass-width);
+  height: var(--_liquid-glass-height);
+  border-radius: var(--_liquid-glass-radius);
+  transform: scale(calc(1 / var(--_liquid-glass-resolution)));
+  transform-origin: 0 0;
+  pointer-events: none;
+  -webkit-backdrop-filter: var(--_liquid-glass-backdrop);
+  backdrop-filter: var(--_liquid-glass-backdrop);
+}
+
+.liquid-glass-layer[hidden] {
+  display: none;
+}
+
+/* Editable headings and tabs share their parent pane; never decorate persisted document HTML. */
+.editor-node.liquid-glass .editor-surface :is(h1, h2, h3),
+.character-node.liquid-glass .character-tabs__list {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Media surfaces keep their normal presentation, even while empty. */
+.character-portrait-section,
+.book-cover-section {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

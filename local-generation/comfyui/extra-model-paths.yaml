@@ -1,0 +1,15 @@
+kubrick:
+  base_path: ../..
+  text_encoders: models/llm
+kubrick_flux3:
+  base_path: ../..
+  diffusion_models: models/image/flux3 klein
+  text_encoders: models/image/flux3 klein/text encoder
+  vae: models/image/flux3 klein/vae
+  loras: models/image/flux3 klein/lora
+kubrick_h3:
+  base_path: ../..
+  diffusion_models: models/video
+  text_encoders: models/video
+  vae: models/video
+  loras: models/video

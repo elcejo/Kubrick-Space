@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kubrick Space — Creación Asistida por IA</title>
+    <meta
+      name="description"
+      content="Plataforma de creación asistida por inteligencia artificial para creativos"
+    />
+    <link rel="icon" type="image/svg+xml" href="/icons/kubrick-dark.svg" />
+    <link rel="preload" href="/fonts/unica-one/UnicaOne-Regular.ttf" as="font" type="font/ttf" crossorigin />
+
+    <script src="/vendor/purify.js"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Google Fonts for cover typography. These families are open-license fonts suitable for commercial use. -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,500;6..96,600;6..96,700;6..96,800;6..96,900&family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Serif+Display:ital@0;1&family=EB+Garamond:wght@400;500;600;700&family=Libre+Baskerville:wght@400;700&family=Libre+Franklin:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Generated locally: npm run build:css -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Abril+Fatface&amp;family=Bebas+Neue&amp;family=Oswald:wght@400;700&amp;family=Raleway:wght@400;700&amp;family=Merriweather:wght@400;700&amp;family=Spectral:wght@400;700&amp;family=Vollkorn:wght@400;700&amp;family=Crimson+Pro:wght@400;700&amp;family=Prata&amp;family=Marcellus&amp;family=Great+Vibes&amp;family=Josefin+Sans:wght@400;700&amp;display=swap"
+    />
+    <link rel="stylesheet" href="/css/tailwind.css" />
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/wizard.css" />
+    <link rel="stylesheet" href="css/workspace/shell.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/canvas-base.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/canvas-elements.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/ingredients.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/editor-surface.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/story-book.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/drawers.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/theme.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/video-board.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/agent-chat.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/workspace/character.css" />
+    <link rel="stylesheet" href="css/workspace/scenario.css" />
+    <link rel="stylesheet" href="css/workspace/film.css" />
+    <link rel="stylesheet" href="css/workspace/overrides.css?v=workspace-components-3" />
+    <link rel="stylesheet" href="css/home.css?v=home-aurora-3" />
+    <link rel="stylesheet" href="css/controls.css" />
+    <link rel="stylesheet" href="css/liquid-glass.css" />
+    <link rel="stylesheet" href="css/project-colors.css" />
+    <!-- face-api.js for client-side face detection -->
+    <script src="/vendor/face-api.js"></script>
+    <!-- D3.js for interactive project bubble map -->
+    <script src="/vendor/d3.js"></script>
+  </head>
+  <body class="bg-kai-bg text-kai-text font-sans min-h-screen overflow-hidden">
+    <div id="app" class="w-full h-screen"></div>
+
+    <!-- App bootstrap -->
+    <script type="module">
+      import { App } from './js/app.js';
+      window.addEventListener('DOMContentLoaded', () => {
+        App.init();
+      });
+    </script>
+  </body>
+</html>
