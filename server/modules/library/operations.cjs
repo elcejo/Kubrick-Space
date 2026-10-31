@@ -138,6 +138,7 @@ function createLibraryOperations(dependencies) {
     const project = data.projects.find((item) => item.id === params.id);
     if (!project) throw security.fail('Proyecto no encontrado.', 404);
     project.inferenceSettings = { ...project.inferenceSettings, ...patch };
+    if (project.inferenceSettings.videoModel === null) delete project.inferenceSettings.videoModel;
     // Routing preferences are metadata. Do not invalidate the content revision,
     // replace the draft or include them in historical document snapshots.
     projectStore.commit(data, { project });

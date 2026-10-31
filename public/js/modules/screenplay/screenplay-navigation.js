@@ -14,6 +14,99 @@ import { Toast } from '../../ui-components.js';
 import { enhanceSelect } from '../../custom-select.js';
 import { versionDialog } from '../ingredients/ingredient-version-dialogs.js';
 
+const SHOT_HELP = {
+  'Gran plano general': 'Muestra un paisaje o un espacio enorme; el personaje apenas se distingue.',
+  'Plano general': 'Muestra todo el escenario y sitúa a los personajes dentro de él.',
+  'Plano entero': 'Encuadra al personaje de cuerpo completo, de la cabeza a los pies.',
+  'Plano americano': 'Corta al personaje por las rodillas o los muslos; es el plano típico de acción.',
+  'Plano medio largo': 'Encuadra al personaje desde la cintura o la cadera hacia arriba.',
+  'Plano medio': 'Encuadra al personaje de la cintura hacia arriba; ideal para diálogos.',
+  'Primer plano': 'Encuadra el rostro y los hombros; resalta la emoción.',
+  'Primerísimo primer plano': 'Encuadra solo una parte del rostro, como los ojos o la boca.',
+  'Plano detalle': 'Muestra un objeto o una parte del cuerpo muy de cerca, como unas manos o una llave.',
+};
+const INTERIOR_HELP = {
+  '': 'Sin definir todavía.',
+  INT: 'Interior: la escena sucede dentro de un lugar cerrado.',
+  EXT: 'Exterior: la escena sucede al aire libre.',
+  'INT/EXT': 'Interior y exterior a la vez: la acción se ve desde dentro hacia fuera o cruza la puerta.',
+  'EXT/INT': 'Exterior e interior a la vez: la acción empieza fuera y entra a un lugar cerrado.',
+};
+const VOICE_HELP = {
+  '': 'Normal: el personaje habla en cuadro y se le ve.',
+  'V.O.': 'V.O. (voz en off): voz del personaje que no está en la escena, como un narrador o un pensamiento.',
+  'O.S.': 'O.S. (fuera de cuadro): el personaje está en la escena pero no se ve en el encuadre.',
+  'O.C.': 'O.C. (fuera de cámara): el personaje habla desde fuera del plano, igual que O.S.',
+  OFF: 'OFF: voz que se oye sin que el personaje aparezca, por ejemplo por teléfono o radio.',
+  'CONT.': 'CONT. (continúa): el mismo personaje sigue hablando tras una acción que interrumpe su diálogo.',
+};
+
+/** Tooltip: what the control is for, how many options it has and what each one means. */
+function describe(control, name, summary, entries = []) {
+  const options = entries.filter(([, text]) => text);
+  control.title =
+    name +
+    ': ' +
+    summary +
+    (options.length
+      ? ` Puedes elegir entre ${options.length} opciones:\n` +
+        options.map(([label, text]) => `• ${label}: ${text}`).join('\n')
+      : '');
+  return control;
+}
+
+/** Only projects linked as ingredients of the open screenplay can be chosen. */
+function linkedProjects(type) {
+  const seen = new Set();
+  return (AppState.currentProject?.ingredients || [])
+    .filter((item) => item.type === type && item.importedProjectId)
+    .map((item) => ({
+      id: item.importedProjectId,
+      name: item.importedProjectName || item.label || '',
+      color1: item.color1,
+      color2: item.color2,
+    }))
+    .filter((item) => (seen.has(item.id) ? false : seen.add(item.id)));
+}
+
+/** Themed select (never the browser's) that keeps typing inside it from reaching the editor. */
+function themed(select, { beforeOpen, ...options } = {}) {
+  const control = enhanceSelect(select, { searchable: false, ...options });
+  // Ingredients can be linked while the script is open: the list is rebuilt just before it opens.
+  if (beforeOpen) {
+    control.root?.addEventListener('pointerdown', beforeOpen, true);
+    control.root?.addEventListener(
+      'keydown',
+      (event) => {
+        if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) beforeOpen();
+      },
+      true,
+    );
+  }
+  control.root?.addEventListener('keydown', (event) => event.stopPropagation());
+  return control;
+}
+
+/** Releases the themed selects of nodes that are leaving the page. */
+function releaseSelects(node) {
+  for (const select of node.querySelectorAll('select')) enhanceSelect(select).destroy?.({ restore: false });
+}
+
+/** The coloured character tag the editor and the screenplay use for a linked character. */
+function characterTag(doc, character) {
+  const tag = doc.createElement('span');
+  tag.className = 'kai-tag kai-character-tag';
+  tag.setAttribute('spellcheck', 'false');
+  tag.dataset.tag = character.name;
+  tag.dataset.definition = 'character:' + character.id;
+  tag.textContent = character.name;
+  if (character.color1 && character.color2) {
+    tag.style.setProperty('--grad-color1', character.color1);
+    tag.style.setProperty('--grad-color2', character.color2);
+  }
+  return tag;
+}
+
 /** Scene shells own the editable body and fixed narrative sheet, never exported UI. */
 export function screenplayGroups(surface) {
   const groups = [];
@@ -47,6 +140,7 @@ function mountSceneHeading(shell, group, scene, index, context) {
   row.contentEditable = 'false';
   const number = doc.createElement('span');
   number.textContent = `ESCENA ${index + 1}:`;
+  number.title = 'Número de escena: se actualiza solo según el orden de las escenas.';
   const select = (label, entries, value) => {
     const control = doc.createElement('select');
     control.setAttribute('aria-label', label);
@@ -78,15 +172,27 @@ function mountSceneHeading(shell, group, scene, index, context) {
     shots.find((value) => value.toLocaleLowerCase() === shot.toLocaleLowerCase()) || '',
   );
   shotControl.dataset.sceneHeading = 'shot';
+  describe(
+    shotControl,
+    'Tipo de plano',
+    'Selecciona el tipo de plano de la escena.',
+    SCREENPLAY_SHOTS.map((value) => [value, SHOT_HELP[value]]),
+  );
+  for (const option of shotControl.options) option.title = SHOT_HELP[option.value] || '';
   const interior = select(
     'Interior / exterior',
     ['', 'INT', 'EXT', 'INT/EXT', 'EXT/INT'].map((value) => [value, value ? value + '.' : 'INT./EXT.']),
     scene.heading.interiorExterior,
   );
   interior.dataset.sceneHeading = 'interiorExterior';
-  const stages = (AppState.projects || []).filter(
-    (project) => project.type === 'stage' && !project.deletedAt && !project.trashedAt,
+  describe(
+    interior,
+    'Interior / exterior',
+    'Indica dónde sucede la escena.',
+    ['INT', 'EXT', 'INT/EXT', 'EXT/INT'].map((value) => [value + '.', INTERIOR_HELP[value]]),
   );
+  for (const option of interior.options) option.title = INTERIOR_HELP[option.value] || '';
+  let stages = linkedProjects('stage');
   const normalize = (value) =>
     String(value || '')
       .trim()
@@ -100,11 +206,53 @@ function mountSceneHeading(shell, group, scene, index, context) {
     linked?.id || (scene.heading.location ? 'custom' : ''),
   );
   stage.dataset.sceneStage = '';
+  const describeStages = () =>
+    describe(
+      stage,
+      'Escenario',
+      stages.length
+        ? `Elige dónde sucede la escena. Solo aparecen los ${stages.length} escenarios vinculados como ingredientes de este guión; con Personalizado escribes un nombre propio.`
+        : 'Elige dónde sucede la escena. No hay escenarios vinculados: añádelos como ingredientes del guión o usa Personalizado para escribir un nombre propio.',
+      [
+        ...stages.map((project) => [project.name, 'Escenario vinculado al guión.']),
+        ['Personalizado', 'Escribe tú el nombre del lugar.'],
+      ],
+    );
+  describeStages();
+  /** Picks up the stages linked (or unlinked) since this scene was drawn. */
+  const refreshStages = () => {
+    const fresh = linkedProjects('stage');
+    if (
+      fresh.map((item) => item.id + item.name).join('|') ===
+      stages.map((item) => item.id + item.name).join('|')
+    )
+      return;
+    stages = fresh;
+    const value = stage.value;
+    stage.replaceChildren(
+      ...[
+        ['', 'Escenario'],
+        ...stages.map((project) => [project.id, project.name]),
+        ['custom', 'Personalizado'],
+      ].map(([key, label]) => {
+        const option = doc.createElement('option');
+        option.value = key;
+        option.textContent = label;
+        return option;
+      }),
+    );
+    stage.value = value === 'custom' || stages.some((project) => project.id === value) ? value : '';
+    describeStages();
+  };
   const custom = text('Escenario personalizado', scene.heading.location, 'Nombre del escenario');
   custom.dataset.sceneHeading = 'location';
+  custom.title =
+    'Escenario personalizado: escribe el nombre del lugar cuando no hay un escenario vinculado que sirva.';
   custom.hidden = stage.value !== 'custom';
   const time = text('Momento del día', scene.heading.time, 'DÍA / NOCHE');
   time.dataset.sceneHeading = 'time';
+  time.title =
+    'Momento del día: escribe cuándo sucede la escena, por ejemplo DÍA, NOCHE, AMANECER o ATARDECER.';
   const commit = () => {
     const current = context.screenplayDocument.scenes.find((item) => item.id === group.id);
     if (!current) return;
@@ -141,13 +289,64 @@ function mountSceneHeading(shell, group, scene, index, context) {
   }
   row.append(number, shotControl, interior, stage, custom, time);
   shell.append(row);
+  themed(shotControl);
+  themed(interior);
+  themed(stage, { beforeOpen: refreshStages });
+}
+
+/**
+ * The speaker is a themed selector listing only the characters linked to the screenplay, plus
+ * "Personalizado" for a free name. The hidden name span keeps the data the document is built from.
+ */
+function syncCharacterControls(block) {
+  const doc = block.ownerDocument;
+  const name = block.querySelector('[data-screenplay-name]');
+  const picker = block.querySelector('[data-character-link]');
+  const custom = block.querySelector('[data-character-custom]');
+  if (!name || !picker || !custom) return;
+  const characters = linkedProjects('character');
+  const tag = name.querySelector('[data-definition^="character:"]');
+  const id = tag?.dataset.definition.slice('character:'.length) || '';
+  const text = name.textContent.trim();
+  const value = characters.some((item) => item.id === id) ? id : text ? 'custom' : '';
+  custom.hidden = value !== 'custom';
+  if (value === 'custom' && custom.value !== text) custom.value = text;
+  // Re-rendering must not touch the DOM when nothing changed (the surface is observed).
+  const key =
+    value + '|' + characters.map((item) => item.id + item.name + item.color1 + item.color2).join('|');
+  if (picker.dataset.key === key) return;
+  picker.dataset.key = key;
+  const option = (label, optionValue) => {
+    const item = doc.createElement('option');
+    item.value = optionValue;
+    item.textContent = label;
+    return item;
+  };
+  picker.replaceChildren(
+    option('Personaje', ''),
+    ...characters.map((item) => option(item.name, item.id)),
+    option('Personalizado', 'custom'),
+  );
+  picker.value = value;
+  describe(
+    picker,
+    'Personaje',
+    characters.length
+      ? `Elige quién habla entre los ${characters.length} personajes vinculados como ingredientes de este guión, o Personalizado para escribir otro nombre.`
+      : 'Elige quién habla. No hay personajes vinculados (añádelos como ingredientes del guión); con Personalizado escribes un nombre propio.',
+    [
+      ...characters.map((item) => [item.name, 'Personaje vinculado al guión.']),
+      ['Personalizado', 'Escribe tú el nombre del personaje.'],
+    ],
+  );
 }
 
 function mountScreenplayCharacter(block, editable) {
   if (block.dataset.screenplayVoice !== undefined) {
     block.contentEditable = 'false';
     const name = block.querySelector('[data-screenplay-name]');
-    if (name) name.contentEditable = String(editable);
+    if (name) name.contentEditable = 'false';
+    syncCharacterControls(block);
     return;
   }
   const doc = block.ownerDocument;
@@ -170,7 +369,9 @@ function mountScreenplayCharacter(block, editable) {
   }
   const name = doc.createElement('span');
   name.dataset.screenplayName = '';
-  name.contentEditable = String(editable);
+  // The speaker is chosen in the Personaje selector (or typed as Personalizado), never in this span.
+  name.contentEditable = 'false';
+  name.title = 'Nombre del personaje que habla: se elige en la lista Personaje.';
   name.setAttribute('role', 'textbox');
   name.setAttribute('aria-label', 'Nombre del personaje');
   name.dataset.placeholder = 'PERSONAJE';
@@ -189,16 +390,59 @@ function mountScreenplayCharacter(block, editable) {
     voice.append(option);
   }
   voice.value = parsed.voice;
+  describe(
+    voice,
+    'Tipo de voz',
+    'Indica cómo se oye al personaje.',
+    Object.entries(SCREENPLAY_VOICES).map(([value, label]) => [label, VOICE_HELP[value]]),
+  );
+  for (const option of voice.options) option.title = VOICE_HELP[option.value] || '';
+  const picker = doc.createElement('select');
+  picker.dataset.characterLink = '';
+  picker.setAttribute('aria-label', 'Personaje');
+  const custom = doc.createElement('input');
+  custom.type = 'text';
+  custom.dataset.characterCustom = '';
+  custom.maxLength = 200;
+  custom.placeholder = 'Nombre del personaje';
+  custom.setAttribute('aria-label', 'Personaje personalizado');
+  custom.title = 'Personaje personalizado: escribe el nombre de quien habla cuando no está vinculado.';
+  custom.hidden = true;
+  const changed = () => block.dispatchEvent(new doc.defaultView.Event('input', { bubbles: true }));
+  picker.addEventListener('change', (event) => {
+    event.stopPropagation();
+    const character = linkedProjects('character').find((item) => item.id === picker.value);
+    if (character) name.replaceChildren(characterTag(doc, character));
+    else if (picker.value === 'custom') name.textContent = custom.value || name.textContent.trim();
+    else name.replaceChildren(doc.createElement('br'));
+    changed();
+  });
+  custom.addEventListener('input', (event) => {
+    event.stopPropagation();
+    name.textContent = custom.value;
+    changed();
+  });
+  for (const control of [picker, custom, voice])
+    control.addEventListener('keydown', (event) => event.stopPropagation());
   block.dataset.screenplayVoice = parsed.voice;
   block.contentEditable = 'false';
   voice.addEventListener('change', (event) => {
     event.stopPropagation();
     block.dataset.screenplayVoice = voice.value;
-    block.dispatchEvent(new doc.defaultView.Event('input', { bubbles: true }));
+    changed();
   });
-  voice.addEventListener('keydown', (event) => event.stopPropagation());
-  controls.append(voice);
+  controls.append(picker, custom, voice);
   block.append(name, controls);
+  syncCharacterControls(block);
+  // The selector shows the character as its coloured tag, inside the control itself.
+  themed(picker, {
+    beforeOpen: () => syncCharacterControls(block),
+    label: (option) => {
+      const character = linkedProjects('character').find((item) => item.id === option.value);
+      return character ? characterTag(doc, character) : null;
+    },
+  });
+  themed(voice);
 }
 
 export function organizeScreenplayScenes(surface, context, editable) {
@@ -220,6 +464,7 @@ export function organizeScreenplayScenes(surface, context, editable) {
     for (const shell of [...surface.querySelectorAll('.screenplay-scene')]) {
       const heading = shell.querySelector('h2');
       const body = shell.querySelector('.screenplay-scene__body');
+      releaseSelects(shell.querySelector('.screenplay-scene__slugline') || shell);
       shell.replaceWith(...(heading ? [heading] : []), ...(body ? [...body.childNodes] : []));
     }
     const doc = surface.ownerDocument;
@@ -260,6 +505,13 @@ export function organizeScreenplayScenes(surface, context, editable) {
           block.contentEditable = 'true';
           block.dataset.placeholder =
             { P: 'Acción', BLOCKQUOTE: 'Diálogo', H4: 'Acotación', H5: 'Transición' }[block.tagName] || '';
+          block.title =
+            {
+              P: 'Acción: describe lo que se ve y sucede en la escena, en presente.',
+              BLOCKQUOTE: 'Diálogo: lo que dice el personaje indicado justo encima.',
+              H4: 'Acotación: indicación breve entre paréntesis sobre cómo se dice el diálogo.',
+              H5: 'Transición: cómo pasa la película a la siguiente escena, por ejemplo CORTE A.',
+            }[block.tagName] || '';
         }
       }
     }
@@ -293,6 +545,7 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
   search.type = 'search';
   search.placeholder = 'Buscar escena';
   search.setAttribute('aria-label', 'Buscar escena');
+  search.title = 'Buscar escena: filtra el índice por el texto del encabezado de cada escena.';
   const list = doc.createElement('ol');
   list.className = 'screenplay-navigation__list';
   details.append(summary, search, list);
@@ -302,6 +555,8 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     add.type = 'button';
     add.className = 'screenplay-navigation__add';
     add.textContent = 'Añadir escena';
+    add.title =
+      'Añadir escena: crea una escena nueva al final del guión con acción, personaje y diálogo vacíos.';
     add.addEventListener('click', () => {
       const scene = {
         id: screenplayId(),
@@ -628,6 +883,7 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
   return () => {
     disposed = true;
     for (const cancel of [...cleanups]) cancel();
+    releaseSelects(surface);
     observer.disconnect();
     surface.removeEventListener('beforeinput', preserveField);
     doc.removeEventListener('selectionchange', active);

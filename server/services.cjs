@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID: uuidv4 } = require('node:crypto');
-const { createKeyStore, security } = require('./modules/security/index.cjs');
+const { createApiKeyVault, security } = require('./modules/security/index.cjs');
 const {
   llmConfig,
   createProjectChatStore: createChatStore,
@@ -20,7 +20,7 @@ function createServices(dataRoot, appRoot = path.resolve(__dirname, '..')) {
   const PROJECTS_DIR = path.join(ROOT_DIR, 'projects');
   const API_KEYS_JSON = path.join(ROOT_DIR, 'api_keys.json');
   const LLM_CONFIG_JSON = path.join(ROOT_DIR, 'llm_config.json');
-  const keyStore = createKeyStore(API_KEYS_JSON);
+  const apiKeyVault = createApiKeyVault(API_KEYS_JSON);
   const repository = createProjectRepository(ROOT_DIR);
   const projectStore = repository;
   const screenplayCovers = createScreenplayCovers({ appRoot, PROJECTS_DIR, security });
@@ -112,7 +112,7 @@ function createServices(dataRoot, appRoot = path.resolve(__dirname, '..')) {
    * Read the current API keys from disk.
    */
   function getApiKeys() {
-    return keyStore.read();
+    return apiKeyVault.read();
   }
   function getLLMConfig() {
     return llmConfig.read(LLM_CONFIG_JSON);
@@ -134,7 +134,7 @@ function createServices(dataRoot, appRoot = path.resolve(__dirname, '..')) {
     ROOT_DIR,
     PROJECTS_DIR,
     LLM_CONFIG_JSON,
-    keyStore,
+    apiKeyVault,
     projectStore,
     documentStore,
     chatStore,

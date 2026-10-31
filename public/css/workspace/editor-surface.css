@@ -1547,7 +1547,9 @@ html[data-theme='light'] .image-model-option {
   text-transform: uppercase;
 }
 .screenplay-scene__slugline :is(select, input),
-.screenplay-wysiwyg h3 [data-voice-type] {
+.screenplay-wysiwyg h3 :is([data-voice-type], [data-character-custom]),
+.screenplay-scene__slugline .kai-select__trigger,
+.screenplay-wysiwyg h3 .kai-select__trigger {
   min-width: 0;
   max-width: 100%;
   min-height: 30px;
@@ -1565,6 +1567,36 @@ html[data-theme='light'] .image-model-option {
 }
 .screenplay-scene__slugline select {
   flex: 0 1 auto;
+}
+.screenplay-scene__slugline .kai-select,
+.screenplay-wysiwyg h3 .kai-select {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.screenplay-scene__slugline .kai-select__trigger,
+.screenplay-wysiwyg h3 .kai-select__trigger {
+  width: auto;
+  gap: 8px;
+  padding: 3px 8px;
+  font-weight: inherit;
+}
+.screenplay-wysiwyg h3 [data-character-custom] {
+  width: 16ch;
+}
+.screenplay-wysiwyg h3[data-screenplay-voice] > [data-screenplay-controls] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+/* The speaker's name lives in the Personaje selector; the span only carries the data. */
+.screenplay-wysiwyg h3[data-screenplay-voice] > [data-screenplay-name] {
+  display: none;
+}
+.screenplay-wysiwyg h3 .kai-select__name .kai-tag {
+  cursor: pointer;
 }
 .screenplay-scene__slugline option,
 .screenplay-wysiwyg h3 option {

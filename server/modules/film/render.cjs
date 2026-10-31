@@ -69,12 +69,23 @@ function createFilmRender(deps, { readImage }) {
         payload: {
           // Step timeouts for the local engine are longer than for an API; nothing here uses a text model.
           inferenceMode: 'local',
-          inferenceSettings: {},
+          inferenceSettings: inference.currentSettings(),
           expectedContent: project.content,
         },
       });
+    /** The top bar decides: previews run only in Local mode with the video model chosen for this project. */
     const available = () => {
-      if (!inference?.localVideoAvailable?.())
+      if (inference?.currentMode?.() !== 'local')
+        throw fail(
+          'El video del largometraje se genera solo con un modelo local. Cambia a Local en la barra superior.',
+          428,
+        );
+      if (inference.currentSettings?.()?.videoModel?.model !== 'minimax-h3')
+        throw fail(
+          'Elige el modelo de video local en la barra superior para generar las previsualizaciones.',
+          428,
+        );
+      if (!inference.localVideoAvailable?.())
         throw fail('Faltan los pesos locales de MiniMax H3 en models/video/h3.', 428);
     };
 

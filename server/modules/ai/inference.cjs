@@ -91,6 +91,7 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
     /** Runs a film task on the local engine, serialized with every other local GPU operation. */
     runLocalVideo: local.video,
     localVideoAvailable: local.videoAvailable,
+    videoModels: local.videoModels,
     generateLocalImage: (body, signal) =>
       local.image({ ...body, localModel: currentLocalModel() || LOCAL_ID }, signal),
   };

@@ -1,5 +1,6 @@
 import { AppState } from '../../app-state.js';
 import { API } from '../../api-service.js';
+import { EventBus } from '../../event-bus.js';
 import { Modal } from '../../ui-components.js';
 import { renderIcon } from '../../icons.js';
 import { safeHTML } from '../../safe-html.js';
@@ -101,6 +102,11 @@ export class FilmWorkspace {
     this.scriptId = '';
     this.node.classList.add('film-anchor');
     this.node.hidden = true;
+    // The top bar decides: switching mode or the video model updates the buttons at once.
+    this.settingsListener = ({ key }) => {
+      if (['inferenceMode', 'inferenceSettings'].includes(key) && this.current()) this.updateBoard();
+    };
+    EventBus.on('state:change', this.settingsListener);
     this.mount();
     this.jobs = new FilmJobs(this);
   }
@@ -118,6 +124,7 @@ export class FilmWorkspace {
   }
   destroy() {
     this.destroyed = true;
+    EventBus.off('state:change', this.settingsListener);
     this.jobs?.destroy();
     this.board?.remove();
     this.board = null;
@@ -147,6 +154,18 @@ export class FilmWorkspace {
   }
   hasScenes() {
     return this.document.scenes.length > 0;
+  }
+  /** Previews run only in Local mode with the video model chosen in the top bar. */
+  videoReady() {
+    return (
+      AppState.inferenceMode === 'local' &&
+      this.project().inferenceSettings?.videoModel?.model === 'minimax-h3'
+    );
+  }
+  videoHint() {
+    if (AppState.inferenceMode !== 'local')
+      return 'El video se genera solo con un modelo local: cambia a Local en la barra superior.';
+    return 'Elige el modelo de video local en la barra superior para generar las previsualizaciones.';
   }
   canRender() {
     return this.document.scenes.some((scene) => !scene.sourceRemoved && scene.prompt);
@@ -334,6 +353,7 @@ export class FilmWorkspace {
       () => void this.sceneAction(scene, 'redo'),
     );
     redo.dataset.renderAction = 'redo';
+    redo.dataset.rerunOk = 'false';
     redo.disabled =
       scene.sourceRemoved || scene.redo > 0 || !scene.conditioning || filmNeedsConditioning(scene);
     const meta = filmDimensions(this.document.params);
@@ -563,12 +583,23 @@ export class FilmWorkspace {
     const running = Boolean(this.jobs?.job) && RUNNING_STATES.includes(this.jobs.job.status);
     const intro = !this.hasScenes();
     this.generateButton.disabled = this.busy || !this.scripts().length;
-    this.renderButton.disabled = this.busy || !this.canRender();
+    this.renderButton.disabled = this.busy || !this.canRender() || !this.videoReady();
     this.retryButton.hidden = !failed || this.busy;
     this.cancelButton.hidden = !running;
-    this.hint.textContent = this.scripts().length
-      ? ''
-      : 'Añade un guión como ingrediente de la película (panel de ingredientes) para poder generarla.';
+    this.hint.textContent = !this.scripts().length
+      ? 'Añade un guión como ingrediente de la película (panel de ingredientes) para poder generarla.'
+      : this.canRender() && !this.videoReady()
+        ? this.videoHint()
+        : '';
+    // A redo needs the same video model, on top of the per-scene conditions.
+    for (const button of this.board.querySelectorAll('[data-render-action="redo"]')) {
+      if (button.dataset.baseDisabled === undefined) button.dataset.baseDisabled = String(button.disabled);
+      button.disabled = button.dataset.baseDisabled === 'true' || !this.videoReady();
+      button.title =
+        this.videoReady() || button.dataset.baseDisabled === 'true'
+          ? 'Rehacer previsualización'
+          : this.videoHint();
+    }
     this.hint.hidden = !this.hint.textContent;
     this.status.textContent = this.busy ? this.statusText || 'Trabajando…' : '';
     this.status.hidden = !this.status.textContent;

@@ -1,4 +1,5 @@
 import { renderIcon } from '../../icons.js';
+import { isCreatableProject } from '../../contracts/project-availability.js';
 /**
  * @file m-songs.js — Song Module for Kubrick Space
  * @description Defines the "Canción" content type: subcategories, ingredients, export formats, sidebar config.
@@ -21,9 +22,27 @@ export default {
 
   /** Available subcategories shown in wizard step 2 */
   subcategories: [
-    { id: 'single', label: 'Single', description: 'Sencillo musical independiente', icon: 'music' },
-    { id: 'album', label: 'Álbum', description: 'Colección de canciones', icon: 'disc' },
-    { id: 'soundtrack', label: 'Soundtrack', description: 'Banda sonora', icon: 'video' },
+    {
+      id: 'single',
+      comingSoon: !isCreatableProject('song', 'single'),
+      label: 'Single',
+      description: 'Sencillo musical independiente',
+      icon: 'music',
+    },
+    {
+      id: 'album',
+      comingSoon: !isCreatableProject('song', 'album'),
+      label: 'Álbum',
+      description: 'Colección de canciones',
+      icon: 'disc',
+    },
+    {
+      id: 'soundtrack',
+      comingSoon: !isCreatableProject('song', 'soundtrack'),
+      label: 'Soundtrack',
+      description: 'Banda sonora',
+      icon: 'video',
+    },
   ],
 
   /** Supported export formats */

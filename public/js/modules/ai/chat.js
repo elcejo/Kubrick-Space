@@ -9,6 +9,7 @@ import { parseAgentResponse, createReplyAnimator, storyBookIntent } from './chat
  * the conversation.
  */
 
+import * as ProjectAvailability from '../../contracts/project-availability.js';
 import { EventBus } from '../../event-bus.js';
 import { AppState } from '../../app-state.js';
 import { API } from '../../api-service.js';
@@ -1009,6 +1010,19 @@ export class Chat {
               '[Sistema: Creación bloqueada. El usuario está editando un proyecto existente. Usa EDITAR_DOCUMENTO para el libro abierto con su ID confirmado; no propongas duplicados. Proyecto existente: ' +
               JSON.stringify(existing?.id || originatingProjectId) +
               ']';
+            this.#addInvisibleMessage('user', outcome);
+            currentMessageText = outcome;
+            continue;
+          }
+          // Only finished project types can be created. A category the model got wrong falls back to the type's
+          // default; a type that is not available yet is refused and the model is told what it may create.
+          payload.type = payload.type || 'character';
+          const categories = ProjectAvailability.creatableCategories(payload.type);
+          // Only a category the model invented is replaced; a real one that is not available yet is refused below.
+          if (categories && !ProjectAvailability.isKnownCategory(payload.type, payload.category))
+            payload.category = ProjectAvailability.DEFAULT_CATEGORY[payload.type];
+          if (!ProjectAvailability.isCreatableProject(payload.type, payload.category)) {
+            const outcome = `[Sistema: Creación bloqueada. "${payload.type}" aún no está disponible en Kubrick Space (próximamente). Solo se pueden crear: ${ProjectAvailability.CREATABLE_DESCRIPTION}. Explícaselo al usuario y no repitas el comando.]`;
             this.#addInvisibleMessage('user', outcome);
             currentMessageText = outcome;
             continue;

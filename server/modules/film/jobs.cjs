@@ -56,11 +56,38 @@ function createFilmJobs(deps, { infer }) {
     return (project.ingredients || [])
       .filter((ingredient) => ingredient.active !== false && ingredient.importedProjectId)
       .map((ingredient) => {
-        const resolved = aiContexts.resolveIngredient(ingredient);
-        return resolved ? { ingredient, project: resolved } : null;
+        try {
+          const resolved = aiContexts.resolveIngredient(ingredient);
+          return resolved ? { ingredient, project: resolved } : null;
+        } catch {
+          // A deleted project or version is simply not a candidate.
+          return null;
+        }
       })
       .filter(Boolean);
   }
+  /** Ingredients of the film first, then those linked to the screenplay itself; one entry per project. */
+  function referenceCandidates(film, script) {
+    const own = script.project.ingredients;
+    const fromScript = linked({
+      ingredients: Array.isArray(own)
+        ? own
+        : readCurrentProject(script.ingredient.importedProjectId)?.ingredients,
+    });
+    const seen = new Set();
+    return [...linked(film), ...fromScript].filter(({ ingredient }) => {
+      if (seen.has(ingredient.importedProjectId)) return false;
+      seen.add(ingredient.importedProjectId);
+      return true;
+    });
+  }
+  const liveProject = (id) => {
+    try {
+      return readCurrentProject(id);
+    } catch {
+      return null;
+    }
+  };
   const screenplayOf = (content) => {
     const clean = security.validateScreenplayContent(content);
     return clean ? JSON.parse(clean) : null;
@@ -226,7 +253,8 @@ function createFilmJobs(deps, { infer }) {
     // 2. Prompts: one LLM call per scene that needs it. A failure keeps the rest of the film.
     const screenplay = parseScreenplay(script.project.content);
     const sceneById = new Map(screenplay.scenes.map((scene) => [scene.id, scene]));
-    const everything = linked(project());
+    const everything = referenceCandidates(project(), script);
+    const noPhoto = new Set();
     const characters = everything.filter(({ project: item }) => parseCharacterDocument(item.content || ''));
     const places = everything.filter(({ project: item }) => parseScenarioDocument(item.content || ''));
     const document = parseFilmDocument(readCurrentProject(projectId).content);
@@ -250,11 +278,16 @@ function createFilmJobs(deps, { infer }) {
         places.find(
           ({ project: item }) => mentions(source.heading.location || source.heading.text, item.name) >= 0,
         );
-      const picked = found
-        .slice(0, place ? FILM_MAX_REFERENCES - 1 : FILM_MAX_REFERENCES)
-        .map(({ entry }) => entry);
-      const result = picked.map((entry) => describe('character', entry));
-      if (place) result.push(describe('stage', place));
+      // Only references with a photo can go to H3; the others are left out and reported once.
+      const described = found.map(({ entry }) => describe('character', entry));
+      const placeReference = place ? describe('stage', place) : null;
+      for (const reference of [...described, ...(placeReference ? [placeReference] : [])])
+        if (!reference.image) noPhoto.add(reference.name || 'sin nombre');
+      const stage = placeReference?.image ? placeReference : null;
+      const result = described
+        .filter((reference) => reference.image)
+        .slice(0, stage ? FILM_MAX_REFERENCES - 1 : FILM_MAX_REFERENCES);
+      if (stage) result.push(stage);
       // Tags identify a reference in the prompt, so they are unique inside the scene.
       const used = new Set();
       return result.map((reference, index) => {
@@ -272,7 +305,13 @@ function createFilmJobs(deps, { infer }) {
         description = sheet
           ? [sheet.description, characterContextText(sheet, { visualOnly: true })].filter(Boolean).join('\n')
           : '';
-        image = item.covers?.[item.currentCoverIndex] || item.covers?.[0] || '';
+        const live = liveProject(ingredient.importedProjectId);
+        image =
+          item.covers?.[item.currentCoverIndex] ||
+          item.covers?.[0] ||
+          live?.covers?.[live.currentCoverIndex] ||
+          live?.covers?.[0] ||
+          '';
       } else {
         const sheet = parseScenarioDocument(item.content || '');
         description = sheet ? scenarioContextText(sheet) : '';
@@ -404,7 +443,12 @@ function createFilmJobs(deps, { infer }) {
       const message = `No se pudo escribir el prompt de ${failures.length} ${failures.length === 1 ? 'escena' : 'escenas'}: ${failures[0].error.message} Las demás se guardaron; reintenta el trabajo.`;
       throw Object.assign(fail(message, 502), { publicMessage: message });
     }
-    return { message: 'Película preparada.', scenes: targets.length };
+    return {
+      message: noPhoto.size
+        ? `Película preparada. Sin foto principal, no se usaron como referencia: ${[...noPhoto].join(', ')}.`
+        : 'Película preparada.',
+      scenes: targets.length,
+    };
   }
 
   return { register, run };

@@ -25,6 +25,17 @@ export class LocalInferenceControls {
     this.imageSelect = document.createElement('select');
     this.imageSelect.setAttribute('aria-label', 'Modelo de imagen local');
     this.element.append(this.select, this.button, this.imageSelect);
+    // Only the feature film generates video, so only it offers a video model (and only in Local mode).
+    const project = AppState.currentProject;
+    this.videoSelect = null;
+    if (project?.type === 'video' && project.category === 'feature') {
+      this.videoSelect = document.createElement('select');
+      this.videoSelect.setAttribute('aria-label', 'Modelo de video local');
+      this.videoSelect.append(new Option('Video · Elegir modelo', ''));
+      this.element.append(this.videoSelect);
+      this.videoPicker = enhanceSelect(this.videoSelect, { searchable: false });
+      this.videoSelect.addEventListener('change', () => void this.saveVideo());
+    }
     this.imagePicker = enhanceSelect(this.imageSelect, { searchable: false });
     this.picker = enhanceSelect(this.select, { searchable: false });
     this.select.addEventListener('change', () => void this.save());
@@ -50,6 +61,12 @@ export class LocalInferenceControls {
           ? state.imageModels.map((model) => new Option(model.name, model.model))
           : [new Option('Imagen · Sin modelo local', '')]),
       );
+      if (this.videoSelect) {
+        this.videoSelect.replaceChildren(
+          new Option('Video · Elegir modelo', ''),
+          ...(state.videoModels || []).map((model) => new Option(model.name, model.model)),
+        );
+      }
       this.select.replaceChildren(
         ...state.models.map((model) => {
           const option = document.createElement('option');
@@ -88,6 +105,14 @@ export class LocalInferenceControls {
     this.picker?.refresh();
     this.imageSelect.disabled = !this.state?.imageModels?.length;
     this.imagePicker?.refresh();
+    if (this.videoSelect) {
+      this.videoSelect.value = AppState.currentProject?.inferenceSettings?.videoModel?.model || '';
+      this.videoSelect.disabled = !!this.saving || !this.state?.videoModels?.length;
+      this.videoSelect.title = this.state?.videoModels?.length
+        ? 'Modelo que genera las previsualizaciones del largometraje'
+        : 'No se encontró el modelo de video local (models/video/h3).';
+      this.videoPicker?.refresh();
+    }
   }
   async save() {
     const model = this.select.value;
@@ -100,6 +125,24 @@ export class LocalInferenceControls {
       );
     } catch (error) {
       if (!this.destroyed) await Modal.alert({ title: 'Modelo local', message: error.message });
+    } finally {
+      this.saving = false;
+      if (!this.destroyed) this.render();
+    }
+  }
+  async saveVideo() {
+    const model = this.videoSelect.value;
+    this.saving = true;
+    this.render();
+    try {
+      applyProjectInference(
+        this.projectId,
+        await API.saveProjectInference(this.projectId, {
+          videoModel: model ? { provider: 'local', model } : null,
+        }),
+      );
+    } catch (error) {
+      if (!this.destroyed) await Modal.alert({ title: 'Modelo de video', message: error.message });
     } finally {
       this.saving = false;
       if (!this.destroyed) this.render();
@@ -129,5 +172,6 @@ export class LocalInferenceControls {
     EventBus.off('state:change', this.listener);
     this.picker.destroy({ restore: false });
     this.imagePicker.destroy({ restore: false });
+    this.videoPicker?.destroy({ restore: false });
   }
 }

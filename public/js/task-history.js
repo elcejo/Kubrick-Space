@@ -120,7 +120,14 @@ export class TaskHistory {
                 dateStyle: 'medium',
                 timeStyle: 'short',
               });
-              return `<article class="workspace-task task-history__item" data-status="${escapeHTML(job.status)}"><div class="task-history__item-header"><div><a href="#/workspace/${encodeURIComponent(job.projectId)}">${escapeHTML(job.projectName)}</a><span>${escapeHTML(kinds[job.kind] || 'Tarea')}</span></div><button type="button" data-delete-job-record="${escapeHTML(job.id)}" aria-label="Eliminar tarea de ${escapeHTML(job.projectName)} del historial" title="Eliminar del historial" ${active(job) ? 'disabled' : ''}>${renderIcon('trash', 16)}</button></div><div class="task-history__meta"><span>${escapeHTML(states[job.status] || job.status)}</span><time datetime="${escapeHTML(job.createdAt)}">${escapeHTML(date)}</time></div>${job.error ? `<p>${escapeHTML(job.error)}</p>` : ''}<details class="workspace-task__timing" data-history-timing="${escapeHTML(job.id)}" ${this.openTiming.has(job.id) ? 'open' : ''}><summary>${renderIcon('chevron-right', 14)} Tiempos</summary>${this.openTiming.has(job.id) ? timingMarkup(job, this.traces.get(job.id)?.timing, this.traces.get(job.id)?.error) : ''}</details></article>`;
+              return [
+                `<article class="workspace-task task-history__item" data-status="${escapeHTML(job.status)}"><div class="task-history__item-header"><div><a href="#/workspace/${encodeURIComponent(job.projectId)}">${escapeHTML(job.projectName)}</a>`,
+                `<span>${escapeHTML(kinds[job.kind] || 'Tarea')}</span></div><button type="button" data-delete-job-record="${escapeHTML(job.id)}" aria-label="Eliminar tarea de ${escapeHTML(job.projectName)} del historial" title="Eliminar del historial" ${active(job) ? 'disabled' : ''}>${renderIcon('trash', 16)}</button>`,
+                `</div><div class="task-history__meta"><span>${escapeHTML(states[job.status] || job.status)}</span><time datetime="${escapeHTML(job.createdAt)}">${escapeHTML(date)}</time>`,
+                `</div>${job.error ? `<p>${escapeHTML(job.error)}</p>` : ''}<details class="workspace-task__timing" data-history-timing="${escapeHTML(job.id)}" ${this.openTiming.has(job.id) ? 'open' : ''}>`,
+                `<summary>${renderIcon('chevron-right', 14)} Tiempos</summary>${this.openTiming.has(job.id) ? timingMarkup(job, this.traces.get(job.id)?.timing, this.traces.get(job.id)?.error) : ''}</details>`,
+                `</article>`,
+              ].join('');
             })
             .join('')
         : '<p class="task-history__empty">Sin tareas registradas.</p>',

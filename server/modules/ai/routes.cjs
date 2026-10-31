@@ -341,6 +341,7 @@ module.exports = function registerAIRoutes(app, dependencies) {
         body: {
           models: dependencies.inference.models(),
           imageModels: dependencies.inference.imageModels(),
+          videoModels: dependencies.inference.videoModels(),
           ...dependencies.inference.localStatus(),
         },
       })),

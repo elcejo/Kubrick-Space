@@ -31,7 +31,7 @@ let sequence = 0;
 
 export function enhanceSelect(
   select,
-  { searchable = true, placeholder = 'Selecciona una opción', allowEmpty = false } = {},
+  { searchable = true, placeholder = 'Selecciona una opción', allowEmpty = false, label = null } = {},
 ) {
   if (controls.has(select)) return controls.get(select);
   const doc = select.ownerDocument;
@@ -78,6 +78,12 @@ export function enhanceSelect(
   root.append(select, trigger, menu);
   select.hidden = true;
   select.tabIndex = -1;
+  // `label(option)` may return a node (for instance a coloured tag) to show instead of the plain text.
+  const paint = (target, option, fallback = '') => {
+    const rich = option && label ? label(option) : null;
+    if (rich) target.replaceChildren(rich);
+    else target.textContent = option?.textContent || fallback;
+  };
   let opened = false,
     destroyed = false,
     active = -1,
@@ -180,8 +186,8 @@ export function enhanceSelect(
       row.tabIndex = -1;
       row.setAttribute('role', 'option');
       row.setAttribute('aria-selected', String(option.value === select.value));
-      row.textContent = option.textContent;
-      row.title = option.textContent;
+      paint(row, option);
+      row.title = option.title || option.textContent;
       row.addEventListener('pointermove', () => {
         active = index;
         highlight();
@@ -209,8 +215,8 @@ export function enhanceSelect(
   function refresh() {
     if (destroyed) return;
     const selected = select.selectedOptions[0];
-    name.textContent = selected?.textContent || placeholder;
-    trigger.title = selected?.textContent || placeholder;
+    paint(name, selected, placeholder);
+    trigger.title = select.title || selected?.textContent || placeholder;
     const caption = select.labels?.[0]?.cloneNode(true);
     caption?.querySelectorAll('select, .kai-select, button, input').forEach((field) => field.remove());
     const label = select.getAttribute('aria-label') || caption?.textContent.trim() || placeholder;
@@ -289,7 +295,7 @@ export function enhanceSelect(
     childList: true,
     characterData: true,
     attributes: true,
-    attributeFilter: ['disabled', 'selected', 'value', 'label', 'aria-label'],
+    attributeFilter: ['disabled', 'selected', 'value', 'label', 'aria-label', 'title'],
   });
   const control = {
     root,

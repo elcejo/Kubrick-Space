@@ -11,6 +11,20 @@ import { API } from './api-service.js';
 import { Toast, Loader } from './ui-components.js';
 import { Router } from './router.js';
 
+/** A subcategory flagged comingSoon cannot be created yet; a module is blocked when all its subcategories are. */
+const isAvailable = (subcategory) => subcategory.comingSoon !== true;
+const moduleAvailable = (module) => module.subcategories.some(isAvailable);
+const COMING_SOON = 'Próximamente';
+
+/** Marks a bubble as not selectable: dimmed, announced as disabled and labelled "Próximamente". */
+function markComingSoon(bubble) {
+  bubble.classList.add('is-coming-soon');
+  const badge = document.createElement('span');
+  badge.className = 'wizard-bubble-soon';
+  badge.textContent = COMING_SOON;
+  bubble.append(badge);
+}
+
 export class Wizard {
   /** @type {HTMLElement|null} */
   _container = null;
@@ -255,7 +269,11 @@ export class Wizard {
       const selectable = visible && (this._step === 1 || !category);
       bubble.tabIndex = selectable ? 0 : -1;
       bubble.setAttribute('aria-hidden', String(!visible));
-      bubble.setAttribute('aria-disabled', String(!selectable));
+      // A blocked option stays reachable by keyboard so its "Próximamente" label is announced, but it is disabled.
+      bubble.setAttribute(
+        'aria-disabled',
+        String(!selectable || bubble.classList.contains('is-coming-soon')),
+      );
     });
   }
 
@@ -332,12 +350,19 @@ export class Wizard {
         </div>
       `);
 
+      const available = moduleAvailable(mod);
+      if (!available) markComingSoon(div);
       this._setupDragAndClick(div, () => {
         if (this._step === 1) {
+          if (!available) return void Toast.show(`${mod.label}: ${COMING_SOON.toLowerCase()}.`, 'info');
           this._selectedModule = mod;
           this._goForward();
         }
       });
+      if (!available) {
+        div.setAttribute('aria-disabled', 'true');
+        div.setAttribute('aria-label', `${mod.label}, ${COMING_SOON.toLowerCase()}`);
+      }
 
       bubblesContainer.appendChild(div);
     });
@@ -363,12 +388,19 @@ export class Wizard {
           </div>
         `);
 
+        const available = isAvailable(sub);
+        if (!available) markComingSoon(div);
         this._setupDragAndClick(div, () => {
           if (this._step === 2) {
+            if (!available) return void Toast.show(`${sub.label}: ${COMING_SOON.toLowerCase()}.`, 'info');
             this._selectedCategory = sub;
             this._goForward();
           }
         });
+        if (!available) {
+          div.setAttribute('aria-disabled', 'true');
+          div.setAttribute('aria-label', `${sub.label}, ${COMING_SOON.toLowerCase()}`);
+        }
 
         bubblesContainer.appendChild(div);
       });

@@ -3,7 +3,7 @@ const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createLocalImage, localImageModels } = require('./local-image.cjs');
-const { createLocalVideo } = require('./local-video.cjs');
+const { createLocalVideo, LOCAL_VIDEO_ENGINE } = require('./local-video.cjs');
 
 const LOCAL_ID = 'local:qwen3.5-4b-int8-convrot';
 const fail = (message, code = 'LOCAL_INFERENCE_ERROR', status = 502) =>
@@ -477,6 +477,17 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     fetchLocal,
     video,
     videoAvailable: localVideo.available,
+    videoModels: () =>
+      localVideo.available()
+        ? [
+            {
+              ...LOCAL_VIDEO_ENGINE,
+              id: 'local:minimax-h3',
+              name: 'MiniMax H3 · Local',
+              label: 'MiniMax H3 · Local',
+            },
+          ]
+        : [],
     control,
     image,
     imageModels: () => localImageModels(appRoot),

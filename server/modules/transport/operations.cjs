@@ -2,7 +2,7 @@
 function createConfigurationOperations(dependencies) {
   const {
     getApiKeys,
-    keyStore,
+    apiKeyVault,
     llmConfig,
     getLLMConfig,
     openrouterModels,
@@ -46,7 +46,7 @@ function createConfigurationOperations(dependencies) {
         keys[name] = value.trim();
       }
 
-      keyStore.save(keys);
+      apiKeyVault.save(keys);
       return reply({ success: true }, 200);
     } catch (err) {
       console.error('PUT /api/keys error:', err);

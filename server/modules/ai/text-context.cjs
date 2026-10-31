@@ -278,7 +278,7 @@ function createTextContext({
   1. COMANDO DE LECTURA: Si el usuario te pide información sobre otro proyecto, o si necesitas leer su contenido completo para responder, NO inventes su contenido. En su lugar, incluye en tu respuesta el comando exacto [LEER_PROYECTO: <ID_DEL_PROYECTO>] usando el ID correspondiente. El sistema interceptará este comando y te devolverá el texto del proyecto en el siguiente turno.
 
   2. COMANDO DE CREACIÓN: Si el usuario pide un proyecto NUEVO o necesitas un recurso complementario (por ejemplo, una ficha de personaje para la historia que estás escribiendo), puedes emitir el comando especial [CREAR_PROYECTO: <JSON_DEL_PROYECTO>]. El formato de <JSON_DEL_PROYECTO> debe ser estrictamente un objeto JSON válido entre corchetes, por ejemplo:
-  [CREAR_PROYECTO: {"name": "Nombre del proyecto", "type": "character|book|stage|song|video", "category": "protagonist|antagonist|secondary|custom|story-book|soundtrack|...", "content": "Contenido inicial en HTML", "traits": {"age": 25, "skin": "clara", "body": 2, "voice": "male-warm", "pitch": 100, "lore": "Historia...", "psychology": "Personalidad..."}, "linkAsIngredient": true}]
+  [CREAR_PROYECTO: {"name": "Nombre del proyecto", "type": "character|book|stage|video", "category": "protagonist|antagonist|secondary (personaje) | story-book|screenplay (libro) | interior|exterior (escenario) | feature (largometraje)", "content": "Contenido inicial en HTML", "traits": {"age": 25, "skin": "clara", "body": 2, "voice": "male-warm", "pitch": 100, "lore": "Historia...", "psychology": "Personalidad..."}, "linkAsIngredient": true}]
   Donde:
   - "name": Nombre del recurso.
   - "type": Tipo de proyecto ("character", "book", "stage", "song", "video").

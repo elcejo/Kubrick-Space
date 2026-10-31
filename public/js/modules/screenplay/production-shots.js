@@ -11,6 +11,8 @@ export function mountProductionShots(card, scene, persist) {
   add.type = 'button';
   add.className = 'btn btn-secondary';
   add.setAttribute('aria-label', 'Añadir plano o clip');
+  add.title = 'Añadir plano: crea un plano o clip nuevo en esta escena (hasta 100).';
+  summary.title = 'Planos y clips: lista de los planos de producción de esta escena; ábrela para editarlos.';
   add.innerHTML = safeHTML(renderIcon('plus') + ' Añadir plano');
   const render = () => {
     summary.textContent = `Planos y clips · ${scene.shots?.length || 0}`;
@@ -23,6 +25,7 @@ export function mountProductionShots(card, scene, persist) {
       title.value = shot.title;
       title.maxLength = 300;
       title.setAttribute('aria-label', 'Nombre del plano');
+      title.title = 'Nombre del plano: cómo se llama este plano o clip en la producción.';
       title.addEventListener('input', () => {
         shot.title = title.value;
         persist();
@@ -32,6 +35,7 @@ export function mountProductionShots(card, scene, persist) {
       prompt.maxLength = 10000;
       prompt.placeholder = 'Prompt de producción';
       prompt.setAttribute('aria-label', 'Prompt del plano');
+      prompt.title = 'Prompt del plano: descripción que se usará para generar este plano o clip.';
       prompt.addEventListener('input', () => {
         shot.prompt = prompt.value;
         persist();
@@ -43,6 +47,7 @@ export function mountProductionShots(card, scene, persist) {
       duration.value = shot.duration ?? '';
       duration.placeholder = 'Sin duración';
       duration.setAttribute('aria-label', 'Duración del clip en segundos');
+      duration.title = 'Duración: segundos que dura el clip, entre 1 y 600. Vacío significa sin duración.';
       duration.addEventListener('change', () => {
         shot.duration = duration.value
           ? Math.max(1, Math.min(600, Number.parseInt(duration.value, 10) || 1))
@@ -52,6 +57,8 @@ export function mountProductionShots(card, scene, persist) {
       const status = document.createElement('button');
       status.type = 'button';
       status.textContent = shot.status === 'lista' ? 'Lista' : 'Pendiente';
+      status.title =
+        'Estado: alterna el plano entre Pendiente (falta producirlo) y Lista (ya está terminado).';
       status.addEventListener('click', () => {
         shot.status = shot.status === 'lista' ? 'pendiente' : 'lista';
         persist();
@@ -60,6 +67,7 @@ export function mountProductionShots(card, scene, persist) {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.setAttribute('aria-label', 'Eliminar plano');
+      remove.title = 'Eliminar plano: quita este plano de la escena.';
       remove.innerHTML = safeHTML(renderIcon('close'));
       remove.addEventListener('click', () => {
         scene.shots = scene.shots.filter((item) => item !== shot);

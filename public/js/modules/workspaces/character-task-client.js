@@ -1,6 +1,7 @@
 import { API } from '../../api-service.js';
 import { EventBus } from '../../event-bus.js';
 import { Modal } from '../../ui-components.js';
+import { enhanceSelect } from '../../custom-select.js';
 
 export async function enqueueRemoteCharacterAction(action, { signal } = {}) {
   if (
@@ -70,6 +71,7 @@ export async function attachCharacterTaskPhoto(file) {
     option.textContent = p.name;
     select.append(option);
   }
+  let picker;
   const projectId = await new Promise((resolve) => {
     Modal.show({
       title: 'Referencia para personaje',
@@ -95,7 +97,10 @@ export async function attachCharacterTaskPhoto(file) {
       ],
       onDismiss: () => resolve(null),
     });
+    // The dialog attaches `select`; the themed control replaces the native one.
+    picker = enhanceSelect(select, { searchable: false });
   });
+  picker?.destroy({ restore: false });
   if (!projectId) return '';
   const data = await new Promise((resolve, reject) => {
     const reader = new FileReader();

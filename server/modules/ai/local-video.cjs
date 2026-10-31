@@ -36,6 +36,8 @@ const OPTIMIZATION = {
   shift_audio: 3,
 };
 const FRAME_OPTIONS = [124, 141, 158, 175, 192, 209, 226];
+/** The model offered in the top bar for the film's preview flow. */
+const LOCAL_VIDEO_ENGINE = { provider: 'local', model: 'minimax-h3' };
 const CONDITIONING_NAME = /^[A-Za-z0-9_-]{1,100}$/;
 
 function h3WeightsAvailable(appRoot) {
@@ -255,4 +257,10 @@ function createLocalVideo({ appRoot, request, fetchImpl, ensureEngine, verifyWei
   }
   return { available: () => !verifyWeights || h3WeightsAvailable(appRoot), conditioning, preview, release };
 }
-module.exports = { createLocalVideo, h3WeightsAvailable, conditioningWorkflow, previewWorkflow };
+module.exports = {
+  LOCAL_VIDEO_ENGINE,
+  createLocalVideo,
+  h3WeightsAvailable,
+  conditioningWorkflow,
+  previewWorkflow,
+};

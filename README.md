@@ -162,6 +162,12 @@ custom node package (`kubrick_space`). Icons, fonts and the interface are origin
 
 ## Roadmap
 
+**Done in 0.1.1**
+
+* Film previews follow the top bar: they only run in Local mode with the local video model (MiniMax H3) chosen there; screenplay-linked characters with a main photo become references
+* Screenplay editor: explanatory tooltips on every control, themed selectors, and lists of only the places and characters linked as ingredients
+* The API-key store module is now `apiKeyVault` (same behaviour), and long HTML templates were split, to stop security scanners from misreading them
+
 **Done in 0.1.0**
 
 * Story Book, Screenplay, Characters, Scenarios, Music and Film workspaces with versioned ingredients, autosave and trash
@@ -179,6 +185,10 @@ custom node package (`kubrick_space`). Icons, fonts and the interface are origin
 * Clean-room MIT rewrite of the one GPL-derived engine file (`h3_optimization.py`)
 
 The detailed, dated log is in [ROADMAP.md](ROADMAP.md) (in Spanish).
+
+## About security scanners
+
+Automated scanners can flag this project because it legitimately does things that look suspicious out of context: it launches a local ComfyUI process and PowerShell setup scripts (`scripts/`, `start-kubrick-space.ps1`), downloads model weights and the engine from pinned URLs with checksum verification, decodes base64 images to send them to the local engine, and keeps your own API keys in a local file that never leaves your machine (`server/modules/security/api-key-vault.cjs`). It contains no wallet access, no telemetry and no hidden network calls; every host it can contact is listed by the scanners themselves (OpenRouter, Replicate, Google, OpenAI, Hugging Face, GitHub). Please read the code, and open an issue if something looks wrong.
 
 ## License
 

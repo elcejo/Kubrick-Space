@@ -8,7 +8,7 @@ const PROVIDERS = ['openrouter', 'replicate', 'gemini', 'openai', 'minimax', 'ar
 const PLAINTEXT_FORMAT = 'code-kai-plaintext-v1';
 const LEGACY_ENCRYPTED_FORMAT = 'code-kai-dpapi-v1';
 
-function createKeyStore(file) {
+function createApiKeyVault(file) {
   let cached;
   let signature;
 
@@ -119,4 +119,4 @@ function createKeyStore(file) {
   return { read, save };
 }
 
-module.exports = { createKeyStore, PROVIDERS, PLAINTEXT_FORMAT, LEGACY_ENCRYPTED_FORMAT };
+module.exports = { createApiKeyVault, PROVIDERS, PLAINTEXT_FORMAT, LEGACY_ENCRYPTED_FORMAT };

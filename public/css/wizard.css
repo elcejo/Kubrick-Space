@@ -342,6 +342,35 @@
   max-width: 115px;
 }
 
+/* Options that cannot be created yet: dimmed, not clickable, with a "Próximamente" tag. */
+.wizard-bubble-node.is-coming-soon {
+  cursor: not-allowed;
+}
+
+.wizard-bubble-node.is-coming-soon .wizard-bubble-circle {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+
+.wizard-bubble-soon {
+  position: absolute;
+  bottom: -44px;
+  left: 50%;
+  z-index: 10;
+  padding: 1px 8px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.8);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .wizard-bubble-node.is-visible .wizard-bubble-label {
   pointer-events: auto;
   cursor: pointer;

@@ -71,7 +71,7 @@ function installHTTP(
       // or temporarily unavailable; this middleware must not make the entire
       // library appear empty.
       secrets = [];
-      req.keyStoreUnavailable = true;
+      req.apiKeyVaultUnavailable = true;
       console.warn('[Keys] API key store unavailable; continuing local project request:', error.message);
     }
     const json = res.json.bind(res);

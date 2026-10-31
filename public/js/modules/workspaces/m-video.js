@@ -1,4 +1,5 @@
 import { renderIcon } from '../../icons.js';
+import { isCreatableProject } from '../../contracts/project-availability.js';
 /**
  * @file m-video.js — Video Module for Kubrick Space
  * @description Defines the "Video / Película" content type: subcategories, ingredients, export formats, sidebar config.
@@ -23,24 +24,39 @@ export default {
   subcategories: [
     {
       id: 'short-film',
+      comingSoon: !isCreatableProject('video', 'short-film'),
       label: 'Cortometraje',
       description: 'Piezas narrativas de menos de 30 min',
       icon: 'video',
     },
-    { id: 'feature', label: 'Largometraje', description: 'Películas de larga duración', icon: 'video' },
+    {
+      id: 'feature',
+      comingSoon: !isCreatableProject('video', 'feature'),
+      label: 'Largometraje',
+      description: 'Películas de larga duración',
+      icon: 'video',
+    },
     {
       id: 'documentary',
+      comingSoon: !isCreatableProject('video', 'documentary'),
       label: 'Documental',
       description: 'No ficción, entrevistas, archivo',
       icon: 'camera',
     },
     {
       id: 'music-video',
+      comingSoon: !isCreatableProject('video', 'music-video'),
       label: 'Videoclip Musical',
       description: 'Visual para acompañar una canción',
       icon: 'music',
     },
-    { id: 'animation', label: 'Animación', description: '2D, 3D o motion graphics', icon: 'brush' },
+    {
+      id: 'animation',
+      comingSoon: !isCreatableProject('video', 'animation'),
+      label: 'Animación',
+      description: '2D, 3D o motion graphics',
+      icon: 'brush',
+    },
   ],
 
   /** Supported export formats */

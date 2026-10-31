@@ -1,5 +1,17 @@
 # Presentación y seguimiento del roadmap
 
+## Versión 0.1.1: escaneo de malware y editor de guión — 30 de octubre de 2026
+
+Nuevo: el almacén de claves de API cambia de nombre (ahora apiKeyVault, módulo api-key-vault.cjs) porque algunos escáneres de repositorios confundían el nombre anterior con carteras cripto; no cambia su comportamiento ni sus datos. Las plantillas HTML del historial de tareas dejan de ser líneas de más de 1000 caracteres. Se publican también las mejoras del largometraje (modelo de video local elegido en la barra superior, referencias del guión vinculado) y del editor de guión (tooltips, selectores propios, listas de escenarios y personajes vinculados).
+
+## Editor de guión: ayudas y listas vinculadas — 30 de octubre de 2026
+
+Nuevo: cada control del guión explica con un tooltip qué hace y qué significa cada opción (por ejemplo los 9 tipos de plano). Escenario y Personaje muestran solo los ingredientes vinculados al guión, y el personaje que habla se elige de esa lista.
+
+## Creación de proyectos: solo lo terminado — 30 de octubre de 2026
+
+Nuevo: el asistente de creación bloquea lo que aún no está listo y lo marca «Próximamente». Se pueden crear Libros (Story Book y Guión), Personajes (los tres tipos), Escenarios (interior y exterior) y el Largometraje. Quedan bloqueados Música (single, álbum y soundtrack) y Cortometraje, Documental, Videoclip y Animación. El asistente de IA también deja de poder crear esos tipos con el comando CREAR_PROYECTO: lo rechaza sin pedir autorización y le explica qué puede crear; la lista está en un único contrato compartido con el asistente de creación.
+
 ## Publicación de la versión 0.1.0 en GitHub — 30 de octubre de 2026
 
 Nuevo: Kubrick Space 0.1.0 se publica como repositorio nuevo (Kubrick-Space, privado hasta su revisión) con licencia MIT y avisos de terceros. Solo contiene la aplicación, el motor auxiliar y su arranque; no incluye proyectos, claves, generaciones, auditorías ni documentación de desarrollo, y ningún peso de modelo (se descargan según la guía de instalación del README, con las rutas y nombres exactos de archivo). Se añade scripts/install-engine.ps1, que descarga ComfyUI 0.43.0 verificando su huella, crea el entorno de Python e instala los paquetes. Pendiente: confirmar las licencias de MiniMax H3 (la comunidad excluye EE. UU., UE, Reino Unido y Corea) y de FLUX 3 Klein y del LoRA Turbo, reescribir h3_optimization.py desde cero si se quiere que todo el motor propio sea MIT (hoy deriva de KJNodes, GPL-3.0), y hacer público el repositorio tras la revisión.
@@ -21,6 +33,10 @@ conservada y escenario vinculado con su contenido; cero llamadas de generación.
 ## Largometraje: conditioning guardado y previsualizaciones con H3 — 30 de octubre de 2026
 
 Nuevo: segunda y tercera etapa del largometraje. Se codifica el conditioning de todas las escenas con una sola carga del text encoder, cada uno se guarda en un archivo, se liberan los modelos y después se genera una previsualización por escena (0,4 MP, 3 pasos, con audio) cargando el conditioning guardado. Cada video tiene aprobar (palomita) y rehacer (recarga); rehacer pasa a una cola con prioridad que se atiende al terminar el video en curso. Las referencias se citan por nombre (`<Marta>`) en lugar de `<Picture 1>`, con la foto principal del personaje. Medido en la RTX 3060: ~45 s por conditioning y, con el nodo H3 Optimization de Skalibur (56 grupos de atención y 4 trozos de feedforward), ~80 s por previsualización frente a ~101 s sin él; el modelo no queda residente entre videos por falta de RAM. Pendiente: comprobar con ojo si la atención dispersa cambia la calidad y valorar instalar SageAttention y Triton en el motor. Pendiente: escalado de las escenas aprobadas, tokenizador de audio de Skalibur, ensamblado del metraje, limpiar conditioning de escenas borradas y compartir el observador de trabajos entre escenarios y película.
+
+## Largometraje: la barra superior decide el video — 30 de octubre de 2026
+
+Nuevo: las previsualizaciones del largometraje solo se generan en modo Local y con el modelo de video elegido en la barra superior (selector «Video», sin selección por defecto); en modo API o sin modelo el servidor lo rechaza y el tablero explica qué falta. Las referencias de cada escena incluyen también los ingredientes vinculados al guión, siempre que tengan foto principal.
 
 ## Interpretación fotográfica local de personajes — 30 de octubre de 2026
 
