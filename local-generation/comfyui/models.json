@@ -19,6 +19,20 @@
       "sha256": "82223af1de7410466cd0383f25b42251ab58723371b8bffdc781bd10d59777f5",
       "source": "https://huggingface.co/beycanai/Qwen-LM",
       "license": "Apache-2.0"
+    },
+    {
+      "id": "qwen3.8-27b-int8-convrot",
+      "path": "models/llm/Qwen 3.8 27B/model.safetensors",
+      "clipName": "Qwen 3.8 27B/model.safetensors",
+      "clipType": "qwen_image",
+      "sha256": "c9534bc311acc1a502c81edddd14aea1061f30f0c3dd3111dca3948db162e083"
+    },
+    {
+      "id": "gemma4-e4b-int8-convrot",
+      "path": "models/llm/Gemma 4 E4B/model.safetensors",
+      "clipName": "Gemma 4 E4B/model.safetensors",
+      "clipType": "qwen_image",
+      "sha256": "c6bfb2a0534a8a966714396e4cb81cbae277bb7fda9dc35a175af7099f567930"
     }
   ]
 }

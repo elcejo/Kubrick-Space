@@ -73,8 +73,87 @@ const ASSET_SECTION_NAMES = Object.freeze({
   mask: 'Máscaras',
   phone: 'Phone',
   insignia: 'Insignias',
+  camera: 'Cámaras',
+  notebook: 'Libretas',
+  book: 'Libros',
+  pencil: 'Lápices',
+  wand: 'Varitas',
+  toy: 'Juguetes',
+  ball: 'Pelotas',
+  'fanny-pack': 'Cangureras',
+  racket: 'Raquetas',
+  bat: 'Bates',
+  banner: 'Pancartas',
+  flashlight: 'Linternas',
+  towel: 'Toallas',
+  pet: 'Mascotas',
+  bra: 'Brasieres',
+  babydoll: 'Baby dolls',
+  tunic: 'Túnicas',
+  robe: 'Batas',
+  cape: 'Capas',
+  turban: 'Turbantes',
+  leggings: 'Leggings',
 });
+/** Kinds added after the first libraries; a general piece whose label names one of them moves into it. */
+const REFINED_KINDS = Object.freeze([
+  'camera',
+  'notebook',
+  'book',
+  'pencil',
+  'wand',
+  'toy',
+  'ball',
+  'fanny-pack',
+  'racket',
+  'bat',
+  'banner',
+  'flashlight',
+  'towel',
+  'pet',
+  'bra',
+  'babydoll',
+  'tunic',
+  'robe',
+  'cape',
+  'turban',
+  'leggings',
+]);
+const REFINABLE_KINDS = new Set([
+  'jacket',
+  'coat',
+  'scarf',
+  'hat',
+  'shirt',
+  'sweater',
+  'tool',
+  'weapon',
+  'bag',
+  'cane',
+]);
 const ASSET_ALIASES = {
+  'fanny-pack': /cangurera|rinonera|fanny|waist[ -]?(?:bag|pack)|belt[ -]bag|hip[ -]?pack|bum[ -]?bag/,
+  babydoll: /baby[ -]?doll|camison|negligee|lenceria/,
+  camera: /camara|camera|gopro/,
+  notebook: /libreta|cuaderno|agenda|notebook|notepad/,
+  book: /\blibros?\b|\bbooks?\b|grimorio/,
+  pencil:
+    /lapiz(?! (?:labial|de labios|delineador|de ojos|para ojos|para labios))|lapicero|boligrafo|\bpencils?\b|\bpen\b/,
+  wand: /varita|\bwand\b/,
+  toy: /juguete|peluche|\btoys?\b|plush|teddy|\bdoll\b|muneco/,
+  ball: /pelota|balon|\bballs?\b/,
+  racket: /raqueta|racket|racquet/,
+  bat: /\bbates?\b|\bbat de\b|baseball bat|\bbat\b/,
+  banner: /pancarta|banner|placard|cartel|letrero/,
+  flashlight: /linterna|flashlight|torch|lantern|farol/,
+  towel: /toalla|towel/,
+  pet: /mascota|\bpets?\b|perro|gato|\bdog\b|\bcat\b|cachorro|puppy|kitten/,
+  bra: /brasier|brasiere|sosten|\bbras?\b|bralette/,
+  tunic: /tunica|tunic/,
+  robe: /\bbatas?\b|bathrobe|\brobes?\b|albornoz|kimono|dressing gown|lab coat/,
+  cape: /\bcapas?\b(?! de )|\bcape\b|\bcloak\b|capote/,
+  turban: /turbante|turban/,
+  leggings: /leggings?|mallas|licra|lycra/,
   insignia:
     /insignia|medalla|condecoracion|galon|charretera|emblema|distintivo|estrella[ -](?:metalica|militar|de[ -]rango)|(?:military|metallic)[ -]star|medals?|badges?|ribbon[ -]?(?:bars?|racks?)|epaulettes?/,
   'contact-lenses': /pupilentes|lentes[ -]de[ -]contacto|contact[ -]lens(?:es)?/,
@@ -200,6 +279,13 @@ const ASSET_CATEGORY_TYPES = {
     'bikini',
     'boxers',
     'shorts',
+    'bra',
+    'babydoll',
+    'tunic',
+    'robe',
+    'cape',
+    'turban',
+    'leggings',
   ]),
   props: new Set([
     'glasses',
@@ -217,6 +303,20 @@ const ASSET_CATEGORY_TYPES = {
     'mask',
     'phone',
     'insignia',
+    'camera',
+    'notebook',
+    'book',
+    'pencil',
+    'wand',
+    'toy',
+    'ball',
+    'fanny-pack',
+    'racket',
+    'bat',
+    'banner',
+    'flashlight',
+    'towel',
+    'pet',
   ]),
 };
 export const CHARACTER_ASSET_POLICY_VERSION = 2;
@@ -281,7 +381,12 @@ export function validateCharacterInventory(value, document) {
   const missing = CHARACTER_AUTO_TRAITS.filter(
     (kind) => value.visibility[kind] === 'visible' && !present.has(kind),
   );
-  if (value.visibility.face === 'visible' && !present.has('hair') && !missing.includes('hair'))
+  if (
+    document.identity.base === 'humanoid' &&
+    value.visibility.face === 'visible' &&
+    !present.has('hair') &&
+    !missing.includes('hair')
+  )
     missing.push('hair');
   // Catch the original failure even when the inventory marks a beard/makeup
   // absent but describes it as present inside the face component.
@@ -296,7 +401,7 @@ export function validateCharacterInventory(value, document) {
         const text = normalizeAssetName(`${item.label}. ${item.description}`);
         return [...text.matchAll(pattern)].some(
           (match) =>
-            !/(?:sin|no|without|ausencia de|clean.shaven)(?:\s+[a-z]+){0,3}\s*$/.test(
+            !/(?:^|[^a-z])(?:sin|no|without|ausencia de|clean.shaven)(?:\s+[a-z]+){0,3}\s*$/.test(
               text.slice(Math.max(0, match.index - 35), match.index),
             ),
         );
@@ -321,6 +426,14 @@ export function characterAssetKind(item) {
   }
   if (kind === 'shirt' && ASSET_ALIASES.blouse.test(normalizeAssetName(item.label))) return 'blouse';
   if (kind === 'jacket' && ASSET_ALIASES.blazer.test(normalizeAssetName(item.label))) return 'blazer';
+  if (REFINABLE_KINDS.has(kind)) {
+    const label = normalizeAssetName(item.label);
+    const own = ASSET_ALIASES[kind]?.exec(label);
+    for (const target of REFINED_KINDS) {
+      const match = ASSET_ALIASES[target].exec(label);
+      if (match && (!own || match.index < own.index)) return target;
+    }
+  }
   if (Object.hasOwn(ASSET_SECTION_NAMES, kind)) return kind;
   if (/^custom-[a-z0-9-]{1,40}$/.test(kind)) return kind;
   for (const input of [
@@ -525,6 +638,228 @@ function validateItem(item, fields) {
     )
   )
     throw Error('Componente visual inválido.');
+}
+/** Sheet fields a visual component stands for; they are shown in the library, not repeated in Diseño. */
+const FIELD_HINTS = [
+  [['face'], /(^|.)(skin|eyes)$|piel|ojos|rostro/],
+  [['hair'], /(^|.)hair$|cabello|pelo/],
+  [['beard'], /beard|barba|bigote/],
+  [['gloves'], /glove|guante/],
+  [['shoes', 'boots', 'socks'], /shoe|calzado|bota|zapato|calcet/],
+  [['tie'], /(^|.)tie$|corbata/],
+  [
+    ['insignia', 'watch', 'bag', 'glasses', 'earrings', 'necklace', 'bracelet', 'ring'],
+    /accesor|insignia|medalla|prop/,
+  ],
+];
+/** A body or mannequin placement in a component prompt makes the model draw the person again. */
+const BODY_PLACEMENT =
+  /,?\s*(?:arranged |worn |mounted |displayed |fitted |placed |shown )?(?:on|over|across|around|at|against|beneath) (?:a |an |the |his |her )?(?:(?:mannequin|human|male|female|display) )?(?:torso|chest|shoulders?|body|neck|head|legs?|feet|hands?|bust|stand|wrist|waist|mannequin)\b/gi;
+/** A component whose label plainly names a trait is that trait, whatever kind a small model assigned it. */
+const LABEL_TRAITS = [
+  ['hair', /^(cabello|pelo|peinado|melena|cuero cabelludo|hair|hairstyle|scalp)\b/],
+  ['beard', /^(barba|bigote|vello facial|beard|moustache|mustache)\b/],
+  ['face', /^(rostro|cara|face)\b/],
+];
+const SINGLE_TRAITS = new Set(['hair', 'beard', 'face']);
+const CLOTHING_FIELD = /clothing|vestimenta|uniform|ropa|traje|outfit/;
+function inferFieldKeys(item, document) {
+  const kind = characterAssetKind(item);
+  const keys = [];
+  for (const field of document.fields) {
+    if (field.section !== 'appearance') continue;
+    const name = normalizeAssetName(`${field.key} ${field.label}`);
+    const hint = FIELD_HINTS.find(([kinds]) => kinds.includes(kind));
+    if (hint ? hint[1].test(name) : item.category === 'clothing' && CLOTHING_FIELD.test(name))
+      keys.push(field.key);
+  }
+  return keys.slice(0, 80);
+}
+/**
+ * Repairs the harmless deviations of a small model before the strict check: unknown keys, field keys
+ * the sheet does not have, a missing colour or a prompt that is only a few words. The meaning of the
+ * component is never changed, and anything the model got wrong beyond that still fails validation.
+ */
+export function normalizeCharacterAssetPlan(value, document) {
+  if (!object(value) || !Array.isArray(value.items)) return value;
+  const fields = new Set(
+    document.fields.filter((field) => field.section === 'appearance').map((field) => field.key),
+  );
+  const seen = new Set();
+  const items = [];
+  for (const raw of value.items) {
+    if (!object(raw) || !text(raw.label, 1000, 1)) {
+      items.push(raw);
+      continue;
+    }
+    const label = raw.label.trim().slice(0, 100);
+    // A description the model left out is the label itself, which names the visible component.
+    const description = (text(raw.description, 20000, 1) ? raw.description.trim() : label).slice(0, 2000);
+    const prompt =
+      typeof raw.prompt === 'string'
+        ? (raw.category === 'traits' ? raw.prompt : raw.prompt.replace(BODY_PLACEMENT, '')).trim()
+        : '';
+    const named = LABEL_TRAITS.find(([, pattern]) => pattern.test(normalizeAssetName(label).trim()))?.[0];
+    const item = {
+      category: named ? 'traits' : raw.category,
+      ...(named ? { kind: named } : typeof raw.kind === 'string' && raw.kind ? { kind: raw.kind } : {}),
+      label,
+      description,
+      fieldKeys: [
+        ...new Set(
+          (Array.isArray(raw.fieldKeys) ? raw.fieldKeys : []).filter(
+            (key) => typeof key === 'string' && fields.has(key),
+          ),
+        ),
+      ].slice(0, 80),
+      prompt: (prompt.length >= 60
+        ? prompt
+        : `${label}. ${description} Isolated component on a plain neutral background, square format.`
+      ).slice(0, 3000),
+      predominantColor: ['white', 'other', 'unknown'].includes(raw.predominantColor)
+        ? raw.predominantColor
+        : 'unknown',
+    };
+    if (!item.fieldKeys.length) item.fieldKeys = inferFieldKeys(item, document);
+    const single = item.category === 'traits' && SINGLE_TRAITS.has(item.kind) ? item.kind : null;
+    if (single && seen.has('single:' + single)) continue;
+    if (single) seen.add('single:' + single);
+    const name = `${item.category}:${label.toLocaleLowerCase('es')}`;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    items.push(item);
+  }
+  return { ...value, items };
+}
+/** Spanish label and noun of every trait a model may report as visible, with the sheet fields that describe it. */
+const TRAIT_DRAFTS = {
+  face: ['Rostro', 'rostro', ['human.skin', 'piel'], ['human.eyes', 'ojos']],
+  hair: ['Cabello', 'cabello o cuero cabelludo', ['human.hair', 'cabello']],
+  beard: ['Barba', 'vello facial', []],
+  makeup: ['Maquillaje', 'maquillaje aplicado', []],
+  nails: ['Uñas', 'uñas', []],
+  tattoo: ['Tatuaje', 'tatuaje', []],
+  scar: ['Cicatriz', 'cicatriz', []],
+  'contact-lenses': ['Lentes de contacto', 'lentes de contacto', []],
+  fur: ['Pelaje', 'pelaje o cubierta', ['animal.coat', 'pelaje']],
+  scales: ['Escamas', 'escamas', []],
+  feathers: ['Plumas', 'plumaje', []],
+  wings: ['Alas', 'alas', []],
+  horns: ['Cuernos', 'cuernos', []],
+  tail: ['Cola', 'cola', []],
+  claws: ['Garras', 'garras', []],
+  tentacles: ['Tentáculos', 'tentáculos', []],
+  antennae: ['Antenas', 'antenas', []],
+  texture: ['Textura', 'textura distintiva', []],
+  material: ['Material', 'material distintivo', []],
+};
+/**
+ * A trait the model reports as visible but forgets to list as its own piece is drafted from the sheet
+ * instead of discarding the whole inventory (and the minutes of generation that follow it). A humanoid
+ * always has a face and hair or scalp. A missing visibility checklist is read from the pieces listed.
+ */
+const BALD = /calv|bald|hairless|sin (cabello|pelo)|rapad/;
+function draftTrait(kind, fields) {
+  const [label, noun, ...sources] = TRAIT_DRAFTS[kind];
+  const known = sources.filter(([key]) => fields.get(key)).map(([key, name]) => name + ' ' + fields.get(key));
+  const description = known.length
+    ? label + ' visible en el retrato: ' + known.join(', ') + '.'
+    : label + ' visible en el retrato de referencia (' + noun + ').';
+  return {
+    category: 'traits',
+    kind,
+    label,
+    description,
+    fieldKeys: sources.map(([key]) => key).filter((key) => fields.has(key)),
+    prompt:
+      'Isolated ' +
+      kind.replace('-', ' ') +
+      ' reproduced faithfully from the reference portrait on a blank glossy mannequin head, front view, ' +
+      description +
+      ' Neutral background, square format, high contrast.',
+    predominantColor: 'unknown',
+  };
+}
+/**
+ * With `complete` false only harmless deviations are repaired and a missing trait is left for the model to
+ * correct; with true (a small local model, which rarely does) the missing trait is drafted from the sheet.
+ */
+export function normalizeCharacterInventory(value, document, { complete = true } = {}) {
+  if (!object(value)) return value;
+  const fields = new Map(
+    document.fields
+      .filter((field) => field.section === 'appearance')
+      .map((field) => [field.key, typeof field.value === 'string' ? field.value.trim() : '']),
+  );
+  const plan = normalizeCharacterAssetPlan(value, document);
+  // A small model sometimes reads a full head of hair as bald; the sheet, written from the same portrait, decides.
+  const sheetHair = fields.get('human.hair') || '';
+  if (Array.isArray(plan.items) && sheetHair && !BALD.test(normalizeAssetName(sheetHair)))
+    plan.items = plan.items.map((item) =>
+      object(item) &&
+      text(item.label, 1000, 1) &&
+      item.kind === 'hair' &&
+      BALD.test(normalizeAssetName(item.label + ' ' + (item.description || '')))
+        ? draftTrait('hair', fields)
+        : item,
+    );
+  const kindOf = (item) => characterAssetKind(item);
+  const listed = new Set(
+    (Array.isArray(plan.items) ? plan.items : [])
+      .filter((item) => object(item) && text(item.label, 1000, 1))
+      .map(kindOf),
+  );
+  const visibility = {};
+  for (const kind of CHARACTER_AUTO_TRAITS) {
+    const given = object(value.visibility) ? value.visibility[kind] : undefined;
+    visibility[kind] = ['visible', 'absent', 'uncertain', 'not_applicable'].includes(given)
+      ? given
+      : listed.has(kind)
+        ? 'visible'
+        : 'not_applicable';
+  }
+  if (!complete || !Array.isArray(plan.items)) return { ...plan, visibility };
+  if (document.identity.base === 'humanoid')
+    for (const kind of ['face', 'hair'])
+      if (['absent', 'not_applicable'].includes(visibility[kind])) visibility[kind] = 'visible';
+  // An animal described with a coat has fur to show, whatever the checklist said.
+  if (document.identity.base === 'animal' && fields.get('animal.coat') && visibility.fur !== 'visible')
+    visibility.fur = 'visible';
+  const items = [...plan.items];
+  const add = (kind) => {
+    visibility[kind] = 'visible';
+    if (!listed.has(kind) && items.length < 48) {
+      items.push(draftTrait(kind, fields));
+      listed.add(kind);
+    }
+  };
+  // A beard the sheet itself reports (in the description or an appearance value) is a piece of its own.
+  const sheetText = normalizeAssetName([document.description, ...fields.values()].join(' . '));
+  if (
+    document.identity.base === 'humanoid' &&
+    [...sheetText.matchAll(/barba|bigote|beard|moustache|mustache/g)].some(
+      (match) =>
+        !/(?:^|[^a-z])(?:sin|no|without|ausencia de|clean.shaven)(?:\s+[a-z]+){0,3}\s*$/.test(
+          sheetText.slice(Math.max(0, match.index - 35), match.index),
+        ),
+    )
+  )
+    visibility.beard = 'visible';
+  for (const kind of Object.keys(TRAIT_DRAFTS)) if (visibility[kind] === 'visible') add(kind);
+  // Whatever the strict check still finds missing (for instance a beard described inside the face piece) is
+  // drafted too, instead of discarding the inventory for a piece the sheet itself can describe.
+  for (let round = 0; round < 3; round++) {
+    try {
+      validateCharacterInventory({ items, visibility }, document);
+      break;
+    } catch (error) {
+      const missing = /^Faltan piezas independientes visibles: (.+)\.$/.exec(error.message)?.[1];
+      const kinds = (missing || '').split(', ').filter((kind) => TRAIT_DRAFTS[kind] && !listed.has(kind));
+      if (!kinds.length) break;
+      kinds.forEach(add);
+    }
+  }
+  return { ...plan, items, visibility };
 }
 export function validateCharacterAssetPlan(value, document) {
   if (!exact(value, ['items']) || !Array.isArray(value.items) || value.items.length > 48)
@@ -801,9 +1136,17 @@ function extremitySupportPrompt(item) {
   return `Image 2 supplies ONLY the neutral glossy ${type} mannequin, its exact geometry, orientation, paired left/right positions, bases and lighting. ${placement} Preserve the original component count and anatomical side; for a single item leave the opposite stand bare. Preserve all requested colors, materials, graphics and details. The uncovered support stays resin, never human skin. Do not add other components, a person or unrelated anatomy. Do not output floating empty garments instead of the fitted display. Preserve only the existing left hand/right hand stand labels when present, never add other text. These display instructions override older standalone extraction directions.`;
 }
 export function characterAssetUsesHeadSupport(item) {
-  return ['hair', 'beard', 'makeup', 'earrings', 'hat', 'hair-accessory', 'glasses', 'headphones'].includes(
-    characterAssetKind(item),
-  );
+  return [
+    'hair',
+    'beard',
+    'makeup',
+    'earrings',
+    'hat',
+    'hair-accessory',
+    'turban',
+    'glasses',
+    'headphones',
+  ].includes(characterAssetKind(item));
 }
 const headAccessoryPlacement = {
   beard:
@@ -813,6 +1156,8 @@ const headAccessoryPlacement = {
   hat: 'Fit only this exact hat or cap on top of the display head, preserving its complete shape and brim.',
   'hair-accessory':
     'Fit only this exact band, headband or ornament at its natural position on the blank display head, without adding a wig.',
+  turban:
+    'Fit only this exact turban, wrapped as worn on the blank display head, preserving its folds, color and fabric without adding a wig.',
   glasses:
     'Fit only these exact glasses across the display nose and ears, preserving the frame, lenses and temples.',
   headphones:
@@ -852,7 +1197,7 @@ export function characterAssetPrompt(item) {
                 ? extremitySupportPrompt(item)
                 : kind === 'phone'
                   ? 'Reproduce this exact phone and its case, not a generic replacement. Match the visible camera count, lens layout, case geometry, sticker count, artwork, placement and ornaments precisely. Preserve visible graphics and symbols as part of the object; do not invent, multiply or replace decorations. Isolate the phone without hands or fingers.'
-                  : 'Show only this individual component as a standalone reference, without the character, other garments or unrelated objects.';
+                  : 'Show only this individual component as a standalone reference, without the character, other garments or unrelated objects. Remove the person completely: no body, face, hands, mannequin, bust or stand, only the component itself photographed alone.';
   const direction =
     kind === 'face'
       ? 'Create a clean facial-identity reference from image 1, separating the underlying face from removable layers.'

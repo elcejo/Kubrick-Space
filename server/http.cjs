@@ -4,6 +4,21 @@ const path = require('node:path');
 const { randomUUID: uuidv4 } = require('node:crypto');
 const { security, validation } = require('./modules/security/index.cjs');
 const { verifyModel } = require('./modules/media/index.cjs');
+
+// Only plain file names ever reach the file system; anything else is refused before any path is built.
+const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/;
+function plainName(value) {
+  if (typeof value !== 'string' || !PLAIN_NAME.test(value) || value.includes('..'))
+    throw security.fail('Invalid file name');
+  return value;
+}
+/** Resolves a served model inside public/models and verifies its checksum. */
+function servedModel(appRoot, name) {
+  const filename = plainName(name);
+  const file = security.containedPath(path.join(appRoot, 'public', 'models'), filename);
+  verifyModel(filename, fs.readFileSync(file));
+  return file;
+}
 function installHTTP(
   app,
   {
@@ -38,9 +53,7 @@ function installHTTP(
   app.get('/vendor/purify.js', (req, res) => res.sendFile(require.resolve('dompurify/dist/purify.min.js')));
   app.get('/models/:filename', (req, res) => {
     try {
-      const file = security.containedPath(path.join(appRoot, 'public', 'models'), req.params.filename);
-      verifyModel(req.params.filename, fs.readFileSync(file));
-      res.sendFile(file);
+      res.sendFile(servedModel(appRoot, req.params.filename));
     } catch {
       res.status(503).json({ error: 'Modelo no disponible o pendiente de verificar.' });
     }

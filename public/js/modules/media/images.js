@@ -43,7 +43,7 @@ export class EditorImages {
   constructor(context) {
     this.context = context;
     this.inferenceChange = ({ key }) => {
-      if (!['inferenceMode', 'inferenceSettings'].includes(key)) return;
+      if (!['inferenceMode', 'imageMode', 'inferenceSettings'].includes(key)) return;
       for (const button of this.coverContainer?.querySelectorAll('[data-generation-backend="api"]') || [])
         void this.refreshGenerationActions(
           button.parentElement,
@@ -326,10 +326,10 @@ export class EditorImages {
     apiBtn.disabled = true;
     apiBtn.title = 'Comprobando claves API…';
     try {
-      const mode = AppState.inferenceMode;
+      const mode = AppState.imageMode;
       const availability = await this.imageAvailability();
       if (!group.isConnected) return;
-      if (mode !== AppState.inferenceMode) return this.refreshGenerationActions(group, imageType);
+      if (mode !== AppState.imageMode) return this.refreshGenerationActions(group, imageType);
       const apiAvailable = availability.api.some(
         (model) => !model.imageTypes || model.imageTypes.includes(imageType),
       );
@@ -363,12 +363,10 @@ export class EditorImages {
     const models = availability.api.filter(
       (model) => !model.imageTypes || model.imageTypes.includes('character'),
     );
-    if (AppState.inferenceMode === 'local' && !models.length)
+    if (AppState.imageMode === 'local' && !models.length)
       throw Error('Faltan los pesos locales de FLUX 3 Image Klein.');
     const saved =
-      (AppState.inferenceMode === 'local'
-        ? models[0]
-        : AppState.currentProject.inferenceSettings?.imageModel) ||
+      (AppState.imageMode === 'local' ? models[0] : AppState.currentProject.inferenceSettings?.imageModel) ||
       AppState.currentProject.characterImageGeneration;
     if (saved) {
       if (!models.some((model) => model.provider === saved.provider && model.model === saved.model))
@@ -379,7 +377,7 @@ export class EditorImages {
   }
 
   imageAvailability() {
-    if (AppState.inferenceMode === 'local') {
+    if (AppState.imageMode === 'local') {
       return API.localRuntime().then((state) => ({ api: state.imageModels || [] }));
     }
     return API.getImageGenerationAvailability();
@@ -429,7 +427,7 @@ export class EditorImages {
       );
       if (!apiModels.length)
         throw new Error(
-          AppState.inferenceMode === 'local'
+          AppState.imageMode === 'local'
             ? 'Faltan los pesos locales de FLUX 3 Image Klein.'
             : 'Configura una clave de imágenes en Inicio → Configuración.',
         );
@@ -440,7 +438,7 @@ export class EditorImages {
         ? { provider: 'openrouter', model: 'meta/muse-image' }
         : null;
       const preferred =
-        (AppState.inferenceMode === 'local' ? apiModels[0] : project.inferenceSettings?.imageModel) ||
+        (AppState.imageMode === 'local' ? apiModels[0] : project.inferenceSettings?.imageModel) ||
         project.characterImageGeneration ||
         this.characterGenerationModel ||
         inferredMuse;

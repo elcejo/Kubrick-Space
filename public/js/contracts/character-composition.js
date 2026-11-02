@@ -15,7 +15,7 @@ const overlays = ['makeup', 'beard', 'eyebrows', 'eyelashes', 'eyes', 'contact-l
 const dependencies = Object.freeze({
   face: [...overlays, 'hair', 'glasses', 'earrings'],
   skin: ['tattoo', 'scar', 'makeup', 'nails'],
-  hair: ['hat', 'hair-accessory', 'headphones', 'earrings'],
+  hair: ['hat', 'hair-accessory', 'turban', 'headphones', 'earrings'],
   fur: ['tattoo', 'scar'],
   scales: ['tattoo', 'scar'],
   feathers: ['wings'],
@@ -59,7 +59,11 @@ const dependencies = Object.freeze({
   blazer: ['shirt', 'blouse', 'apron', 'tie', 'necklace', 'scarf', 'insignia'],
   jacket: ['shirt', 'blouse', 'apron', 'necklace', 'scarf', 'insignia'],
   coat: ['shirt', 'blouse', 'jacket', 'blazer', 'apron', 'scarf', 'insignia'],
-  trousers: ['belt', 'shoes', 'socks'],
+  trousers: ['belt', 'fanny-pack', 'shoes', 'socks'],
+  leggings: ['belt', 'fanny-pack', 'shoes', 'socks'],
+  tunic: ['shirt', 'blouse', 'apron', 'necklace', 'scarf', 'insignia'],
+  robe: ['shirt', 'blouse', 'jacket', 'blazer', 'apron', 'scarf'],
+  cape: ['scarf', 'necklace', 'insignia'],
   skirt: ['belt', 'shoes', 'socks'],
   dress: ['jacket', 'blazer', 'coat', 'belt', 'necklace', 'shoes', 'insignia'],
 });
@@ -81,11 +85,14 @@ export function characterCompositionLayer(kind) {
       'bikini',
       'boxers',
       'shorts',
+      'bra',
+      'babydoll',
+      'leggings',
     ].includes(kind)
   )
     return 3;
-  if (['jacket', 'blazer', 'coat', 'sweater'].includes(kind)) return 4;
-  if (['apron', 'scarf', 'tie'].includes(kind)) return 5;
+  if (['jacket', 'blazer', 'coat', 'sweater', 'tunic', 'robe'].includes(kind)) return 4;
+  if (['apron', 'scarf', 'tie', 'cape'].includes(kind)) return 5;
   return 6;
 }
 export function characterFieldCompositionScope(field) {

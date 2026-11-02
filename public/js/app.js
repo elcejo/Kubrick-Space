@@ -13,6 +13,7 @@ import { EventBus } from './event-bus.js';
 import { AppState, replaceProjects, setCurrentView } from './app-state.js';
 import { getAllModules, getModuleByType } from './modules/workspaces/project-module-registry.js';
 import { initLiquidGlass } from './liquid-glass.js';
+import { startLocalTrace } from './modules/ai/local-trace.js';
 
 // Keep the legacy export surface while feature modules use focused dependencies.
 export { EventBus, AppState, getAllModules, getModuleByType };
@@ -71,6 +72,8 @@ export class App {
 
       // Start hash router (will trigger initial route)
       Router.init((viewName, params) => App.mountView(viewName, params));
+      // Every prompt the local LLM and FLUX receive is printed to the console as it is sent.
+      globalThis.kubrickLocalTrace = startLocalTrace({ load: (after) => API.localTrace(after) });
     } catch (err) {
       console.error('[App] Initialisation failed:', err);
       Toast.show('Error al iniciar la aplicación', 'error');

@@ -740,9 +740,10 @@ export class CharacterWorkspace {
         (field) =>
           field.section === section &&
           (characterFieldVisible(field) || characterEditableDimension(field)) &&
+          // Once the pieces exist they carry the appearance: Diseño keeps only the editable age and height.
           (characterEditableDimension(field) ||
             !characterAssistedCreation(this.document) ||
-            !represented.has(field.key)),
+            (!visualItems.length && !represented.has(field.key))),
       );
       if (!items.length && !visualItems.length) continue;
       const group = el('section', 'character-field-group');

@@ -774,3 +774,15 @@ html[data-theme='light'] .ingredient-drawer.occupied {
     transition: none;
   }
 }
+
+.ingredient-card__field {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.ingredient-card__field .input {
+  font-size: 12px;
+  padding: 6px 10px;
+}

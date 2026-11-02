@@ -6,6 +6,8 @@ const {
   characterAssetImage,
   characterAppearanceKey,
   validateCharacterInventory,
+  normalizeCharacterAssetPlan,
+  normalizeCharacterInventory,
   validateCharacterAssetPlan,
   characterAssetCategory,
   characterAssetKind,
@@ -161,6 +163,12 @@ function createCharacterVisualLibraryOperation(dependencies) {
           },
         },
       };
+      // A small local model often omits the checklist; it is derived from the listed pieces.
+      if (llmConfig.isLocalModel(model)) {
+        tool.function.parameters.required = ['items'];
+        // Description, kind and field keys are repaired from the label and the sheet when a small model omits them.
+        tool.function.parameters.properties.items.items.required = ['category', 'label', 'prompt'];
+      }
       if (body.extractionScope) {
         tool.function.parameters.required = ['items'];
         delete tool.function.parameters.properties.visibility;
@@ -260,7 +268,10 @@ function createCharacterVisualLibraryOperation(dependencies) {
             calls[0].function?.name !== tool.function.name
           )
             throw Error('Invalid inventory');
-          const proposal = JSON.parse(calls[0].function.arguments);
+          const raw = JSON.parse(calls[0].function.arguments);
+          const proposal = body.extractionScope
+            ? normalizeCharacterAssetPlan(raw, document)
+            : normalizeCharacterInventory(raw, document, { complete: llmConfig.isLocalModel(model) });
           if (!body.extractionScope && attempt === 0 && proposal.visibility?.makeup === 'uncertain') {
             correction =
               'Reinspect the SAME accepted portrait at high detail to determine whether cosmetics exist at all. Natural eyelashes, eyelid shadows, skin tones, lip color, skin oil and lighting are NOT evidence of makeup. Report absent unless a real applied product boundary, paint, false lashes or cosmetic pigment can be seen. Return the full inventory and checklist again, including an independent makeup item when visible. If genuinely occluded or too small, retain uncertain. Preserve all other exact components and do not invent them.';
@@ -325,6 +336,14 @@ function createCharacterVisualLibraryOperation(dependencies) {
             },
           };
         } catch (error) {
+          console.warn(
+            '[Character inventory]',
+            JSON.stringify({
+              attempt: attempt + 1,
+              finishReason: choice?.finish_reason || 'missing',
+              reason: String(error.message).slice(0, 300),
+            }),
+          );
           if (attempt === 0 && choice?.finish_reason !== 'length') {
             correction = body.extractionScope
               ? `Return one complete inventory_character_assets call with items only, restricted to ${categories.join(', ')}. Use the same donor, concrete short component descriptions and no invented parts or character changes.`

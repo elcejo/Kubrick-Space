@@ -3,8 +3,17 @@
 from comfy_api.latest import ComfyExtension, io
 from comfy_extras.nodes_textgen import TextGenerate
 from comfy.text_encoders.qwen35 import Qwen35TEModel
+from comfy.text_encoders.gemma4 import Gemma4Model
+from . import gemma_protocol
 
 from .tool_protocol import build_prompt, dump, parse_response
+
+
+def clip_family(clip):
+    stage = getattr(clip, "cond_stage_model", None)
+    if isinstance(stage, Qwen35TEModel): return "qwen"
+    if isinstance(getattr(stage, "gemma4", None), Gemma4Model): return "gemma4"
+    raise ValueError("Kubrick requiere un modelo Qwen o Gemma 4 completo compatible.")
 
 
 class KubrickToolGenerate(io.ComfyNode):
@@ -15,7 +24,7 @@ class KubrickToolGenerate(io.ComfyNode):
             display_name="Kubrick · Generate Text + Tools",
             category="Kubrick Space/text",
             is_output_node=True,
-            description="Qwen3.5 conversation and tool proposals. Kubrick validates and executes tools outside this node.",
+            description="Qwen and Gemma 4 conversation and tool proposals. Kubrick validates and executes tools outside this node.",
             inputs=[
                 io.Clip.Input("clip"),
                 io.String.Input("prompt", multiline=True, default="", dynamic_prompts=False),
@@ -48,10 +57,12 @@ class KubrickToolGenerate(io.ComfyNode):
             raise ValueError("Límites de generación inválidos.")
         if type(temperature) not in (int, float) or not 0 <= temperature <= 2 or type(seed) is not int or not 0 <= seed <= 0xffffffffffffffff or type(thinking) is not bool:
             raise ValueError("Controles de muestreo inválidos.")
-        if not isinstance(getattr(clip, "cond_stage_model", None), Qwen35TEModel):
-            raise ValueError("KubrickToolGenerate requiere un Qwen3.5 completo cargado por CLIPLoader.")
+        family = clip_family(clip)
+        build = gemma_protocol.build_prompt if family == "gemma4" else build_prompt
+        parse = gemma_protocol.parse_response if family == "gemma4" else parse_response
+        stop_tokens = (1, 50, 106) if family == "gemma4" else (248044, 248046)
         image_count = int(image.shape[0]) if image is not None else 0
-        rendered, catalog = build_prompt(system_prompt, prompt, tools_json, messages_json, tool_choice, thinking, image_count, max_calls, forced_tool)
+        rendered, catalog = build(system_prompt, prompt, tools_json, messages_json, tool_choice, thinking, image_count, max_calls, forced_tool)
         if type(max_context_tokens) is not int or not 1024 <= max_context_tokens <= 32768:
             raise ValueError("Límite de contexto inválido.")
         class BoundedClip:
@@ -69,7 +80,7 @@ class KubrickToolGenerate(io.ComfyNode):
 
             def generate(self, *args, **kwargs):
                 generated = clip.generate(*args, **kwargs)
-                self.truncated = len(generated) >= max_new_tokens and generated[-1] not in (248044, 248046)
+                self.truncated = len(generated) >= max_new_tokens and generated[-1] not in stop_tokens
                 return generated
         sampling = {"sampling_mode": "off" if temperature == 0 else "on", "temperature": max(0.01, temperature), "top_k": 40, "top_p": 0.95, "min_p": 0.0, "repetition_penalty": 1.05, "seed": seed}
         bounded_clip = BoundedClip()
@@ -78,7 +89,7 @@ class KubrickToolGenerate(io.ComfyNode):
         if bounded_clip.truncated:
             return cls._output("invalid", text, [], None, reasoning, "La respuesta local agotó el límite de tokens. No se aplicaron acciones.")
         try:
-            message = parse_response(text, catalog, tool_choice, max_calls, forced_tool)
+            message = parse(text, catalog, tool_choice, max_calls, forced_tool)
         except ValueError as error:
             # No retry and no partial action: consumers must not append this as an assistant message.
             return cls._output("invalid", text, [], None, reasoning, str(error))
@@ -128,8 +139,7 @@ class KubrickModelControl(io.ComfyNode):
     def execute(cls, operation, nonce="", clip=None):
         import comfy.model_management as management
         if operation == "load":
-            if not isinstance(getattr(clip, "cond_stage_model", None), Qwen35TEModel):
-                raise ValueError("Se requiere un Qwen3.5 válido.")
+            clip_family(clip)
             clip.load_model()
             # Dynamic VRAM loading stages weights until the first forward pass.
             # A single private warm-up token populates the GPU cache without a user task.

@@ -1082,7 +1082,7 @@ export const ICONS = Object.freeze({
   ],
   'timeline-port': [
     'Puerto temporal',
-    'Story Book · puertos de elementos, fechas, rangos y puntos disponibles · círculo sólido con uniones tangenciales calculadas para la línea y los cables',
+    'Story Book y Guión · puertos de elementos, fechas, rangos, puntos, planos, diálogos, personajes y escenarios · círculo sólido con uniones tangenciales calculadas para la línea y los cables',
     '<circle cx="12" cy="12" r="12" fill="currentColor" stroke="none"/>',
   ],
   minus: ['Reducir', 'Controles de escala', '<path d="M5 12h14"/>'],
@@ -1185,7 +1185,7 @@ export const ICONS = Object.freeze({
   check: ['Confirmar', 'Checkbox · estado correcto', '<path d="m4 12 5 5L20 6"/>'],
   refresh: [
     'Actualizar',
-    'Reescribir · sincronizar ingrediente · Generar Otra propuesta del personaje y compararla con la principal · regenerar una pieza Outfit · restaurar foto de personaje · reintentar solicitud fallida del ayudante de personajes',
+    'Reescribir · sincronizar ingrediente · Generar Otra propuesta del personaje y compararla con la principal · regenerar una pieza Outfit · restaurar foto de personaje · reintentar solicitud fallida del ayudante de personajes · recargar catálogos de modelos API',
     '<path d="M20 4v6h-6M4 20v-6h6M20 10a8 8 0 0 0-14-5M4 14a8 8 0 0 0 14 5"/>',
   ],
   'arrow-right': ['Avanzar', 'Wizard · acciones', '<path d="M3 12h18m-7-7 7 7-7 7"/>'],

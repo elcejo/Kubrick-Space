@@ -77,7 +77,7 @@ function createCoverJobs(deps, makeOperations) {
         if (prior) return { status: 202, body: { job: prior } };
         if ((project.covers?.length || 0) >= 100 || (project.coverVersions?.length || 0) >= 100)
           throw security.fail('El historial admite 100 portadas.');
-        if (inference?.currentMode() !== 'local' && !inference?.currentSettings()?.imageModel)
+        if (inference?.currentImageMode() !== 'local' && !inference?.currentSettings()?.imageModel)
           throw security.fail('Selecciona un modelo de imagen en la barra superior.', 422);
         let document = '';
         try {
@@ -162,10 +162,9 @@ function createCoverJobs(deps, makeOperations) {
     });
     ctx.progress('Generando portada…');
     const result = await ctx.step('cover-image', async () => {
+      const imageMode = p.inferenceSettings?.imageMode || p.inferenceMode;
       const engine =
-        p.inferenceMode === 'local'
-          ? { provider: 'local', model: 'flux3-klein' }
-          : p.inferenceSettings.imageModel;
+        imageMode === 'local' ? { provider: 'local', model: 'flux3-klein' } : p.inferenceSettings.imageModel;
       const scene =
         engine?.model === 'meta/muse-image' ? sanitizeMuseCoverScene(brief.visualPrompt) : brief.visualPrompt;
       const prompt = buildCoverImagePrompt({
@@ -182,7 +181,7 @@ function createCoverJobs(deps, makeOperations) {
           aspectRatio: '2:3',
           prompt,
           inputImages: p.inputImages,
-          backend: p.inferenceMode === 'local' ? 'local' : 'api',
+          backend: imageMode === 'local' ? 'local' : 'api',
           ...engine,
         },
       });

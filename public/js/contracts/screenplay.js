@@ -3,6 +3,7 @@ export { identifier, reference };
 export const SCREENPLAY_SCHEMA = 'code-kai.screenplay';
 
 export const SCREENPLAY_TYPES = Object.freeze({
+  shot: 'h6',
   action: 'p',
   character: 'h3',
   dialogue: 'blockquote',
@@ -13,6 +14,7 @@ export const SCREENPLAY_TYPES = Object.freeze({
 export const SCREENPLAY_LABELS = Object.freeze({
   title: 'Título',
   scene: 'Escena',
+  shot: 'Plano',
   action: 'Acción',
   character: 'Personaje',
   dialogue: 'Diálogo',
@@ -296,4 +298,119 @@ export function screenplayContext(doc) {
       })
       .join('\n\n'),
   };
+}
+
+/** Reserved, deterministic marker family for upgrading an implicit shot without changing its film identity. */
+function legacyShotMarker(sceneId) {
+  let hash = 2166136261;
+  for (const char of sceneId) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619) >>> 0;
+  return 'legacy-shot-' + sceneId.slice(0, 100) + '-' + hash.toString(16).padStart(8, '0');
+}
+
+/** Upgrade an editable copy only. No scenes are merged, no prose or historical snapshots are rewritten. */
+export function upgradeScreenplayDocument(input, cleanInline = (html) => html) {
+  const doc = validateScreenplayDocument(input, cleanInline);
+  const used = new Set([
+    doc.title.id,
+    ...doc.preamble.map((block) => block.id),
+    ...doc.scenes.flatMap((scene) => [scene.id, ...scene.blocks.map((block) => block.id)]),
+  ]);
+  const allocate = (base) => {
+    let id = base,
+      number = 0;
+    while (used.has(id)) id = base + '-' + ++number;
+    used.add(id);
+    return id;
+  };
+  for (const scene of doc.scenes) {
+    if (scene.blocks[0]?.type !== 'shot') {
+      const text = 'PLANO 1' + (scene.heading.shot ? ' — ' + scene.heading.shot : '');
+      scene.blocks.unshift({
+        id: allocate(legacyShotMarker(scene.id)),
+        type: 'shot',
+        text,
+        html: escapeHTML(text),
+      });
+    }
+    // Early blank templates lacked acotación/transición. Complete each empty shot,
+    // including a draft that already received another shot, without rewriting prose.
+    const complete = [];
+    for (let index = 0; index < scene.blocks.length;) {
+      const marker = scene.blocks[index++];
+      const fields = [];
+      while (index < scene.blocks.length && scene.blocks[index].type !== 'shot')
+        fields.push(scene.blocks[index++]);
+      complete.push(marker);
+      const byType = new Map(fields.map((block) => [block.type, block]));
+      if (
+        byType.size === fields.length &&
+        // A modern silent shot retains action/transition only; never resurrect a deleted speech.
+        (!byType.has('transition') || byType.has('character') || byType.has('dialogue')) &&
+        fields.every((block) => !block.text.trim() && !block.html.replace(/<br\s*\/?\s*>/gi, '').trim())
+      ) {
+        complete.push(
+          ...['action', 'character', 'parenthetical', 'dialogue', 'transition'].map(
+            (type) =>
+              byType.get(type) || {
+                id: allocate(legacyShotMarker(scene.id) + '-' + type),
+                type,
+                text: '',
+                html: '',
+              },
+          ),
+        );
+      } else complete.push(...fields);
+    }
+    // Every speech keeps an editable parenthetical slot even when its author supplied no acting direction.
+    // This is an empty structural field, not generated narrative content.
+    const withParentheticals = [];
+    let speaker = null;
+    for (const block of complete) {
+      if (block.type === 'character') speaker = block.id;
+      if (['shot', 'action', 'transition'].includes(block.type)) speaker = null;
+      if (block.type === 'dialogue' && withParentheticals.at(-1)?.type !== 'parenthetical') {
+        const speakerId = block.speakerId || speaker;
+        withParentheticals.push({
+          id: allocate(legacyShotMarker(scene.id) + '-acotacion'),
+          type: 'parenthetical',
+          text: '',
+          html: '',
+          ...(speakerId ? { speakerId } : {}),
+        });
+      }
+      withParentheticals.push(block);
+    }
+    scene.blocks = withParentheticals;
+  }
+  return validateScreenplayDocument(doc, cleanInline);
+}
+
+/** Ordered, nonduplicated shot view over cinematic blocks. Legacy scenes remain a single implicit shot. */
+export function screenplayShots(scene) {
+  const shots = [];
+  let current = null;
+  for (const block of scene.blocks) {
+    if (block.type === 'shot') {
+      const marker = legacyShotMarker(scene.id);
+      const legacy =
+        shots.length === 0 && (block.id === marker || new RegExp('^' + marker + '-[0-9]+$').test(block.id));
+      current = {
+        id: legacy ? scene.id : block.id,
+        ...(legacy ? { markerId: block.id } : {}),
+        title: block.text || `Plano ${shots.length + 1}`,
+        blocks: [],
+        explicit: true,
+      };
+      shots.push(current);
+    } else {
+      if (!current) {
+        current = { id: scene.id, title: scene.heading.shot || 'Plano inicial', blocks: [], explicit: false };
+        shots.push(current);
+      }
+      current.blocks.push(block);
+    }
+  }
+  return shots.length
+    ? shots
+    : [{ id: scene.id, title: scene.heading.shot || 'Plano 1', blocks: [], explicit: false }];
 }

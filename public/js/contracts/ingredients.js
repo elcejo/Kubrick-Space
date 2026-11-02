@@ -48,6 +48,7 @@ function ingredients(value) {
         'lastAdaptedVersionId',
         'lastAdaptedVersionNumber',
         'lastAdaptedContent',
+        'pseudonyms',
       ],
       'Ingrediente',
     );

@@ -1,7 +1,7 @@
 /** Portable prompt contract for film scenes: what the LLM receives and how its answer is validated. */
 import { FILM_MAX_SECONDS, FILM_FRAME_OPTIONS, snapFilmFrames, filmSeconds } from './film.js';
 
-export const FILM_PROMPT_INSTRUCTION = `You are the shot designer of Kubrick Space, a film pre-production studio. You turn ONE scene of a screenplay into ONE text prompt for MiniMax H3, a model that generates a short video clip together with its sound.
+export const FILM_PROMPT_INSTRUCTION = `You are the shot designer of Kubrick Space, a film pre-production studio. You turn ONE SHOT within a screenplay scene into ONE text prompt for MiniMax H3, a model that generates a short video clip together with its sound.
 
 Return ONLY a JSON object, with no Markdown, using exactly these keys:
 - "prompt": the complete H3 prompt as plain text.
@@ -9,8 +9,9 @@ Return ONLY a JSON object, with no Markdown, using exactly these keys:
 - "shot": a short note of the framing and camera movement you chose (for the author).
 
 Hard limits:
-- The clip lasts ${FILM_MAX_SECONDS} seconds at most, under no circumstance more. A scene is usually longer than that: choose the most essential moment or two consecutive beats and tell only that, as one continuous shot. Never describe a montage, a time jump or events that cannot fit in the clip. Never try to include the whole scene.
-- Spoken words must fit the clip at a natural pace of about 2.5 words per second. Choose the lines that carry the scene and never cut a sentence in half. If the scene has more dialogue than fits, keep the strongest lines.
+- This request contains exactly one shot, not an entire scene. Render its complete action and dialogue in one continuous camera take. The parent scene heading and adjacent-shot notes are continuity context only; never include other shots or choose a "highlight" from the scene.
+- The clip lasts ${FILM_MAX_SECONDS} seconds at most. Respect the supplied shot's framing, angle, movement and estimated duration; no montage, invented cut or time jump.
+- Preserve ALL supplied dialogue verbatim in its original language, attributed to its speaker. Never select only the strongest lines or summarize them. Do not replace character identity, staging, costume or props between shots. If the shot cannot fit, the screenplay must be split into more shots before rendering.
 
 How to write the prompt:
 1. Start with the shot: size, angle, lens feel and camera movement. Respect the screenplay's own shot note when there is one.
@@ -33,6 +34,8 @@ export function filmSceneRequest({ film, scene, references = [], previous = '' }
   return JSON.stringify({
     film: short(film, 160),
     scene: {
+      id: short(scene.id, 140),
+      shotId: short(scene.shotId, 140),
       heading: short(scene.heading, 400),
       shotNote: short(scene.shot, 400),
       location: short(scene.location, 200),
@@ -50,6 +53,7 @@ export function filmSceneRequest({ film, scene, references = [], previous = '' }
       name: short(reference.name, 80),
       description: short(reference.description, 900),
     })),
+    previousShot: short(previous, 400),
     previousScene: short(previous, 400),
   });
 }

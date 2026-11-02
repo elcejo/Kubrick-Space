@@ -16,6 +16,7 @@ export const kinds = {
   film: 'Preparar película',
   'film-render': 'Previsualizar película',
   book: 'Escribir y revisar libro',
+  edit: 'Editar y revisar proyecto',
   interpret: 'Interpretar personaje',
   portrait: 'Generar fotografía',
   assets: 'Generar Outfit',

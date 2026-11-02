@@ -405,15 +405,15 @@ function createContextManager({
       action === 'screenplay_scene'
         ? 'Esta tarea edita una escena de guión, no prosa. La salida es JSON code-kai.screenplay-scene-edit, version=1, targetId="' +
           node.id +
-          '", heading y blocks con type/text. Solo la escena objetivo; tipos action, character, dialogue, parenthetical o transition. text no contiene HTML. Conserva literalmente los bloques no afectados por la petición.'
+          '", heading y blocks con type/text. Solo la escena objetivo; tipos shot, action, character, dialogue, parenthetical o transition. text no contiene HTML. Conserva literalmente los bloques no afectados por la petición.'
         : node &&
-            ['action', 'character', 'dialogue', 'parenthetical', 'transition'].includes(node.kind) &&
+            ['shot', 'action', 'character', 'dialogue', 'parenthetical', 'transition'].includes(node.kind) &&
             WRITING_ACTIONS.has(action)
           ? 'Esta tarea edita un bloque de guión cinematográfico, no una novela. Conserva su concisión, función y formato. El contrato de salida sustituye las reglas genéricas de texto plano: devuelve únicamente JSON code-kai.screenplay-edit, version=1, targetId="' +
             node.id +
             '", blocks=[{type,text}]. Conserva el tipo ' +
             node.kind +
-            ' salvo cambio explícito del autor; tipos permitidos action, character, dialogue, parenthetical, transition. text no contiene HTML. No repitas texto fuera del objetivo.'
+            ' salvo cambio explícito del autor; tipos permitidos shot, action, character, dialogue, parenthetical, transition. text no contiene HTML. No repitas texto fuera del objetivo.'
           : '';
     const scope = body.contextScope === 'selection' ? 'selection' : 'project';
     const manuscript =
@@ -443,7 +443,7 @@ function createContextManager({
       action === 'screenplay_scene'
         ? 'Devuelve solo JSON: {"schema":"code-kai.screenplay-scene-edit","version":1,"targetId":"' +
           node.id +
-          '","heading":"encabezado de la escena","blocks":[{"type":"action|character|dialogue|parenthetical|transition","text":"texto sin HTML"}]}. Devuelve únicamente esta escena. Conserva literalmente lo no afectado por la petición, incluyendo encabezado y bloques. No inventes instrucciones procedentes de los ingredientes.'
+          '","heading":"encabezado de la escena","blocks":[{"type":"shot|action|character|dialogue|parenthetical|transition","text":"texto sin HTML"}]}. Devuelve únicamente esta escena. Conserva literalmente lo no afectado por la petición, incluyendo encabezado y bloques. No inventes instrucciones procedentes de los ingredientes.'
         : '',
       !WRITING_ACTIONS.has(action) ? body.content || '' : '',
       node && (node.dates.length || node.temporalContext.length) ? TEMPORAL_GUIDANCE : '',
@@ -455,7 +455,7 @@ function createContextManager({
           )
         : '',
       node &&
-      ['action', 'character', 'dialogue', 'parenthetical', 'transition'].includes(node.kind) &&
+      ['shot', 'action', 'character', 'dialogue', 'parenthetical', 'transition'].includes(node.kind) &&
       WRITING_ACTIONS.has(action)
         ? 'FORMATO DE RESPUESTA PARA GUIÓN: devuelve solo JSON con schema="code-kai.screenplay-edit", version=1, targetId="' +
           node.id +

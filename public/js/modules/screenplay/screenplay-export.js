@@ -1,7 +1,7 @@
 import { parseScreenplayContent, screenplayToHTML } from './screenplay-document.js';
 import { escapeHTML } from '../../safe-html.js';
 
-export const SCREENPLAY_PRINT_CSS = `@page{size:A4;margin:25mm 20mm 25mm 30mm}body{font-family:"Courier New",monospace;font-size:12pt;line-height:1.1;color:#111;margin:0}h1{font-size:16pt;text-align:center;margin:0 0 24pt}h2{font-size:12pt;text-transform:uppercase;margin:18pt 0 12pt;break-after:avoid;page-break-after:avoid}p{margin:0 0 12pt}h3{font-size:12pt;font-weight:normal;text-transform:uppercase;margin:12pt 0 0 40%;break-after:avoid;page-break-after:avoid}blockquote{margin:0 15% 12pt 20%;padding:0;border:0}h4{font-size:12pt;font-weight:normal;margin:0 20% 0 28%;break-after:avoid;page-break-after:avoid}h5{font-size:12pt;font-weight:normal;text-align:right;margin:12pt 0}h2,h3,h4,p,blockquote{orphans:2;widows:2}tag{font-weight:inherit}span.kai-tag{color:inherit}`;
+export const SCREENPLAY_PRINT_CSS = `@page{size:A4;margin:25mm 20mm 25mm 30mm}body{font-family:"Courier New",monospace;font-size:12pt;line-height:1.1;color:#111;margin:0}h1{font-size:16pt;text-align:center;margin:0 0 24pt}h2{font-size:12pt;text-transform:uppercase;margin:18pt 0 12pt;break-after:avoid;page-break-after:avoid}p{margin:0 0 12pt}h3{font-size:12pt;font-weight:normal;text-transform:uppercase;margin:12pt 0 0 40%;break-after:avoid;page-break-after:avoid}blockquote{margin:0 15% 12pt 20%;padding:0;border:0}h4{font-size:12pt;font-weight:normal;margin:0 20% 0 28%;break-after:avoid;page-break-after:avoid}h5{font-size:12pt;font-weight:normal;text-align:right;margin:12pt 0}h6{font-size:11pt;text-transform:uppercase;margin:14pt 0 8pt;border-bottom:1px solid #777;break-after:avoid}h2,h3,h4,h6,p,blockquote{orphans:2;widows:2}tag{font-weight:inherit}span.kai-tag{color:inherit}`;
 
 export function screenplayPrintDocument(content, name) {
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHTML(name)}</title><style>${SCREENPLAY_PRINT_CSS}</style></head><body>${screenplayToHTML(parseScreenplayContent(content))}</body></html>`;
@@ -116,7 +116,7 @@ export function screenplayDocx(content) {
             ? '<w:ind w:left="2400" w:right="1800"/>'
             : '';
     const align = type === 'title' ? 'center' : type === 'transition' ? 'right' : 'left';
-    return `<w:p><w:pPr>${indent}<w:jc w:val="${align}"/><w:spacing w:after="${['character', 'parenthetical'].includes(type) ? 0 : 240}" w:line="240" w:lineRule="auto"/><w:widowControl/>${['scene', 'character', 'parenthetical'].includes(type) ? '<w:keepNext/>' : ''}</w:pPr>${runs(html)}</w:p>`;
+    return `<w:p><w:pPr>${indent}<w:jc w:val="${align}"/><w:spacing w:after="${['character', 'parenthetical'].includes(type) ? 0 : 240}" w:line="240" w:lineRule="auto"/><w:widowControl/>${['scene', 'shot', 'character', 'parenthetical'].includes(type) ? '<w:keepNext/>' : ''}</w:pPr>${runs(html)}</w:p>`;
   };
   const body =
     paragraph('title', doc.title.html || xml(doc.title.text)) +

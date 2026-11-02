@@ -112,7 +112,7 @@ function registerJobRoutes(
         if (body[key] && !characterAssetImage(body[key], body.projectId))
           throw security.fail('Referencia de otro proyecto.');
       const engine =
-        inference?.currentMode() === 'local'
+        inference?.currentImageMode() === 'local'
           ? { provider: 'local', model: 'flux3-klein' }
           : project.inferenceSettings?.imageModel || body.engine || project.characterImageGeneration;
       if (engine) {

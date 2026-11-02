@@ -6,7 +6,7 @@ import {
   screenplayInlineHTML,
 } from './screenplay-document.js';
 
-const blockSelector = 'h1,h2,h3,h4,h5,p,blockquote';
+const blockSelector = 'h1,h2,h3,h4,h5,h6,p,blockquote';
 function blockAt(node) {
   return (node?.nodeType === 1 ? node : node?.parentElement)?.closest(blockSelector);
 }

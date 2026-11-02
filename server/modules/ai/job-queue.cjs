@@ -5,7 +5,13 @@ const { setMaxListeners } = require('node:events');
 const { queueTiming, startTiming, finishTiming, timingContext, publicTiming } = require('./job-timing.cjs');
 
 /** Durable FIFO. The runner receives capabilities, never HTTP objects or credentials. */
-function createJobQueue({ directory, run, now = () => new Date().toISOString(), stepTimeoutMs = 360000 }) {
+function createJobQueue({
+  directory,
+  run,
+  settled,
+  now = () => new Date().toISOString(),
+  stepTimeoutMs = 360000,
+}) {
   fs.mkdirSync(directory, { recursive: true });
   if (fs.lstatSync(directory).isSymbolicLink())
     throw Error('El directorio de trabajos no puede ser un enlace.');
@@ -54,7 +60,17 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
       fs.fsyncSync(fd);
       fs.closeSync(fd);
       fd = undefined;
-      fs.renameSync(temporary, file);
+      // On Windows another process reading the record (an indexer, a scanner, a person opening it) briefly
+      // locks it and the rename fails with EPERM; the write is retried instead of failing the whole job.
+      for (let attempt = 0; ; attempt++) {
+        try {
+          fs.renameSync(temporary, file);
+          break;
+        } catch (error) {
+          if (attempt >= 20 || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code)) throw error;
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+        }
+      }
     } finally {
       if (fd !== undefined) fs.closeSync(fd);
       if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
@@ -151,7 +167,7 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
         : {}),
       timing: publicTiming(job, now(), details),
       result: job.result || null,
-      ...(job.kind === 'book'
+      ...(['book', 'edit'].includes(job.kind)
         ? { progress: job.state.progress || 0, questions: job.state.questions || [] }
         : {}),
       position:
@@ -222,10 +238,17 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
             persist(job);
           },
           state: job.state,
+          forgetStep(name) {
+            check();
+            delete job.steps[name];
+            persist(job);
+          },
           async step(name, operation) {
             check();
             const timeoutMs =
-              job.payload.inferenceMode === 'local' ? Math.max(stepTimeoutMs, 30 * 60000) : stepTimeoutMs;
+              job.payload.inferenceMode === 'local' || job.payload.inferenceSettings?.imageMode === 'local'
+                ? Math.max(stepTimeoutMs, 30 * 60000)
+                : stepTimeoutMs;
             if (Object.hasOwn(job.steps, name)) {
               timing.reuse();
               return job.steps[name];
@@ -296,6 +319,9 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
           job.status = job.result?.awaitingChoice ? 'awaiting_choice' : 'completed';
           job.message = job.result?.message || 'Trabajo completado.';
         } catch (error) {
+          // The author sees a generic message for server-side faults; the cause stays in the server log.
+          if (job.status !== 'cancelled' && !(error.status && error.status < 500))
+            console.error('[Jobs] El trabajo ' + job.kind + ' falló:', error?.stack || error);
           job.status = job.status === 'cancelled' ? 'cancelled' : 'failed';
           job.error =
             job.status === 'cancelled'
@@ -315,6 +341,14 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
         finishTiming(job, now());
         if (job.status === 'awaiting_choice') job.timing.finishedAt = null;
         persist(job);
+        // Follow-up work (for instance the props of a new character) is queued once the job is final.
+        if (!['awaiting_choice', 'cancelled'].includes(job.status)) {
+          try {
+            settled?.(job);
+          } catch (error) {
+            console.error('[Jobs] El seguimiento del trabajo falló:', error?.message || error);
+          }
+        }
       }
     } finally {
       processing = false;
@@ -375,6 +409,18 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
     schedule();
     return publicJob(job);
   }
+  function resumeChoice(id) {
+    const job = jobs.get(id);
+    if (!job || job.status !== 'awaiting_choice' || job.kind !== 'edit')
+      throw Object.assign(Error('No hay una decisión pendiente.'), { status: 409 });
+    job.status = 'queued';
+    job.result = null;
+    job.error = '';
+    queueTiming(job, now());
+    persist(job);
+    schedule();
+    return publicJob(job);
+  }
   function cancel(id) {
     const job = jobs.get(id);
     if (!job) throw Object.assign(Error('Trabajo no encontrado.'), { status: 404 });
@@ -408,6 +454,7 @@ function createJobQueue({ directory, run, now = () => new Date().toISOString(), 
   return {
     enqueue,
     retry,
+    resumeChoice,
     cancel,
     dismiss,
     remove,

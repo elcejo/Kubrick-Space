@@ -18,7 +18,9 @@ export class CharacterJobs {
     }
     this.restoring = true;
     try {
-      const { jobs } = await API.characterJobs(this.host.projectId, { signal: this.controller.signal });
+      const all = await API.characterJobs(this.host.projectId, { signal: this.controller.signal });
+      // A book edit that created or linked this character is the book's task, not a character notice.
+      const jobs = all.jobs.filter((job) => !['edit', 'book'].includes(job.kind));
       if (!this.host.current() || this.host.submitting || this.watching) return;
       const job =
         jobs.find((job) => ['queued', 'running', 'awaiting_choice'].includes(job.status)) || jobs[0];

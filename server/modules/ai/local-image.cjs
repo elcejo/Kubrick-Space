@@ -29,7 +29,15 @@ function localImageModels(appRoot) {
 }
 
 /** Native Flux3 graph: each reference has its own latent, never an image batch/collage. */
-function imageWorkflow({ prompt, references, width, height, prefix, seed = randomInt(2 ** 48 - 1) }) {
+function imageWorkflow({
+  prompt,
+  references,
+  width,
+  height,
+  prefix,
+  seed = randomInt(2 ** 48 - 1),
+  referenceMegapixels = 0.5,
+}) {
   const graph = {
     1: { class_type: 'UNETLoader', inputs: { unet_name: 'model.safetensors', weight_dtype: 'default' } },
     2: {
@@ -69,7 +77,12 @@ function imageWorkflow({ prompt, references, width, height, prefix, seed = rando
     graph[load] = { class_type: 'LoadImage', inputs: { image: filename } };
     graph[fit] = {
       class_type: 'ImageScaleToTotalPixels',
-      inputs: { image: [load, 0], upscale_method: 'lanczos', megapixels: 0.5, resolution_steps: 16 },
+      inputs: {
+        image: [load, 0],
+        upscale_method: 'lanczos',
+        megapixels: referenceMegapixels,
+        resolution_steps: 16,
+      },
     };
     graph[encode] = { class_type: 'VAEEncode', inputs: { pixels: [fit, 0], vae: ['3', 0] } };
     graph[positive] = {
@@ -86,7 +99,7 @@ function imageWorkflow({ prompt, references, width, height, prefix, seed = rando
   return graph;
 }
 
-function createLocalImage({ appRoot, request, fetchImpl, ensureEngine, caption }) {
+function createLocalImage({ appRoot, request, fetchImpl, ensureEngine, caption, trace }) {
   const base = 'http://127.0.0.1:8189';
   return async (
     { prompt, inputImages = [], aspectRatio = '2:3', model, localModel, imageType, promptReady = false },
@@ -156,6 +169,22 @@ function createLocalImage({ appRoot, request, fetchImpl, ensureEngine, caption }
       // A second rewrite can duplicate titles or dilute typography instructions.
       const text = expanded ? (await expanded.json()).choices?.[0]?.message?.content?.trim() : prompt;
       if (!text || text.length > 24000) throw fail('El modelo local no preparó una dirección visual válida.');
+      trace?.add({
+        kind: 'image',
+        model: ENGINE.model,
+        imageType,
+        aspectRatio,
+        promptReady,
+        rewritten: Boolean(expanded),
+        inputPrompt: prompt,
+        prompt: text,
+        references: inputImages.length,
+        referenceMegapixels: promptReady ? 1 : 0.5,
+        size: ratios[aspectRatio].join('x'),
+        steps: 8,
+        lora: 'turbo.safetensors (Turbo PDD)',
+        cfg: 1,
+      });
       for (const url of inputImages) {
         const [, extension, data] = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(url);
         const filename = `${prefix}-${references.length}.${extension}`;
@@ -184,6 +213,8 @@ function createLocalImage({ appRoot, request, fetchImpl, ensureEngine, caption }
               width,
               height,
               prefix,
+              // Engineered edits (pieces, outfits) need the detail of the donor: a head is a few pixels at 0.5 MP.
+              referenceMegapixels: promptReady ? 1 : 0.5,
             }),
           },
           signal,

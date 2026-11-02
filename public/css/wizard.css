@@ -238,6 +238,41 @@
   gap: 20px;
 }
 
+.wizard-name-field {
+  position: relative;
+  display: block;
+}
+
+.wizard-name-field .input {
+  padding-right: 44px;
+}
+
+.wizard-name-status {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: #fff;
+}
+
+.wizard-name-status[hidden] {
+  display: none;
+}
+
+.wizard-name-status.is-available {
+  background: #16a34a;
+}
+
+.wizard-name-status.is-taken {
+  background: #dc2626;
+}
+
 /* ============================================
    WIZARD FOOTER
    ============================================ */

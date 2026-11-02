@@ -211,7 +211,7 @@ export function validateCharacterImageDirection(value, brief) {
   )
     throw new Error('La dirección visual no corresponde a los datos de este personaje.');
   if (
-    /```|CURRENT USER EDIT REQUEST|AUTHORIZED VISUAL EDIT SCOPE|Visual direction:|FICHA ACTUAL|Diseño visual\s*·|the subject can be|for characters whose anatomy/i.test(
+    /```|CURRENT USER EDIT REQUEST|AUTHORIZED VISUAL EDIT SCOPE|Visual direction:|FICHA ACTUAL|CURRENT SHEET|USER REQUEST|Diseño visual\s*·|the subject can be|for characters whose anatomy/i.test(
       value.prompt,
     )
   )

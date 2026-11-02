@@ -724,7 +724,9 @@ function installLocalSecurity(app, port) {
   const generations = { active: 0, calls: [] };
   const localControls = { active: 0, calls: [] };
   app.use('/api/ai', (req, res, next) => {
-    if (req.path === '/local-runtime' && ['GET', 'HEAD'].includes(req.method)) return next();
+    // Read-only status and trace polling are not generations and must never consume their budget.
+    if (['/local-runtime', '/local-trace'].includes(req.path) && ['GET', 'HEAD'].includes(req.method))
+      return next();
     const control = req.path === '/local-runtime' && req.method === 'POST';
     const bucket = control ? localControls : generations;
     const now = Date.now();
@@ -755,6 +757,7 @@ function installLocalSecurity(app, port) {
 }
 
 module.exports = {
+  cleanScreenplayInline,
   validateScreenplayContent,
   UUID,
   IMAGE_NAME,

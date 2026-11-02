@@ -7,6 +7,8 @@ import {
   SCREENPLAY_SCENE_FIELDS,
   SCREENPLAY_SHOTS,
   SCREENPLAY_VOICES,
+  screenplayShots,
+  upgradeScreenplayDocument,
   screenplayCharacter,
   screenplayNarrative,
   screenplayId,
@@ -27,7 +29,9 @@ export function screenplayInlineHTML(element) {
   copy
     .querySelectorAll('button, svg, .kai-remove-btn, [data-screenplay-controls]')
     .forEach((node) => node.remove());
-  copy.querySelectorAll('[data-screenplay-name]').forEach((node) => node.replaceWith(...node.childNodes));
+  copy
+    .querySelectorAll('[data-screenplay-name], [data-screenplay-shot-text]')
+    .forEach((node) => node.replaceWith(...node.childNodes));
   const voice = element.matches('h3[data-screenplay-voice]') ? element.dataset.screenplayVoice : '';
   let html = safeContent(copy.innerHTML + (voice ? ' (' + escapeHTML(voice) + ')' : ''));
   if (copy.getAttribute('style'))
@@ -66,7 +70,7 @@ export function screenplayFromHTML(html, previous = null, liveRoot = null) {
   const root = liveRoot || new DOMParser().parseFromString(safeContent(html), 'text/html').body;
   // Native paste and older documents may contain divs or bare text. Normalize
   // these runs without recreating their text nodes, so no written text vanishes.
-  const blockSelector = 'h1,h2,h3,h4,h5,p,blockquote,pre,li';
+  const blockSelector = 'h1,h2,h3,h4,h5,h6,p,blockquote,pre,li';
   const selection = liveRoot?.ownerDocument.defaultView.getSelection();
   const cursor =
     selection?.rangeCount && root.contains(selection.anchorNode)
@@ -83,7 +87,10 @@ export function screenplayFromHTML(html, previous = null, liveRoot = null) {
     for (const child of [...parent.childNodes]) {
       if (child.nodeType === 1 && child.matches('[data-scene-properties], [data-screenplay-controls]'))
         continue;
-      if (child.nodeType === 1 && child.matches('.screenplay-scene, .screenplay-scene__body')) {
+      if (
+        child.nodeType === 1 &&
+        child.matches('.screenplay-scene, .screenplay-scene__body, .screenplay-shot, .screenplay-dialogue')
+      ) {
         normalize(child);
         continue;
       }
@@ -152,10 +159,10 @@ export function screenplayFromHTML(html, previous = null, liveRoot = null) {
   const doc = { schema: SCREENPLAY_SCHEMA, version: 1, title: null, preamble: [], scenes: [] };
   let target = doc.preamble,
     speaker = null;
-  const elements = [...root.querySelectorAll('h1,h2,h3,h4,h5,p,blockquote,pre,li')].filter(
+  const elements = [...root.querySelectorAll('h1,h2,h3,h4,h5,h6,p,blockquote,pre,li')].filter(
     (el) =>
       !el.closest('[data-scene-properties], [data-screenplay-controls]') &&
-      !el.parentElement?.closest('h1,h2,h3,h4,h5,p,blockquote,pre,li'),
+      !el.parentElement?.closest('h1,h2,h3,h4,h5,h6,p,blockquote,pre,li'),
   );
   for (const el of elements) {
     const text = blockText(el);
@@ -193,7 +200,7 @@ export function screenplayFromHTML(html, previous = null, liveRoot = null) {
       if (reference.test(char)) node.characterId = char;
     }
     if (speaker && ['dialogue', 'parenthetical'].includes(type)) node.speakerId = speaker;
-    if (['action', 'transition'].includes(type)) speaker = null;
+    if (['action', 'transition', 'shot'].includes(type)) speaker = null;
     target.push(node);
   }
   if (!doc.title) doc.title = previous?.title || { id: screenplayId(), type: 'title', text: '', html: '' };
@@ -209,6 +216,15 @@ export function parseScreenplayContent(content) {
   )
     return validateScreenplayDocument(JSON.parse(content), safeContent);
   return screenplayFromHTML(content || '');
+}
+
+/** The current workspace uses one scene/shot layout, even when its draft predates explicit shot blocks. */
+export function prepareScreenplayProject(project) {
+  if (project.type === 'book' && project.category === 'screenplay')
+    project.content = JSON.stringify(
+      upgradeScreenplayDocument(parseScreenplayContent(project.content || ''), safeContent),
+    );
+  return project;
 }
 
 /** All ingredient adaptations enter the editor through its canonical document model. */
@@ -227,6 +243,11 @@ export function prepareScreenplayAdaptation(html, previousContent, scenarios = [
       .trim()
       .toLocaleLowerCase();
   for (const scene of doc.scenes) {
+    const shots = screenplayShots(scene);
+    if (shots.filter((shot) => shot.explicit).length < 2 || shots.some((shot) => !shot.explicit))
+      throw new Error(
+        'La propuesta debe dividir cada escena en varios planos h6 antes de su acción y diálogo. Se conservó el guión.',
+      );
     scene.heading.shot ||= '';
     const matches = catalog.filter((item) => key(item.name) === key(scene.heading.location));
     const selected =
@@ -262,6 +283,8 @@ export {
   SCREENPLAY_SCENE_FIELDS,
   SCREENPLAY_SHOTS,
   SCREENPLAY_VOICES,
+  screenplayShots,
+  upgradeScreenplayDocument,
   screenplayCharacter,
   screenplayNarrative,
   screenplayId,

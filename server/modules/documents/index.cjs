@@ -1,5 +1,6 @@
 // Public server contract for documents.
 module.exports = {
+  applyElementPatch: require('./element-patches.cjs').applyElementPatch,
   applyBookAgentPatch: require('./book-patches.cjs').applyBookAgentPatch,
   createBackgroundDraftWriter: require('./background.cjs').createBackgroundDraftWriter,
   createDocumentOperations: require('./operations.cjs').createDocumentOperations,

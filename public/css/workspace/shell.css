@@ -910,19 +910,7 @@
   flex-shrink: 0;
 }
 
-.toolbar-inference-control {
-  width: 112px;
-  flex: 0 0 112px;
-}
-
-.toolbar-local-inference {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  pointer-events: auto;
-}
-
-.toolbar-api-inference {
+.toolbar-inference-controls {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -930,16 +918,12 @@
   pointer-events: auto;
 }
 
-.toolbar-api-inference[hidden] {
-  display: none;
-}
-
-.toolbar-api-inference .kai-select {
+.toolbar-inference-controls .kai-select {
   width: clamp(120px, 12vw, 200px);
   min-width: 0;
 }
 
-.toolbar-api-inference .kai-select__trigger {
+.toolbar-inference-controls .kai-select__trigger {
   min-height: 32px;
   height: 32px;
   padding: 6px 8px;
@@ -948,21 +932,8 @@
   font-size: 12px;
 }
 
-.toolbar-local-inference[hidden] {
+.toolbar-local-power[hidden] {
   display: none;
-}
-
-.toolbar-local-inference .kai-select {
-  width: 138px;
-}
-
-.toolbar-local-inference .kai-select__trigger {
-  min-height: 32px;
-  height: 32px;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
 }
 
 .toolbar-local-power {
@@ -978,14 +949,6 @@
 
 .toolbar-local-power[aria-pressed='true'] {
   color: var(--accent);
-}
-.toolbar-inference-control .kai-select__trigger {
-  min-height: 32px;
-  height: 32px;
-  padding: 6px 10px;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
 }
 
 @media (max-width: 760px) {
@@ -1012,10 +975,6 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 4px;
-  }
-  .toolbar-inference-control {
-    width: 96px;
-    flex-basis: 96px;
   }
   .workspace-toolbar .toolbar-utility-btn {
     padding: 6px 8px;

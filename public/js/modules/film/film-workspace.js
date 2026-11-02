@@ -155,16 +155,11 @@ export class FilmWorkspace {
   hasScenes() {
     return this.document.scenes.length > 0;
   }
-  /** Previews run only in Local mode with the video model chosen in the top bar. */
+  /** Previews run with the local video model chosen in the top bar, whatever the text and image providers. */
   videoReady() {
-    return (
-      AppState.inferenceMode === 'local' &&
-      this.project().inferenceSettings?.videoModel?.model === 'minimax-h3'
-    );
+    return this.project().inferenceSettings?.videoModel?.model === 'minimax-h3';
   }
   videoHint() {
-    if (AppState.inferenceMode !== 'local')
-      return 'El video se genera solo con un modelo local: cambia a Local en la barra superior.';
     return 'Elige el modelo de video local en la barra superior para generar las previsualizaciones.';
   }
   canRender() {
@@ -238,7 +233,7 @@ export class FilmWorkspace {
         el(
           'p',
           'film-header__text',
-          'Cada escena del guión se convierte en un clip independiente de como máximo 10 segundos, con su prompt para MiniMax H3. Vincula el guión, los personajes y los escenarios como ingredientes.',
+          'Cada plano del guión se convierte en un clip independiente de como máximo 10 segundos, agrupado por su escena, con su prompt para MiniMax H3. Vincula el guión, los personajes y los escenarios como ingredientes.',
         ),
       );
     } else {
@@ -250,7 +245,7 @@ export class FilmWorkspace {
         el(
           'p',
           'film-header__text',
-          `${summary.total} ${summary.total === 1 ? 'escena' : 'escenas'} · ${summary.ready} con prompt · ${previews} previsualizadas · ${approved} aprobadas · ${duration(Math.round(summary.seconds))} de metraje`,
+          `${summary.total} ${summary.total === 1 ? 'plano' : 'planos'} · ${summary.ready} con prompt · ${previews} previsualizadas · ${approved} aprobadas · ${duration(Math.round(summary.seconds))} de metraje`,
         ),
       );
     }
@@ -295,6 +290,8 @@ export class FilmWorkspace {
   buildRow(scene, index) {
     const row = el('article', 'film-row');
     row.dataset.sceneId = scene.id;
+    row.dataset.sourceSceneId = scene.sourceSceneId;
+    row.dataset.sourceShotId = scene.sourceShotId;
     if (scene.sourceRemoved) row.classList.add('is-removed');
     row.append(this.buildVideoNode(scene, index), this.buildParamsNode(scene, index));
     return row;
@@ -310,10 +307,14 @@ export class FilmWorkspace {
   }
   buildVideoNode(scene, index) {
     const section = el('section', 'character-node film-node film-node--video');
-    section.setAttribute('aria-label', `Video de la escena ${index + 1}`);
+    section.setAttribute('aria-label', `Video del plano ${index + 1}`);
     const header = el('header', 'film-node__header');
     header.append(
-      el('h2', 'character-eyebrow', `ESCENA ${index + 1}`),
+      el(
+        'h2',
+        'character-eyebrow',
+        `ESCENA ${[...new Set(this.document.scenes.map((item) => item.sourceSceneId))].indexOf(scene.sourceSceneId) + 1} · PLANO ${this.document.scenes.filter((item) => item.sourceSceneId === scene.sourceSceneId).indexOf(scene) + 1}`,
+      ),
       el('h3', 'film-node__title', scene.title),
     );
     const frame = el('div', 'film-video-frame');
@@ -326,7 +327,7 @@ export class FilmWorkspace {
       video.loop = true;
       video.playsInline = true;
       video.preload = 'metadata';
-      video.setAttribute('aria-label', `Previsualización de la escena ${index + 1}`);
+      video.setAttribute('aria-label', `Previsualización del plano ${index + 1}`);
       frame.append(video);
     } else {
       frame.setAttribute('role', 'img');
@@ -374,18 +375,18 @@ export class FilmWorkspace {
     }
     if (scene.sourceRemoved)
       section.append(
-        el('p', 'film-node__notice', 'Esta escena ya no está en el guión. Se conserva por si la recuperas.'),
+        el('p', 'film-node__notice', 'Este plano ya no está en el guión. Se conserva por si la recuperas.'),
       );
     return section;
   }
   statusOf(scene) {
-    if (scene.sourceRemoved) return 'Escena eliminada del guión';
+    if (scene.sourceRemoved) return 'Plano eliminado del guión';
     if (scene.status === 'ready' && filmSceneNeedsPrompt(scene)) return 'El guión cambió; se reescribirá';
     return STATUS_LABELS[scene.status];
   }
   buildParamsNode(scene, index) {
     const section = el('section', 'character-node film-node film-node--params');
-    section.setAttribute('aria-label', `Parámetros de la escena ${index + 1}`);
+    section.setAttribute('aria-label', `Parámetros del plano ${index + 1}`);
     const header = el('header', 'film-node__header');
     header.append(el('h2', 'character-eyebrow', 'PARÁMETROS DE GENERACIÓN'));
     const chip = el('span', `film-chip film-chip--${scene.status}`, this.statusOf(scene));
@@ -428,7 +429,7 @@ export class FilmWorkspace {
     );
     length.append(
       select,
-      Object.assign(el('small', 'film-field__help', `Máximo ${FILM_MAX_SECONDS} s por escena.`), {
+      Object.assign(el('small', 'film-field__help', `Máximo ${FILM_MAX_SECONDS} s por plano.`), {
         id: `film-limit-${scene.id}`,
       }),
     );
@@ -453,7 +454,7 @@ export class FilmWorkspace {
     references.append(el('span', 'film-field__label', 'Referencias'));
     if (!scene.references.length)
       references.append(
-        el('p', 'film-references__empty', 'Sin personajes ni escenarios vinculados en esta escena.'),
+        el('p', 'film-references__empty', 'Sin personajes ni escenarios vinculados en este plano.'),
       );
     else {
       const list = el('ul', 'film-references__list');

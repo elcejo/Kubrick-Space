@@ -176,31 +176,40 @@ function createCharacterBackgroundWorkflow({
     }
     const discoverLore = async () => {
       ctx.progress('Buscando referencias y lore del personaje…');
-      const lore = await ctx.step('lore-discovery', async () => {
+      const unavailable = (message) => ({
+        status: 'unavailable',
+        name: '',
+        work: '',
+        message,
+        sources: [],
+        facts: [],
+      });
+      const found = await ctx.step('lore-discovery', async () => {
         try {
-          return (
-            await checked(
-              helpers.discoverLore({
-                body: {
-                  projectId: id,
-                  document: parseCharacterDocument(state.content),
-                  request: input.request || '',
-                },
-              }),
-            )
-          ).lore;
+          const response = await checked(
+            helpers.discoverLore({
+              body: {
+                projectId: id,
+                document: parseCharacterDocument(state.content),
+                request: input.request || '',
+              },
+            }),
+          );
+          // Local models cannot search online: that is not a failure of the creation that just finished.
+          return response.lore || null;
         } catch (error) {
           ctx.throwIfAborted?.();
-          return {
-            status: 'unavailable',
-            name: '',
-            work: '',
-            message: 'No se pudo comprobar si existe lore previo. Puedes reintentar la búsqueda.',
-            sources: [],
-            facts: [],
-          };
+          return unavailable('No se pudo comprobar si existe lore previo. Puedes reintentar la búsqueda.');
         }
       });
+      // Nothing to show: an automatic search that cannot run (local model) adds no panel to the sheet. Only a
+      // search the user asked for explains why it was not possible. A step cached as empty is read the same way.
+      if (!found && job.kind !== 'lore') {
+        state.loreSearched = true;
+        ctx.checkpoint();
+        return;
+      }
+      const lore = found || unavailable('La búsqueda en línea requiere un modelo API.');
       doc = parseCharacterDocument(state.content);
       doc.lore = lore;
       doc.revision++;
@@ -355,7 +364,13 @@ function createCharacterBackgroundWorkflow({
                 ...(input.gallery ? { gallery: input.gallery } : {}),
               },
             },
-            { management: !input.managementDisabled && source !== 'summary' },
+            {
+              // Reading a first photograph needs no tool for other characters: only the sheet proposal is offered.
+              management:
+                !input.managementDisabled &&
+                source !== 'summary' &&
+                !(source === 'image' && !parseCharacterDocument(state.content).identity.base),
+            },
           ),
         ),
       );
@@ -426,6 +441,7 @@ function createCharacterBackgroundWorkflow({
         prompt: characterAssetPrompt(item),
         aspectRatio: '1:1',
         inputImages: characterAssetReferences(item, input.referenceImage),
+        promptReady: true,
       });
       if (item.image !== url) {
         library.trash ||= [];
@@ -605,6 +621,9 @@ function createCharacterBackgroundWorkflow({
       state.imageUrl = url;
       ctx.checkpoint();
     }
+    // A character created for a story is usable as soon as it has its name and first photograph.
+    if (input.stopAfterPortrait && state.portraitSaved)
+      return { imageUrl: state.imageUrl || null, message: 'Fotografía principal lista.' };
     if (
       job.kind === 'assets' ||
       (imageAction === 'generate' && !state.skipInventory) ||
@@ -653,7 +672,7 @@ function createCharacterBackgroundWorkflow({
         pending.map(async (item) => {
           const previous = localTail;
           let release;
-          if (input.inferenceMode === 'local')
+          if ((input.inferenceSettings?.imageMode || input.inferenceMode) === 'local')
             localTail = new Promise((resolve) => {
               release = resolve;
             });
@@ -663,6 +682,8 @@ function createCharacterBackgroundWorkflow({
               prompt: characterAssetPrompt(item),
               aspectRatio: '1:1',
               inputImages: characterAssetReferences(item, sourceImage),
+              // The builder already wrote the complete isolation instruction; a local rewrite would drop it.
+              promptReady: true,
             });
             library = validateCharacterVisualLibrary(current().characterVisualLibrary, id);
             if (library.sourceImage !== sourceImage || library.sourceKey !== characterAppearanceKey(doc))

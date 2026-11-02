@@ -25,7 +25,7 @@ export function normalizeScreenplayProposal(text, titleHTML) {
   // Unwrap presentation-only containers, but never accept prose outside cinematic blocks.
   for (const wrapper of [...parsed.querySelectorAll('div')].reverse())
     wrapper.replaceWith(...wrapper.childNodes);
-  const allowed = new Set(['H2', 'P', 'H3', 'BLOCKQUOTE', 'H4', 'H5']);
+  const allowed = new Set(['H2', 'P', 'H3', 'BLOCKQUOTE', 'H4', 'H5', 'H6']);
   if (
     [...parsed.childNodes].some((node) =>
       node.nodeType === 3 ? node.textContent.trim() : node.nodeType === 1 && !allowed.has(node.tagName),

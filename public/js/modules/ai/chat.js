@@ -15,6 +15,7 @@ import { AppState } from '../../app-state.js';
 import { API } from '../../api-service.js';
 import { ingredientContent, ingredientVersionLabel } from '../ingredients/ingredient-versions.js';
 import { Modal, Toast } from '../../ui-components.js';
+import { chooseResourceImageModel } from './resource-model-dialog.js';
 import { prepareCharacterCreation } from '../characters/character-creation.js';
 
 /**
@@ -97,6 +98,7 @@ export class Chat {
   #bookJobId = null;
   #acceptBookJob = null;
   #bookActive = false;
+  #setEditingBusy = null;
   #bookStopRequested = false;
   #bookQueuedMessages = [];
 
@@ -112,10 +114,12 @@ export class Chat {
       applyDocumentChange = null,
       prepareProjectContent = null,
       acceptBookJob = null,
+      setEditingBusy = null,
     } = {},
   ) {
     this.#applyDocumentChange = applyDocumentChange;
     this.#acceptBookJob = acceptBookJob;
+    this.#setEditingBusy = setEditingBusy;
     this.#prepareProjectContent = prepareProjectContent;
     this.#executeCharacterAction = executeCharacterAction;
     this.#attachCharacterPhoto = attachCharacterPhoto;
@@ -289,11 +293,20 @@ export class Chat {
     document.addEventListener('keydown', this.#bound.escapeMenu);
     this.#messageList.addEventListener('click', this.#bound.suggestion);
     EventBus.on('workspace:context:ready', this.#bound.contextReady);
-    if (this.#acceptBookJob && API.enqueueBookJob && AppState.currentProject?.category === 'story-book') {
+    if (
+      this.#acceptBookJob &&
+      API.enqueueBookJob &&
+      (['story-book', 'screenplay'].includes(AppState.currentProject?.category) ||
+        ['stage', 'video'].includes(AppState.currentProject?.type))
+    ) {
       const id = AppState.currentProject.id;
       void API.characterJobs(id)
         .then(({ jobs }) => {
-          const job = jobs.find((j) => j.kind === 'book' && ['queued', 'running'].includes(j.status));
+          const job = jobs.find(
+            (j) =>
+              ['book', 'edit'].includes(j.kind) &&
+              ['queued', 'running', 'awaiting_choice'].includes(j.status),
+          );
           if (job && this.#root && AppState.currentProject?.id === id && !this.#loading)
             return this.#runBookJob('', job.id);
         })
@@ -752,8 +765,9 @@ export class Chat {
     const approvedReads = new Set([originatingProjectId]);
     if (!originalText) return;
     if (
-      AppState.currentProject?.type === 'book' &&
-      AppState.currentProject?.category === 'story-book' &&
+      ((AppState.currentProject?.type === 'book' &&
+        ['story-book', 'screenplay'].includes(AppState.currentProject?.category)) ||
+        ['stage', 'video'].includes(AppState.currentProject?.type)) &&
       storyBookIntent(originalText) === 'edit' &&
       this.#acceptBookJob &&
       API.enqueueBookJob
@@ -884,7 +898,7 @@ export class Chat {
         ) {
           reply.discard();
           const instruction =
-            '[Sistema: La petición anterior ya ordena actuar en el libro abierto. No solicites confirmación ni crees otro proyecto. Emite EDITAR_DOCUMENTO con el ID del proyecto activo y el contenido actualizado. Pregunta solo si falta información imprescindible.]';
+            '[Sistema: La petición anterior ya ordena actuar en el libro abierto. No solicites confirmación ni crees otro proyecto. Emite EDITAR_PROYECTO con el ID del proyecto activo; no envíes el contenido completo como comando. Pregunta solo si falta información imprescindible.]';
           this.#addInvisibleMessage('user', instruction);
           currentMessageText = instruction;
           continue;
@@ -896,16 +910,21 @@ export class Chat {
         const editMatch = parsed.commands.find((command) => command.name === 'EDITAR_DOCUMENTO');
         const createMatch = parsed.commands.find((command) => command.name === 'CREAR_PROYECTO');
         const characterMatch = parsed.commands.find((command) => command.name === 'PERSONAJE');
-        const bookMatch = parsed.commands.find((command) => command.name === 'ESCRIBIR_LIBRO');
+        const bookMatch = parsed.commands.find((command) =>
+          ['ESCRIBIR_LIBRO', 'EDITAR_PROYECTO'].includes(command.name),
+        );
         if (bookMatch) {
           const action = JSON.parse(bookMatch.argument);
           if (
             parsed.commands.length !== 1 ||
             action.projectId !== originatingProjectId ||
             !this.#acceptBookJob ||
-            AppState.currentProject?.category !== 'story-book'
+            !(
+              ['story-book', 'screenplay'].includes(AppState.currentProject?.category) ||
+              ['stage', 'video'].includes(AppState.currentProject?.type)
+            )
           )
-            throw new Error('La escritura requiere el Story Book abierto.');
+            throw new Error('La edición requiere el proyecto abierto.');
           loader.remove();
           await this.#runBookJob(originalText);
           break;
@@ -990,24 +1009,13 @@ export class Chat {
           const existing = (
             Array.isArray(knownProjects) ? knownProjects : knownProjects?.projects || []
           ).find((project) => normalizedName(project.name) === normalizedName(payload.name));
-          const editRequest =
-            /\b(edit(?:a|ar|alo|ala)|modific(?:a|ar|alo|ala)|actualiz(?:a|ar|alo|ala)|reescrib(?:e|ir|elo|ela)|complet(?:a|ar|alo|ala))\b/i.test(
-              normalizedName(originalText),
-            );
           const explicitNewProject =
             /\b(?:crea|crear|genera|generar|haz)\b[\s\S]{0,100}\b(?:proyecto|libro|personaje|guion)\b/i.test(
               normalizedName(originalText),
             ) && /\b(?:nuevo|nueva|otro|otra)\b/i.test(normalizedName(originalText));
-          if (
-            existing ||
-            ((editRequest ||
-              (directEdit && !explicitNewProject) ||
-              normalizedName(payload.name) === normalizedName(AppState.currentProject?.name)) &&
-              AppState.currentProject?.type === 'book' &&
-              payload.type === 'book')
-          ) {
+          if (existing || (!explicitNewProject && !['character', 'stage'].includes(payload.type))) {
             const outcome =
-              '[Sistema: Creación bloqueada. El usuario está editando un proyecto existente. Usa EDITAR_DOCUMENTO para el libro abierto con su ID confirmado; no propongas duplicados. Proyecto existente: ' +
+              '[Sistema: Creación bloqueada. El usuario está editando un proyecto existente. Usa EDITAR_PROYECTO para el proyecto abierto con su ID confirmado; no propongas duplicados. Proyecto existente: ' +
               JSON.stringify(existing?.id || originatingProjectId) +
               ']';
             this.#addInvisibleMessage('user', outcome);
@@ -1026,23 +1034,6 @@ export class Chat {
             this.#addInvisibleMessage('user', outcome);
             currentMessageText = outcome;
             continue;
-          }
-          if (payload.type === 'book' && payload.category !== 'screenplay') {
-            payload.category = 'story-book';
-            if (!this.#prepareProjectContent) throw new Error('No está disponible el validador de libros.');
-            payload.content = this.#prepareProjectContent(payload, payload.content || '');
-          }
-          if (
-            !explicitNewProject &&
-            !(await Modal.confirm({
-              title: 'Autorizar creación de proyecto',
-              message: `El asistente propone crear y guardar "${payload.name || 'Nuevo proyecto'}" (${payload.type || 'character'})${payload.linkAsIngredient ? ' y vincularlo al proyecto actual' : ''}.\n\n¿Autorizar esta creación?`,
-              confirmLabel: 'Crear proyecto',
-              type: 'warning',
-            }))
-          ) {
-            this.#addMessage('ai', 'Creación cancelada. No se guardó el proyecto propuesto.');
-            break;
           }
           Toast.show(`Creando proyecto "${payload.name || 'Nuevo'}"...`, 'info');
 
@@ -1078,6 +1069,8 @@ export class Chat {
               if (controller.signal.aborted) throw new Error('Se canceló la configuración del personaje.');
               initialContent = JSON.stringify(creation.document);
             }
+            if (newProj.type !== 'character' && this.#prepareProjectContent)
+              initialContent = this.#prepareProjectContent(newProj, initialContent);
             const updatedProj = await API.updateProject(newProj.id, {
               content: initialContent,
               traits: newProj.type === 'character' ? {} : payload.traits || {},
@@ -1265,12 +1258,14 @@ export class Chat {
     const progress = document.createElement('progress');
     progress.max = 100;
     progress.value = 0;
-    progress.setAttribute('aria-label', 'Avance estimado del libro');
+    progress.setAttribute('aria-label', 'Avance estimado del proyecto');
     loader.append(label, progress);
     let expected, response;
     const questions = new Set();
     try {
       if (!existingId) await EventBus.emitAsync('autosave:flush');
+      if (controller.signal.aborted || !this.#root || AppState.currentProject?.id !== projectId) return;
+      this.#setEditingBusy?.(true);
       expected = this.#getEditorContext().document;
       response = existingId
         ? null
@@ -1289,11 +1284,35 @@ export class Chat {
             questions.add(question);
             this.#addMessage('ai', question);
           }
+        if (response.job.status === 'awaiting_choice' && response.job.result?.resourceModel) {
+          const choice = await chooseResourceImageModel(response.job.result.resourceModel);
+          if (controller.signal.aborted || AppState.currentProject?.id !== projectId) break;
+          if (choice) {
+            await API.chooseResourceModel(this.#bookJobId, choice);
+            continue;
+          }
+          this.#addMessage(
+            'ai',
+            'Pendiente: elegir modelo de imagen para ' + response.job.result.resourceModel.name + '.',
+          );
+          const resume = document.createElement('button');
+          resume.className = 'btn-secondary';
+          resume.textContent = 'Elegir modelo';
+          const pendingId = this.#bookJobId;
+          resume.addEventListener('click', () => {
+            if (!this.#loading) {
+              resume.remove();
+              void this.#runBookJob('', pendingId);
+            }
+          });
+          this.#messageList.append(resume);
+          break;
+        }
         if (!['queued', 'running'].includes(response.job.status)) {
           this.#addMessage(
             'ai',
             response.job.status === 'completed'
-              ? `Libro escrito y revisado. ${response.job.result?.words || 0} palabras guardadas en el borrador.`
+              ? `Proyecto editado y revisado.${response.job.result?.words ? ' ' + response.job.result.words + ' palabras guardadas en el borrador.' : ''}${(response.job.result?.warnings || []).map((warning) => '\n• ' + warning).join('')}`
               : response.job.error || 'Trabajo detenido. Lo guardado se conserva.',
           );
           break;
@@ -1306,6 +1325,8 @@ export class Chat {
       if (!controller.signal.aborted)
         this.#addMessage('ai', `El trabajo del servidor se conserva. ${error.message}`);
     } finally {
+      if (!response?.job || !['queued', 'running', 'awaiting_choice'].includes(response.job.status))
+        this.#setEditingBusy?.(false);
       loader.remove();
       this.#bookJobId = null;
       this.#bookActive = false;

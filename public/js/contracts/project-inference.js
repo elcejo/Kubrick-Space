@@ -1,3 +1,4 @@
+import { canonicalLocalModel, localModelProfile } from './local-models.js';
 /** Project metadata, independent of document revisions and saved content versions. */
 export function validateProjectInference(value) {
   const fail = () => {
@@ -6,13 +7,14 @@ export function validateProjectInference(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail();
   if (
     Object.keys(value).some(
-      (key) => !['mode', 'localModel', 'textModel', 'imageModel', 'videoModel'].includes(key),
+      (key) => !['mode', 'imageMode', 'localModel', 'textModel', 'imageModel', 'videoModel'].includes(key),
     )
   )
     fail();
   if (value.mode !== undefined && !['local', 'api', 'hybrid'].includes(value.mode)) fail();
-  if (value.localModel !== undefined && !/^local:qwen3\.5-(4b|9b)-int8-convrot$/.test(value.localModel))
-    fail();
+  // Absent imageMode follows mode; it only exists once text and image providers differ.
+  if (value.imageMode !== undefined && !['local', 'api'].includes(value.imageMode)) fail();
+  if (value.localModel !== undefined && !localModelProfile(value.localModel)) fail();
   if (
     value.textModel !== undefined &&
     (typeof value.textModel !== 'string' ||
@@ -23,7 +25,9 @@ export function validateProjectInference(value) {
   if (value.imageModel !== undefined) validateImageEngine(value.imageModel);
   // null clears the selection.
   if (value.videoModel !== undefined && value.videoModel !== null) validateVideoEngine(value.videoModel);
-  return structuredClone(value);
+  const result = structuredClone(value);
+  if (result.localModel !== undefined) result.localModel = canonicalLocalModel(result.localModel);
+  return result;
 }
 
 /** The only video model today: MiniMax H3 on the local engine. */

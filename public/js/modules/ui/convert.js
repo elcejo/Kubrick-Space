@@ -210,7 +210,7 @@ export const Convert = {
     const div = doc.body;
 
     const hasBlockChildren = (node) => {
-      const blockTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'p', 'ul', 'ol', 'li', 'pre', 'blockquote'];
+      const blockTags = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'ul', 'ol', 'li', 'pre', 'blockquote'];
       for (let child of node.childNodes) {
         if (child.nodeType === Node.ELEMENT_NODE) {
           if (blockTags.includes(child.tagName.toLowerCase()) || hasBlockChildren(child)) {
@@ -365,7 +365,7 @@ export const Convert = {
 
     // Iterate through child nodes or block elements: h1, h2, h3, p, h4, blockquote
     const lines = [];
-    const elements = temp.querySelectorAll('h1, h2, h3, p, h4, blockquote');
+    const elements = temp.querySelectorAll('h1, h2, h3, p, h4, h5, h6, blockquote');
 
     elements.forEach((el) => {
       const tagName = el.tagName.toLowerCase();
@@ -378,6 +378,10 @@ export const Convert = {
         lines.push(`[CAPITULO (h2)]: "${text}" (Esta línea representa el título de un capítulo del libro)`);
       } else if (tagName === 'h3') {
         lines.push(`[TEMA DEL CAPITULO (h3)]: "${text}" (Esta línea representa un subtema del capítulo)`);
+      } else if (tagName === 'h6') {
+        lines.push(`[PLANO (h6)]: ${text}`);
+      } else if (tagName === 'h5') {
+        lines.push(`[TRANSICION (h5)]: ${text}`);
       } else if (tagName === 'h4') {
         lines.push(`[ACOTACION (h4)]: (${text})`);
       } else if (tagName === 'blockquote') {

@@ -162,6 +162,16 @@ custom node package (`kubrick_space`). Icons, fonts and the interface are origin
 
 ## Roadmap
 
+**Done in 0.1.2**
+
+* **Local is a provider, not a mode.** The API/Local switch is gone: LLM, image and video lists show Local first, next to the cloud providers. Each project keeps one setting for text and another for images, so an OpenRouter LLM can write while FLUX 3 Klein draws locally (or the other way round). Film previews depend only on the local video model
+* **Edit the open project by elements.** The assistant can edit a Story Book or a Screenplay in rounds with the full, current text as context, create the supporting characters and places the story needs (description, narrative, first photo, then their props) and link them as ingredients. Before generating an image it asks which model to use (Local or API) for each new resource. Jobs are durable: they survive a restart, can be stopped, resumed or retried, and the book is only changed through checked, reversible patches
+* **Resuming no longer mixes resources.** A fix for a resumed edit that could treat a character it had just created as one from another story and attach the wrong description or photo to it. Props of a new character are retried once if the model fails
+* **Character library: 21 new groups.** Clothing adds bras, baby dolls, tunics, robes, capes, turbans and leggings; props add cameras, notebooks, books, pencils and pens, wands, toys, balls, fanny packs, rackets, bats, banners, flashlights, towels and pets. Pieces already saved under a general group move to the new one by name
+* **Ingredients** get unique, readable names and a name check in the creation wizard; Story Book now writes plain prose by default
+* **More local text models (optional).** `Qwen 3.8 27B` and `Gemma 4 E4B` (INT8 ConvRot) are recognised in `models/llm/<name>/model.safetensors`, with a native tool protocol for Gemma. They are not required, and their sources are not listed here yet; the SHA-256 expected by the app is in `local-generation/comfyui/models.json`
+* **OpenRouter** model lists have a reload button, and the Muse Image models are detected correctly
+
 **Done in 0.1.1**
 
 * Film previews follow the top bar: they only run in Local mode with the local video model (MiniMax H3) chosen there; screenplay-linked characters with a main photo become references

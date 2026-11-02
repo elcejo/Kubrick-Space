@@ -1,6 +1,11 @@
+import { mountScreenplayInsertion } from './screenplay-insertion.js';
+import { syncScreenplayRemoval } from './screenplay-removal.js';
+import { screenplayProjectionNodes, arrangeScreenplayBlocks } from './screenplay-layout.js';
+import { mountScreenplayShot, SHOT_HELP } from './screenplay-shot-controls.js';
 import {
   SCREENPLAY_SHOTS,
   SCREENPLAY_VOICES,
+  screenplayShots,
   screenplayCharacter,
   screenplayId,
   screenplayHeading,
@@ -13,18 +18,8 @@ import { AppState } from '../../app-state.js';
 import { Toast } from '../../ui-components.js';
 import { enhanceSelect } from '../../custom-select.js';
 import { versionDialog } from '../ingredients/ingredient-version-dialogs.js';
+import { ingredientPortrait } from '../ingredients/ingredient-portrait.js';
 
-const SHOT_HELP = {
-  'Gran plano general': 'Muestra un paisaje o un espacio enorme; el personaje apenas se distingue.',
-  'Plano general': 'Muestra todo el escenario y sitúa a los personajes dentro de él.',
-  'Plano entero': 'Encuadra al personaje de cuerpo completo, de la cabeza a los pies.',
-  'Plano americano': 'Corta al personaje por las rodillas o los muslos; es el plano típico de acción.',
-  'Plano medio largo': 'Encuadra al personaje desde la cintura o la cadera hacia arriba.',
-  'Plano medio': 'Encuadra al personaje de la cintura hacia arriba; ideal para diálogos.',
-  'Primer plano': 'Encuadra el rostro y los hombros; resalta la emoción.',
-  'Primerísimo primer plano': 'Encuadra solo una parte del rostro, como los ojos o la boca.',
-  'Plano detalle': 'Muestra un objeto o una parte del cuerpo muy de cerca, como unas manos o una llave.',
-};
 const INTERIOR_HELP = {
   '': 'Sin definir todavía.',
   INT: 'Interior: la escena sucede dentro de un lugar cerrado.',
@@ -32,6 +27,15 @@ const INTERIOR_HELP = {
   'INT/EXT': 'Interior y exterior a la vez: la acción se ve desde dentro hacia fuera o cruza la puerta.',
   'EXT/INT': 'Exterior e interior a la vez: la acción empieza fuera y entra a un lugar cerrado.',
 };
+const TIME_HELP = {
+  AMANECER: 'Los primeros momentos del día, con la luz saliendo.',
+  DÍA: 'Pleno día, con luz natural completa.',
+  ATARDECER: 'El final de la tarde, con luz cálida y baja.',
+  NOCHE: 'Después de anochecer, con poca luz o luz artificial.',
+  CONTINUO: 'Sucede justo después de la escena anterior, sin salto de tiempo.',
+  'MÁS TARDE': 'Ha pasado un rato desde la escena anterior.',
+};
+const TIME_OF_DAY = Object.keys(TIME_HELP);
 const VOICE_HELP = {
   '': 'Normal: el personaje habla en cuadro y se le ve.',
   'V.O.': 'V.O. (voz en off): voz del personaje que no está en la escena, como un narrador o un pensamiento.',
@@ -56,7 +60,7 @@ function describe(control, name, summary, entries = []) {
 }
 
 /** Only projects linked as ingredients of the open screenplay can be chosen. */
-function linkedProjects(type) {
+export function linkedProjects(type) {
   const seen = new Set();
   return (AppState.currentProject?.ingredients || [])
     .filter((item) => item.type === type && item.importedProjectId)
@@ -65,6 +69,7 @@ function linkedProjects(type) {
       name: item.importedProjectName || item.label || '',
       color1: item.color1,
       color2: item.color2,
+      portrait: ingredientPortrait(item),
     }))
     .filter((item) => (seen.has(item.id) ? false : seen.add(item.id)));
 }
@@ -83,6 +88,8 @@ function themed(select, { beforeOpen, ...options } = {}) {
       true,
     );
   }
+  // The link rails ask for current options before writing a value through this selector.
+  if (beforeOpen) select.addEventListener('screenplay:refresh', () => beforeOpen());
   control.root?.addEventListener('keydown', (event) => event.stopPropagation());
   return control;
 }
@@ -118,7 +125,7 @@ export function screenplayGroups(surface) {
     } else {
       let next = heading.nextElementSibling;
       while (next && next.tagName !== 'H2') {
-        nodes.push(next);
+        if (!next.matches('.screenplay-editor__add-scene')) nodes.push(next);
         next = next.nextElementSibling;
       }
     }
@@ -140,6 +147,8 @@ function mountSceneHeading(shell, group, scene, index, context) {
   row.contentEditable = 'false';
   const number = doc.createElement('span');
   number.textContent = `ESCENA ${index + 1}:`;
+  number.dataset.sceneNumber = '';
+  number.contentEditable = 'false';
   number.title = 'Número de escena: se actualiza solo según el orden de las escenas.';
   const select = (label, entries, value) => {
     const control = doc.createElement('select');
@@ -249,10 +258,23 @@ function mountSceneHeading(shell, group, scene, index, context) {
   custom.title =
     'Escenario personalizado: escribe el nombre del lugar cuando no hay un escenario vinculado que sirva.';
   custom.hidden = stage.value !== 'custom';
-  const time = text('Momento del día', scene.heading.time, 'DÍA / NOCHE');
-  time.dataset.sceneHeading = 'time';
-  time.title =
-    'Momento del día: escribe cuándo sucede la escena, por ejemplo DÍA, NOCHE, AMANECER o ATARDECER.';
+  const knownTime = TIME_OF_DAY.find((value) => normalize(value) === normalize(scene.heading.time));
+  const timeSelect = select(
+    'Momento del día',
+    [['', 'Momento del día'], ...TIME_OF_DAY.map((value) => [value, value]), ['custom', 'Personalizado']],
+    knownTime || (scene.heading.time ? 'custom' : ''),
+  );
+  describe(
+    timeSelect,
+    'Momento del día',
+    'Indica cuándo sucede la escena; con Personalizado escribes tu propio momento.',
+    [...TIME_OF_DAY.map((value) => [value, TIME_HELP[value]]), ['Personalizado', 'Escribe tú el momento.']],
+  );
+  for (const option of timeSelect.options) option.title = TIME_HELP[option.value] || '';
+  const timeCustom = text('Momento del día personalizado', scene.heading.time, 'Momento del día');
+  timeCustom.title = 'Momento del día personalizado: escribe cuándo sucede la escena, por ejemplo ANOCHECER.';
+  timeCustom.hidden = timeSelect.value !== 'custom';
+  const timeValue = () => (timeSelect.value === 'custom' ? timeCustom.value : timeSelect.value);
   const commit = () => {
     const current = context.screenplayDocument.scenes.find((item) => item.id === group.id);
     if (!current) return;
@@ -264,10 +286,12 @@ function mountSceneHeading(shell, group, scene, index, context) {
       ...current.heading,
       interiorExterior: interior.value,
       location,
-      time: time.value,
+      time: timeValue(),
       shot: shotControl.value,
     };
-    const prefix = /^\s*ESCENA\s+\d+\s*[:.\-]/i.test(current.heading.text) ? `ESCENA ${index + 1}: ` : '';
+    const prefix = /^\s*ESCENA\s+\d+\s*[:.\-]/i.test(current.heading.text)
+      ? `ESCENA ${[...shell.parentElement.querySelectorAll('h2[data-kai-id]')].indexOf(group.heading) + 1}: `
+      : '';
     const slug = (
       [heading.interiorExterior && heading.interiorExterior + '.', location].filter(Boolean).join(' ') +
       (heading.time ? ' - ' + heading.time : '') +
@@ -279,18 +303,21 @@ function mountSceneHeading(shell, group, scene, index, context) {
       locationId: stages.some((project) => project.id === stage.value) ? stage.value : '',
     });
   };
-  for (const control of [shotControl, interior, stage, custom, time]) {
+  for (const control of [shotControl, interior, stage, custom, timeSelect, timeCustom]) {
     control.addEventListener(control.tagName === 'SELECT' ? 'change' : 'input', (event) => {
       event.stopPropagation();
       custom.hidden = stage.value !== 'custom';
+      timeCustom.hidden = timeSelect.value !== 'custom';
       commit();
     });
     control.addEventListener('keydown', (event) => event.stopPropagation());
   }
-  row.append(number, shotControl, interior, stage, custom, time);
+  row.append(number, shotControl, interior, stage, custom, timeSelect, timeCustom);
   shell.append(row);
-  themed(shotControl);
+  const legacyShotPicker = themed(shotControl);
+  legacyShotPicker.root.hidden = scene.blocks.some((block) => block.type === 'shot');
   themed(interior);
+  themed(timeSelect);
   themed(stage, { beforeOpen: refreshStages });
 }
 
@@ -308,7 +335,12 @@ function syncCharacterControls(block) {
   const tag = name.querySelector('[data-definition^="character:"]');
   const id = tag?.dataset.definition.slice('character:'.length) || '';
   const text = name.textContent.trim();
-  const value = characters.some((item) => item.id === id) ? id : text ? 'custom' : '';
+  // An explicitly chosen custom speaker remains editable even before typing or after clearing its name.
+  const value = characters.some((item) => item.id === id)
+    ? id
+    : text || picker.value === 'custom'
+      ? 'custom'
+      : '';
   custom.hidden = value !== 'custom';
   if (value === 'custom' && custom.value !== text) custom.value = text;
   // Re-rendering must not touch the DOM when nothing changed (the surface is observed).
@@ -415,6 +447,7 @@ function mountScreenplayCharacter(block, editable) {
     if (character) name.replaceChildren(characterTag(doc, character));
     else if (picker.value === 'custom') name.textContent = custom.value || name.textContent.trim();
     else name.replaceChildren(doc.createElement('br'));
+    syncCharacterControls(block);
     changed();
   });
   custom.addEventListener('input', (event) => {
@@ -442,7 +475,160 @@ function mountScreenplayCharacter(block, editable) {
       return character ? characterTag(doc, character) : null;
     },
   });
-  themed(voice);
+  themed(voice, { allowEmpty: true });
+}
+
+/** Keep existing numbered sluglines consistent without flattening coloured/inline tags. */
+function renumberSceneHeadings(surface) {
+  [...surface.querySelectorAll('h2[data-kai-id]')].forEach((heading, index) => {
+    const match = heading.textContent.match(/^(\s*ESCENA\s+)(\d+)(?=\s*[:.\-])/i);
+    if (!match || match[2] === String(index + 1)) return;
+    const walker = heading.ownerDocument.createTreeWalker(heading, 4);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    let offset = match[1].length,
+      remaining = match[2].length,
+      inserted = false;
+    for (const text of nodes) {
+      if (offset >= text.length) {
+        offset -= text.length;
+        continue;
+      }
+      const length = Math.min(remaining, text.length - offset);
+      text.replaceData(offset, length, inserted ? '' : String(index + 1));
+      inserted = true;
+      remaining -= length;
+      offset = 0;
+      if (!remaining) break;
+    }
+  });
+}
+
+function appendScreenplayDialogue(anchor, context) {
+  const doc = anchor.ownerDocument;
+  const fields = ['h3', 'h4', 'blockquote'].map((tag) => {
+    const field = doc.createElement(tag);
+    field.dataset.kaiId = screenplayId();
+    field.contentEditable = 'true';
+    field.dataset.placeholder = { h4: 'Acotación', blockquote: 'Diálogo' }[tag] || '';
+    field.append(doc.createElement('br'));
+    return field;
+  });
+  anchor.before(...fields);
+  mountScreenplayCharacter(fields[0], true);
+  context.emitChange();
+  fields[0].querySelector('.kai-select__trigger')?.focus({ preventScroll: true });
+  fields[0].scrollIntoView?.({ block: 'nearest' });
+}
+
+/** Adds one complete cinematic shot; footer and index share the exact same operation. */
+function appendScreenplayShot(shell, context, before = null) {
+  const scene = context.screenplayDocument.scenes.find((item) => item.id === shell?.dataset.sceneId);
+  const body = shell?.querySelector('.screenplay-scene__body');
+  if (!scene || !body) return;
+  const doc = body.ownerDocument;
+  const explicit = scene.blocks.filter((block) => block.type === 'shot');
+  if (!explicit.length && scene.blocks.length) {
+    const initial = doc.createElement('h6');
+    initial.dataset.kaiId = screenplayId();
+    initial.contentEditable = 'true';
+    initial.textContent = `PLANO 1 — ${scene.heading.shot || 'Plano general'}; cámara fija; 8 s`;
+    body.prepend(initial);
+  }
+  const number = (explicit.length || (scene.blocks.length ? 1 : 0)) + 1;
+  const heading = doc.createElement('h6');
+  heading.dataset.kaiId = screenplayId();
+  heading.contentEditable = 'true';
+  heading.textContent = `PLANO ${number} — Plano general; cámara fija; 8 s`;
+  const nodes = [heading];
+  for (const tag of ['p', 'h3', 'h4', 'blockquote', 'h5']) {
+    const field = doc.createElement(tag);
+    field.dataset.kaiId = screenplayId();
+    field.contentEditable = 'true';
+    field.append(doc.createElement('br'));
+    nodes.push(field);
+  }
+  if (before?.parentElement === body) before.before(...nodes);
+  else body.append(...nodes);
+  const action = nodes[1];
+  const legacy = shell.querySelector('[data-scene-heading="shot"]')?.closest('.kai-select');
+  if (legacy) legacy.hidden = true;
+  context.emitChange();
+  const selection = doc.defaultView.getSelection();
+  const range = doc.createRange();
+  action.focus?.({ preventScroll: true });
+  range.selectNodeContents(action);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+/** One dialogue insertion action per shot, outside the persisted cinematic blocks. */
+function syncShotDialogueActions(body, context) {
+  const fields = screenplayProjectionNodes(body).filter((node) => node.nodeType === 1);
+  const headings = fields.filter((block) => block.tagName === 'H6');
+  const wanted = new Set(headings.map((block) => block.dataset.kaiId));
+  const existing = [...body.querySelectorAll('.screenplay-shot__add-character')];
+  for (const button of existing) if (!wanted.has(button.dataset.shotId)) button.remove();
+  for (const [index, heading] of headings.entries()) {
+    const end = headings[index + 1] || null;
+    const container = heading.closest('.screenplay-shot') || body;
+    let anchor = end?.parentElement === container ? end : null;
+    for (const node of fields.slice(fields.indexOf(heading) + 1, end ? fields.indexOf(end) : undefined)) {
+      if (node.tagName === 'H5') {
+        anchor = node;
+        break;
+      }
+    }
+    let button = existing.find((item) => item.dataset.shotId === heading.dataset.kaiId);
+    if (!button) {
+      const doc = body.ownerDocument;
+      button = doc.createElement('button');
+      button.type = 'button';
+      button.className = 'screenplay-navigation__add screenplay-shot__add-character';
+      button.dataset.screenplayControls = '';
+      button.dataset.shotId = heading.dataset.kaiId;
+      button.contentEditable = 'false';
+      button.setAttribute('aria-label', 'Añadir personaje y diálogo a este plano');
+      button.title = 'Añadir otro personaje y su diálogo dentro del mismo plano.';
+      button.innerHTML = safeHTML(renderIcon('plus'));
+      const label = doc.createElement('span');
+      label.textContent = 'Añadir diálogo';
+      button.append(label);
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        appendScreenplayDialogue(button, context);
+      });
+    }
+    if (button.parentElement !== container || button.nextElementSibling !== anchor)
+      container.insertBefore(button, anchor);
+  }
+}
+
+/** Index and manuscript footer create the same complete, empty cinematic scene. */
+function appendScreenplayScene(surface, context, before = null) {
+  const scene = {
+    id: screenplayId(),
+    heading: screenplayHeading(''),
+    blocks: ['shot', 'action', 'character', 'parenthetical', 'dialogue', 'transition'].map((type) => ({
+      id: screenplayId(),
+      type,
+      text: '',
+      html: '',
+      ...(type === 'character' ? { voice: '' } : {}),
+    })),
+  };
+  const fragment = surface.ownerDocument.createElement('div');
+  fragment.innerHTML = safeHTML(
+    screenplayToHTML({ ...context.screenplayDocument, scenes: [scene], preamble: [] }),
+  );
+  fragment.querySelector('h1').remove();
+  const footer = [...surface.children].find((node) => node.matches('.screenplay-editor__add-scene'));
+  if (before?.parentElement === surface) before.before(...fragment.childNodes);
+  else if (footer) footer.before(...fragment.childNodes);
+  else surface.append(...fragment.childNodes);
+  renumberSceneHeadings(surface);
+  context.emitChange();
 }
 
 export function organizeScreenplayScenes(surface, context, editable) {
@@ -465,12 +651,15 @@ export function organizeScreenplayScenes(surface, context, editable) {
       const heading = shell.querySelector('h2');
       const body = shell.querySelector('.screenplay-scene__body');
       releaseSelects(shell.querySelector('.screenplay-scene__slugline') || shell);
-      shell.replaceWith(...(heading ? [heading] : []), ...(body ? [...body.childNodes] : []));
+      shell.replaceWith(...(heading ? [heading] : []), ...(body ? screenplayProjectionNodes(body) : []));
     }
     const doc = surface.ownerDocument;
     const model = context.screenplayDocument;
     surface.contentEditable = 'false';
-    for (const block of surface.children) block.contentEditable = String(editable);
+    for (const block of surface.children)
+      block.contentEditable = block.matches('[data-screenplay-controls], h2, h3, h6')
+        ? 'false'
+        : String(editable);
     for (const [index, group] of screenplayGroups(surface).entries()) {
       const scene = model.scenes.find((item) => item.id === group.id);
       if (!scene) continue;
@@ -488,6 +677,21 @@ export function organizeScreenplayScenes(surface, context, editable) {
       body.contentEditable = 'false';
       body.append(...group.nodes.slice(1));
       shell.append(body);
+      if (editable) {
+        const add = doc.createElement('button');
+        add.type = 'button';
+        add.className = 'screenplay-scene__add-shot';
+        add.dataset.screenplayControls = '';
+        add.contentEditable = 'false';
+        add.setAttribute('aria-label', 'Añadir plano al final de la escena');
+        add.title = 'Añadir plano con dirección, acción, personaje, acotación, diálogo y transición';
+        add.innerHTML = safeHTML(renderIcon('plus'));
+        const label = doc.createElement('span');
+        label.textContent = 'Añadir plano';
+        add.append(label);
+        add.addEventListener('click', () => appendScreenplayShot(shell, context));
+        shell.append(add);
+      }
     }
     if (saved && surface.contains(saved.anchor) && surface.contains(saved.focus)) {
       try {
@@ -497,16 +701,50 @@ export function organizeScreenplayScenes(surface, context, editable) {
       }
     }
   }
+  if (editable) {
+    let footer = [...surface.children].find((node) => node.matches('.screenplay-editor__add-scene'));
+    if (!footer) {
+      footer = surface.ownerDocument.createElement('button');
+      footer.type = 'button';
+      footer.className = 'screenplay-editor__add-scene';
+      footer.dataset.screenplayControls = '';
+      footer.contentEditable = 'false';
+      footer.textContent = 'Añadir escena';
+      footer.title = 'Añadir una escena con su primer plano y campos cinematográficos vacíos.';
+      footer.addEventListener('click', () => appendScreenplayScene(surface, context));
+    }
+    if (surface.lastElementChild !== footer) surface.append(footer);
+    for (const [index, shell] of [...surface.querySelectorAll('.screenplay-scene')].entries()) {
+      const label = shell.querySelector('[data-scene-number]');
+      if (label && label.textContent !== `ESCENA ${index + 1}:`) label.textContent = `ESCENA ${index + 1}:`;
+      shell.setAttribute('aria-label', `Escena ${index + 1}`);
+    }
+  }
   if (editable)
     for (const body of surface.querySelectorAll('.screenplay-scene__body')) {
-      for (const block of body.children) {
-        if (block.tagName === 'H3') mountScreenplayCharacter(block, editable);
+      const legacyPicker = body
+        .closest('.screenplay-scene')
+        ?.querySelector('[data-scene-heading="shot"]')
+        ?.closest('.kai-select');
+      if (legacyPicker) legacyPicker.hidden = Boolean(body.querySelector('h6'));
+      let shotNumber = 0;
+      for (const block of screenplayProjectionNodes(body).filter((node) => node.nodeType === 1)) {
+        if (block.matches('[data-screenplay-controls]')) continue;
+        if (block.tagName === 'H6') mountScreenplayShot(block, ++shotNumber, () => context.emitChange());
+        else if (block.tagName === 'H3') mountScreenplayCharacter(block, editable);
         else {
           block.contentEditable = 'true';
           block.dataset.placeholder =
-            { P: 'Acción', BLOCKQUOTE: 'Diálogo', H4: 'Acotación', H5: 'Transición' }[block.tagName] || '';
+            {
+              P: 'Acción',
+              BLOCKQUOTE: 'Diálogo',
+              H4: 'Acotación',
+              H5: 'Transición',
+              H6: 'PLANO — encuadre; ángulo; movimiento; duración',
+            }[block.tagName] || '';
           block.title =
             {
+              H6: 'Plano: una toma continua de esta escena. Indica encuadre, ángulo, movimiento y segundos; Enter añade su acción.',
               P: 'Acción: describe lo que se ve y sucede en la escena, en presente.',
               BLOCKQUOTE: 'Diálogo: lo que dice el personaje indicado justo encima.',
               H4: 'Acotación: indicación breve entre paréntesis sobre cómo se dice el diálogo.',
@@ -514,7 +752,17 @@ export function organizeScreenplayScenes(surface, context, editable) {
             }[block.tagName] || '';
         }
       }
+      syncShotDialogueActions(body, context);
+      arrangeScreenplayBlocks(body);
     }
+  if (editable)
+    syncScreenplayRemoval(surface, {
+      changed: () => {
+        renumberSceneHeadings(surface);
+        context.emitChange();
+      },
+      releaseSelects,
+    });
 }
 
 export function moveScreenplayScene(surface, sourceId, targetId) {
@@ -556,23 +804,9 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     add.className = 'screenplay-navigation__add';
     add.textContent = 'Añadir escena';
     add.title =
-      'Añadir escena: crea una escena nueva al final del guión con acción, personaje y diálogo vacíos.';
+      'Añadir escena: crea un primer plano con acción, personaje/voz, acotación, diálogo y transición vacíos.';
     add.addEventListener('click', () => {
-      const scene = {
-        id: screenplayId(),
-        heading: screenplayHeading(''),
-        blocks: [
-          { id: screenplayId(), type: 'action', text: '', html: '' },
-          { id: screenplayId(), type: 'character', text: '', html: '', voice: '' },
-          { id: screenplayId(), type: 'dialogue', text: '', html: '' },
-        ],
-      };
-      const model = context.screenplayDocument;
-      const fragment = doc.createElement('div');
-      fragment.innerHTML = safeHTML(screenplayToHTML({ ...model, scenes: [scene], preamble: [] }));
-      fragment.querySelector('h1').remove();
-      surface.append(...fragment.childNodes);
-      context.emitChange();
+      appendScreenplayScene(surface, context);
       render();
     });
     nav.append(add);
@@ -609,7 +843,7 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     const groups = screenplayGroups(surface);
     if (current && surface.contains(current)) {
       const block = (current.nodeType === 1 ? current : current.parentElement)?.closest(
-        'h2,h3,h4,h5,p,blockquote',
+        'h2,h3,h4,h5,h6,p,blockquote',
       );
       id = groups.find((group) => group.nodes.some((node) => node === block || node.contains(block)))?.id;
     } else
@@ -689,8 +923,27 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
         block.hidden = collapsed.has(group.id);
         block.inert = collapsed.has(group.id);
       }
+    for (const group of groups) {
+      const footer = group.container?.querySelector('.screenplay-scene__add-shot');
+      if (footer) footer.hidden = collapsed.has(group.id);
+    }
     const key = groups
-      .map((group) => group.id + screenplayCaption(group.heading) + collapsed.has(group.id))
+      .map(
+        (group) =>
+          group.id +
+          screenplayCaption(group.heading) +
+          collapsed.has(group.id) +
+          (group.container
+            ? [...group.container.querySelectorAll('h6[data-kai-id]')]
+            : group.nodes.filter((block) => block.tagName === 'H6')
+          )
+            .map(
+              (block) =>
+                block.dataset.kaiId +
+                (block.querySelector('[data-screenplay-shot-text]')?.textContent || block.textContent),
+            )
+            .join('|'),
+      )
       .join('|');
     if (key === fingerprint) {
       active();
@@ -762,7 +1015,29 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
       );
       collapse.setAttribute('aria-expanded', String(!collapsed.has(group.id)));
       row.append(collapse, jump);
+      const shotLinks = doc.createElement('div');
+      shotLinks.className = 'screenplay-navigation__shots';
+      const modelScene = context.screenplayDocument.scenes.find((item) => item.id === group.id);
+      for (const [shotIndex, shot] of screenplayShots(modelScene).entries()) {
+        if (!shot.explicit) continue;
+        const link = button(`Ir al plano ${shotIndex + 1}`, 'video', () => {
+          setCollapsed(group, false);
+          const heading = [...group.container.querySelectorAll('h6')].find(
+            (item) => item.dataset.kaiId === (shot.markerId || shot.id),
+          );
+          heading?.scrollIntoView?.({ block: 'nearest' });
+        });
+        link.textContent = `${shotIndex + 1}. ${shot.title}`;
+        shotLinks.append(link);
+      }
+      if (shotLinks.childNodes.length) row.append(shotLinks);
       if (editable) {
+        row.append(
+          button('Añadir plano a esta escena', 'plus', () => {
+            appendScreenplayShot(group.container, context);
+            render();
+          }),
+        );
         for (const [delta, label, icon] of [
           [-1, 'Subir escena', 'chevron-up'],
           [1, 'Bajar escena', 'chevron-down'],
@@ -852,7 +1127,7 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
       range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
     const field =
       element?.closest('[contenteditable="true"]') ||
-      element?.closest('h1,p,blockquote,h4,h5,[data-screenplay-name]');
+      element?.closest('h1,p,blockquote,h4,h5,h6,[data-screenplay-name]');
     if (!field || !surface.contains(field) || field === surface || !field.contains(range.endContainer))
       return;
     if (range.toString().length < field.textContent.length) return;
@@ -865,6 +1140,20 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     selection.addRange(cursor);
     context.emitChange();
   };
+  const positionEmptyCaret = (event) => {
+    if (!editable || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey) return;
+    const field = event.target.closest?.('[contenteditable="true"][data-placeholder]');
+    if (!field || !surface.contains(field) || field.textContent !== '') return;
+    event.preventDefault();
+    field.focus({ preventScroll: true });
+    const range = doc.createRange();
+    range.selectNodeContents(field);
+    range.collapse(true);
+    const selection = doc.defaultView.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  };
+  surface.addEventListener('pointerdown', positionEmptyCaret);
   surface.addEventListener('beforeinput', preserveField);
   search.addEventListener('input', filter);
   const observer = new doc.defaultView.MutationObserver(() => {
@@ -880,12 +1169,24 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
   doc.addEventListener('selectionchange', active);
   surface.addEventListener('scroll', active);
   render();
+  const disposeInsertion = editable
+    ? mountScreenplayInsertion(node, surface, (kind, _before, after) => {
+        if (kind === 'scene') appendScreenplayScene(surface, context, after);
+        else if (kind === 'shot') appendScreenplayShot(after.closest('.screenplay-scene'), context, after);
+        else appendScreenplayDialogue(after, context);
+        render();
+        // Shot mounting updates the canonical numbering before the final autosave snapshot.
+        context.emitChange();
+      })
+    : null;
   return () => {
     disposed = true;
+    disposeInsertion?.();
     for (const cancel of [...cleanups]) cancel();
     releaseSelects(surface);
     observer.disconnect();
     surface.removeEventListener('beforeinput', preserveField);
+    surface.removeEventListener('pointerdown', positionEmptyCaret);
     doc.removeEventListener('selectionchange', active);
     surface.removeEventListener('scroll', active);
     nav.remove();

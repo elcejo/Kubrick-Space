@@ -1,5 +1,6 @@
 const { once } = require('node:events');
 const { fastOpenRouterOptions } = require('./request-metrics.cjs');
+const { prepareReasoning, retryReasoning } = require('./reasoning-fallback.cjs');
 
 /** Relay only answer deltas, with an explicit success/error terminal event. */
 async function streamChat(
@@ -8,7 +9,7 @@ async function streamChat(
   options,
   { timeoutMs, debug, fetchImpl = fetch, redact = (value) => value },
 ) {
-  options = fastOpenRouterOptions(url, options);
+  options = fastOpenRouterOptions(url, prepareReasoning(options));
   const { readSSE } = await import('../../../public/js/modules/ai/event-stream.mjs');
   const controller = new AbortController();
   let timedOut = false;
@@ -26,14 +27,26 @@ async function streamChat(
     }
   };
   try {
-    const response = await fetchImpl(url, { ...options, signal: controller.signal });
-    if (!response.ok) {
+    let response = await fetchImpl(url, { ...options, signal: controller.signal });
+    let failure;
+    const readFailure = async () => {
       const body = await response.json().catch(() => ({}));
-      const message =
+      return (
         body.error?.message ||
-        (typeof body.error === 'string' ? body.error : 'El proveedor rechazó la petición de IA.');
-      return res.status(response.status).json({ error: redact(message), code: 'AI_PROVIDER_ERROR' });
+        (typeof body.error === 'string' ? body.error : 'El proveedor rechazó la petición de IA.')
+      );
+    };
+    if (!response.ok) {
+      failure = await readFailure();
+      // A model that cannot run without reasoning is asked again with a low effort.
+      const retry = response.status === 400 ? retryReasoning(options, failure) : null;
+      if (retry) {
+        response = await fetchImpl(url, { ...retry, signal: controller.signal });
+        failure = response.ok ? undefined : await readFailure();
+      }
     }
+    if (!response.ok)
+      return res.status(response.status).json({ error: redact(failure), code: 'AI_PROVIDER_ERROR' });
     if (!response.headers.get('content-type')?.includes('text/event-stream')) {
       throw Object.assign(new Error('El proveedor no devolvió una respuesta en streaming.'), {
         code: 'AI_INVALID_STREAM',

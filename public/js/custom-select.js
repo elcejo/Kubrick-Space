@@ -3,7 +3,9 @@ import { safeHTML } from './safe-html.js';
 /** Preserve provider groups in both native selects and the searchable presentation. */
 export function appendModelGroups(select, models, { image = false } = {}) {
   const groups = new Map();
-  for (const model of models) {
+  for (const model of [...models].sort(
+    (a, b) => Number((b.provider || '') === 'local') - Number((a.provider || '') === 'local'),
+  )) {
     const provider = model.provider || 'openrouter';
     if (!groups.has(provider)) {
       const group = select.ownerDocument.createElement('optgroup');
@@ -349,7 +351,7 @@ export function createModelPicker(
   prompt,
   models,
   currentModel,
-  { onChange = null, benchmarkAvailable = false, image = false, grouped = false } = {},
+  { onChange = null, onReload = null, benchmarkAvailable = false, image = false, grouped = false } = {},
 ) {
   const picker = document.createElement('div');
   picker.className = 'settings-model-picker';
@@ -417,6 +419,37 @@ export function createModelPicker(
   rankingLabel.textContent = 'Ranking';
   rankingFilter.append(rankingCheckbox, rankingLabel);
   sort.append(rankingFilter);
+  let reloading = false,
+    disposed = false;
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.className = 'settings-model-sort-button settings-model-reload';
+  reload.dataset.modelReload = 'true';
+  reload.title = 'Recargar modelos disponibles';
+  reload.setAttribute('aria-label', 'Recargar modelos disponibles');
+  reload.innerHTML = safeHTML(renderIcon('refresh', 16));
+  reload.hidden = typeof onReload !== 'function';
+  reload.addEventListener('click', async () => {
+    if (reloading || disposed || typeof onReload !== 'function') return;
+    reloading = true;
+    reload.disabled = true;
+    reload.setAttribute('aria-busy', 'true');
+    reload.classList.add('is-loading');
+    try {
+      await onReload();
+      reload.title = 'Recargar modelos disponibles';
+    } catch {
+      reload.title = 'No se pudo actualizar. Pulsa para reintentar.';
+    } finally {
+      reloading = false;
+      if (!disposed) {
+        reload.disabled = false;
+        reload.removeAttribute('aria-busy');
+        reload.classList.remove('is-loading');
+      }
+    }
+  });
+  sort.append(reload);
   toolbar.append(search, sort);
   const list = document.createElement('div');
   list.className = 'settings-model-list';
@@ -440,9 +473,10 @@ export function createModelPicker(
     if (document.activeElement === list) active.scrollIntoView?.({ block: 'nearest' });
   };
   popover.append(toolbar, list);
-  if (benchmarkAvailable) {
+  {
     const attribution = document.createElement('p');
     attribution.className = 'settings-model-attribution';
+    attribution.hidden = !benchmarkAvailable;
     const link = document.createElement('a');
     link.href = 'https://artificialanalysis.ai/';
     link.target = '_blank';
@@ -459,21 +493,26 @@ export function createModelPicker(
     [model?.id, model?.name, model?.canonicalSlug].some(
       (value) => typeof value === 'string' && /(?:^|[^a-z0-9])batch(?:$|[^a-z0-9])/i.test(value),
     );
-  const catalogModels = Array.isArray(models)
-    ? models.filter((model) => !isBatchModel(model)).map((model) => ({ ...model }))
-    : [];
-  if (
-    currentModel &&
-    !isBatchModel({ id: currentModel }) &&
-    !catalogModels.some((model) => model.id === currentModel)
-  ) {
-    catalogModels.push({
-      id: currentModel,
-      name: currentModel,
-      pricing: {},
-      description: 'Modelo guardado en la configuración actual.',
-    });
-  }
+  let catalogModels = [];
+  const replaceCatalog = (items) => {
+    catalogModels = Array.isArray(items)
+      ? items.filter((model) => !isBatchModel(model)).map((model) => ({ ...model }))
+      : [];
+    const selected = hiddenInput.value;
+    if (
+      selected &&
+      !isBatchModel({ id: selected }) &&
+      !catalogModels.some((model) => model.id === selected)
+    ) {
+      catalogModels.push({
+        id: selected,
+        name: selected,
+        pricing: {},
+        description: 'Modelo guardado en la configuración actual.',
+      });
+    }
+  };
+  replaceCatalog(models);
   let sortMode = 'name';
   let priceDirection = 'asc';
   let rankingDirection = 'asc';
@@ -553,7 +592,12 @@ export function createModelPicker(
     }
     let previousGroup;
     if (grouped)
-      filtered.sort((a, b) => (a.provider || 'openrouter').localeCompare(b.provider || 'openrouter'));
+      // Local always leads; the remaining providers keep alphabetical order.
+      filtered.sort(
+        (a, b) =>
+          Number((b.provider || '') === 'local') - Number((a.provider || '') === 'local') ||
+          (a.provider || 'openrouter').localeCompare(b.provider || 'openrouter'),
+      );
     for (const model of filtered) {
       const provider = model.provider || 'openrouter';
       if (grouped && provider !== previousGroup) {
@@ -788,6 +832,7 @@ export function createModelPicker(
   document.addEventListener('pointerdown', outside);
   picker.addEventListener('keydown', escape);
   picker.destroyModelPicker = () => {
+    disposed = true;
     closePicker();
     document.removeEventListener('pointerdown', outside);
     picker.removeEventListener('keydown', escape);
@@ -796,7 +841,27 @@ export function createModelPicker(
     element: picker,
     trigger,
     setSelectedModel,
+    updateModels(items) {
+      if (disposed) return;
+      replaceCatalog(items);
+      benchmarkAvailable = items.some((model) => model.artificialAnalysis);
+      rankingCheckbox.disabled = !benchmarkAvailable;
+      if (!benchmarkAvailable) {
+        rankingCheckbox.checked = false;
+        if (sortMode === 'ranking') sortMode = 'name';
+      }
+      rankingCheckbox.title = benchmarkAvailable
+        ? 'Mostrar solo modelos presentes en el ranking de Artificial Analysis'
+        : 'Configura una clave válida de Artificial Analysis para activar este filtro.';
+      sortButtons.get('ranking').disabled = !benchmarkAvailable;
+      picker.querySelector('.settings-model-attribution').hidden = !benchmarkAvailable;
+      updateSortButtons();
+      updateTrigger();
+      if (rendered) renderOptions();
+      positionPopover();
+    },
     destroy() {
+      disposed = true;
       closePicker();
       document.removeEventListener('pointerdown', outside);
       picker.removeEventListener('keydown', escape);
@@ -806,7 +871,7 @@ export function createModelPicker(
 }
 
 /** Rich catalog UI backed by the original select, shared by project and character controls. */
-export function enhanceModelSelect(select, { image = false } = {}) {
+export function enhanceModelSelect(select, { image = false, onReload = null } = {}) {
   const root = document.createElement('div');
   root.className = 'kai-select kai-model-select';
   select.before(root);
@@ -823,37 +888,44 @@ export function enhanceModelSelect(select, { image = false } = {}) {
       options.length !== previousOptions.length ||
       options.some((option, i) => option !== previousOptions[i])
     ) {
-      picker?.destroy();
       previousOptions = options;
       const models = options.map((option) => ({
         ...option.modelData,
         id: option.value,
         name: option.modelData?.name || (image ? option.textContent.split(' · ')[0] : option.textContent),
       }));
-      picker = createModelPicker(
-        {
-          id: select.getAttribute('aria-label') || 'model',
-          label: select.getAttribute('aria-label') || 'Modelo',
-        },
-        models,
-        select.value,
-        {
-          image,
-          grouped: true,
-          benchmarkAvailable: models.some((model) => model.artificialAnalysis),
-          onChange(model) {
-            if (select.disabled || !model || !options.some((option) => option.value === model.id)) return;
-            select.value = model.id;
-            select.dispatchEvent(new document.defaultView.Event('change', { bubbles: true }));
+      if (picker) picker.updateModels(models);
+      else
+        picker = createModelPicker(
+          {
+            id: select.getAttribute('aria-label') || 'model',
+            label: select.getAttribute('aria-label') || 'Modelo',
           },
-        },
-      );
-      root.append(picker.element);
+          models,
+          select.value,
+          {
+            image,
+            onReload,
+            grouped: true,
+            benchmarkAvailable: models.some((model) => model.artificialAnalysis),
+            onChange(model) {
+              if (
+                select.disabled ||
+                !model ||
+                ![...select.options].some((option) => option.value === model.id && !option.disabled)
+              )
+                return;
+              select.value = model.id;
+              select.dispatchEvent(new document.defaultView.Event('change', { bubbles: true }));
+            },
+          },
+        );
+      if (!picker.element.parentElement) root.append(picker.element);
     }
     picker.setSelectedModel(select.value, { silent: true });
-    picker.trigger.disabled = select.disabled;
+    picker.trigger.disabled = select.disabled && typeof onReload !== 'function';
     picker.trigger.setAttribute('aria-label', select.getAttribute('aria-label') || 'Seleccionar modelo');
-    if (select.disabled) picker.element.closeModelPicker?.();
+    if (select.disabled && typeof onReload !== 'function') picker.element.closeModelPicker?.();
   }
   select.addEventListener('change', refresh);
   refresh();

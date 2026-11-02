@@ -4,11 +4,15 @@ import { parseCharacterDocument } from '../characters/character-model.js';
 import { characterDocumentToHTML } from '../characters/character-workspace.js';
 import { prepareCharacterProject } from '../characters/character-document.js';
 import { prepareScenarioProject, scenarioDocumentToHTML } from '../scenarios/scenario-workspace.js';
-import { parseScenarioDocument } from '../../contracts/scenario.js';
+import { legacyScenarioDocument, parseScenarioDocument } from '../../contracts/scenario.js';
 import { filmDocumentToHTML } from '../film/film-workspace.js';
 import { isFilmProject, parseFilmDocument, prepareFilmProject } from '../../contracts/film.js';
 import { productionHTML, imageToPNG } from '../media/export-content.js';
-import { parseScreenplayContent, screenplayToHTML } from '../screenplay/screenplay-document.js';
+import {
+  parseScreenplayContent,
+  prepareScreenplayProject,
+  screenplayToHTML,
+} from '../screenplay/screenplay-document.js';
 import { screenplayDocx, screenplayPrintDocument } from '../screenplay/screenplay-export.js';
 import { recoverGeneratedImages } from '../media/generated-media.js';
 import { recoverDrafts } from '../documents/drafts.js';
@@ -263,7 +267,7 @@ export class Workspace {
             parseScreenplayContent(
               '<h1>' +
                 escapeHTML(projectData.name || 'Guión sin título') +
-                '</h1><h2><br></h2><p><br></p><h3><br></h3><blockquote><br></blockquote>',
+                '</h1><h2><br></h2><h6><br></h6><p><br></p><h3><br></h3><h4><br></h4><blockquote><br></blockquote><h5><br></h5>',
             ),
           );
         } else if (category === 'theater') {
@@ -375,14 +379,49 @@ export class Workspace {
 
       this.#chat = new Chat();
       this.#chat.init(layout.chat, {
-        acceptBookJob: (response, expected) => {
-          const busy = ['queued', 'running'].includes(response.job.status);
+        setEditingBusy: (busy) => {
+          this.#editor.setAgentBusy(busy);
+          this.#toolbar?.setBackgroundBusy(busy);
+        },
+        acceptBookJob: async (response, expected) => {
+          if (['stage', 'video'].includes(AppState.currentProject?.type))
+            return this.#editor.acceptBackgroundProject(response);
+          const busy = ['queued', 'running', 'awaiting_choice'].includes(response.job.status);
           const content = response.draft?.payload.content || expected;
           this.#autosave?.acceptBackgroundState({ busy, draft: response.draft });
-          return this.#editor.acceptBackgroundBook(content, expected, busy);
+          this.#toolbar?.setBackgroundBusy(busy);
+          return this.#editor.acceptBackgroundBook(
+            content,
+            expected,
+            busy,
+            response.draft?.payload.ingredients,
+          );
         },
-        prepareProjectContent: (project, content) =>
-          project.type === 'book' && project.category === 'story-book'
+        prepareProjectContent: (project, content) => {
+          if (project.type === 'book' && project.category === 'screenplay') {
+            const source = String(content || '')
+              .trim()
+              .startsWith('{')
+              ? content
+              : safeHTML(content);
+            return prepareScreenplayProject({
+              ...project,
+              content:
+                source ||
+                '<h1>' +
+                  escapeHTML(project.name) +
+                  '</h1><h2>ESCENA 1: EXT. - DÍA</h2><h6>PLANO 1 — Plano general; 8s</h6><p></p><h3></h3><h4></h4><blockquote></blockquote>',
+            }).content;
+          }
+          if (project.type === 'stage')
+            return JSON.stringify(
+              parseScenarioDocument(content) || {
+                ...legacyScenarioDocument(project, content),
+                description: String(content || '').slice(0, 4000),
+              },
+            );
+          if (isFilmProject(project)) return prepareFilmProject({ ...project, content }).content;
+          return project.type === 'book' && project.category === 'story-book'
             ? prepareAssistantStoryBook(
                 safeHTML(
                   /<h1\b/i.test(content)
@@ -390,7 +429,8 @@ export class Workspace {
                     : '<h1>' + escapeHTML(project.name || 'Título') + '</h1>' + content,
                 ),
               )
-            : content,
+            : content;
+        },
         applyDocumentChange: async (proposal, expectedContent) => {
           const result = this.#editor.applyAssistantDocument(proposal, expectedContent);
           await this.#autosave.forceSave();

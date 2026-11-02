@@ -177,6 +177,10 @@ export const API = Object.freeze({
   setLocalModelProvider(provider) {
     localModelProvider = provider;
   },
+  /** Prompts the local LLM and FLUX received after `after`; polled by the console trace. */
+  localTrace(after = 0) {
+    return _fetch(`${BASE_URL}/ai/local-trace?after=${encodeURIComponent(after)}`, { quiet: true });
+  },
   localRuntime() {
     return _fetch(`${BASE_URL}/ai/local-runtime`, { quiet: true });
   },
@@ -209,8 +213,14 @@ export const API = Object.freeze({
   enqueueScenarioJob(body) {
     return _fetch(`${BASE_URL}/jobs/scenario`, { method: 'POST', body: JSON.stringify(body) });
   },
+  chooseResourceModel(id, selection) {
+    return _fetch(`${BASE_URL}/jobs/${encodeURIComponent(id)}/resource-model`, {
+      method: 'POST',
+      body: JSON.stringify(selection),
+    });
+  },
   enqueueBookJob(body) {
-    return _fetch(`${BASE_URL}/jobs/book`, { method: 'POST', body: JSON.stringify(body) });
+    return _fetch(`${BASE_URL}/jobs/edit`, { method: 'POST', body: JSON.stringify(body) });
   },
   enqueueCoverJob(body) {
     return _fetch(`${BASE_URL}/jobs/cover`, { method: 'POST', body: JSON.stringify(body) });
@@ -641,8 +651,8 @@ export const API = Object.freeze({
    * Availability is calculated at click time so a newly saved key becomes
    * usable without reloading the workspace.
    */
-  async getImageGenerationAvailability() {
-    return _fetch(`${BASE_URL}/image-models`);
+  async getImageGenerationAvailability({ force = false } = {}) {
+    return _fetch(`${BASE_URL}/image-models${force ? '?force=1' : ''}`);
   },
 
   async aiImage(payload, transport = {}) {

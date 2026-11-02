@@ -1,4 +1,8 @@
-const { emptyCharacterDocument } = require('../../../public/js/contracts/character-model.js');
+const { legacyScenarioDocument } = require('../../../public/js/contracts/scenario.js');
+const {
+  emptyCharacterDocument,
+  parseCharacterDocument,
+} = require('../../../public/js/contracts/character-model.js');
 const { endpoint } = require('../transport/index.cjs');
 const { createAIOperations } = require('./operations.cjs');
 const { streamChat } = require('./chat-stream.cjs');
@@ -16,6 +20,9 @@ const {
 const { createJobQueue } = require('./job-queue.cjs');
 const { registerJobRoutes } = require('./job-routes.cjs');
 const { createBookAgent } = require('./book-agent.cjs');
+const { validateImageEngine } = require('../../../public/js/contracts/project-inference.js');
+const { createElementAgent } = require('./element-agent.cjs');
+const { createNarrativeResources } = require('./narrative-resources.cjs');
 const { createCoverJobs } = require('./cover-job.cjs');
 const { createScenarioJobs } = require('../scenarios/index.cjs');
 const { createFilmJobs, createFilmRender } = require('../film/index.cjs');
@@ -51,7 +58,7 @@ module.exports = function registerAIRoutes(app, dependencies) {
     };
     return {
       // Jobs run inside their captured inference scope, so this reflects the job's mode.
-      localInference: dependencies.inference?.currentMode() === 'local',
+      localInference: dependencies.inference?.currentImageMode() === 'local',
       designCharacter: createCharacterOperations(capabilities).designCharacter,
       preparePrompt: createCharacterImagePromptOperation(capabilities),
       prepareLibrary: createCharacterVisualLibraryOperation(capabilities),
@@ -117,15 +124,18 @@ module.exports = function registerAIRoutes(app, dependencies) {
       result.data.choices[0].finish_reason === 'length'
     )
       throw dependencies.security.fail(
-        result.error || `El modelo no completó la etapa ${input.stage || 'del libro'}.`,
+        result.error ||
+          (result.data?.choices?.[0]?.finish_reason === 'length'
+            ? `El modelo agotó su presupuesto de razonamiento en la etapa ${input.stage || 'del libro'} antes de responder. Lo guardado se conserva; reintenta o elige un modelo con menos razonamiento.`
+            : `El modelo no completó la etapa ${input.stage || 'del libro'}.`),
         result.status || 502,
       );
     try {
       return JSON.parse(result.data.choices[0].message.content);
     } catch {
-      throw dependencies.security.fail(
-        'El modelo devolvió una etapa inválida. Lo guardado se conserva.',
-        502,
+      throw Object.assign(
+        dependencies.security.fail('El modelo devolvió una etapa inválida. Lo guardado se conserva.', 502),
+        { code: 'MODEL_JSON_INVALID' },
       );
     }
   };
@@ -155,12 +165,58 @@ module.exports = function registerAIRoutes(app, dependencies) {
         if (result.status !== 200 || !result.body?.document)
           throw dependencies.security.fail('No se pudo completar la ficha complementaria.', 502);
         content = JSON.stringify(result.body.document);
-      } else content = resource.description;
+      } else
+        content = JSON.stringify({
+          ...legacyScenarioDocument(project, resource.description),
+          description: resource.description.slice(0, 4000),
+        });
       ctx.throwIfAborted();
       dependencies.writeProject(record.id, { content }, project.content);
       return dependencies.readCurrentProject(record.id);
     },
     infer: bookInfer,
+  });
+  const resourceWorkflow = createCharacterBackgroundWorkflow({
+    ...dependencies,
+    makeHelpers,
+    management,
+    generateImage: (input, options) => {
+      const settings = dependencies.readCurrentProject(
+        input.body?.projectId || input.projectId,
+      )?.inferenceSettings;
+      return dependencies.inference && (settings?.mode || settings?.imageMode)
+        ? dependencies.inference.run(
+            settings.mode || 'api',
+            () => generateImage(input, options),
+            dependencies.inference.currentLocalModel(),
+            { ...settings, projectId: input.body?.projectId || input.projectId },
+          )
+        : generateImage(input, options);
+    },
+  });
+  const narrativeResources = createNarrativeResources(
+    {
+      ...dependencies,
+      // The scenario pipeline is created below; it is only called while a job runs.
+      runScenario: (job, ctx) => scenarioJobs.run(job, ctx),
+    },
+    resourceWorkflow,
+  );
+  const elementAgent = createElementAgent({
+    ...dependencies,
+    infer: bookInfer,
+    prepareStoryResource: narrativeResources.prepare,
+    isCharacterShell(id) {
+      try {
+        const project = dependencies.readCurrentProject(id);
+        const sheet = parseCharacterDocument(project.content || '');
+        return !project.covers?.length && (!sheet || (!sheet.identity.base && !sheet.fields.length));
+      } catch {
+        return false;
+      }
+    },
+    updateResourceNarrative: narrativeResources.narrative,
+    requireResourceModel: true,
   });
   const coverJobs = createCoverJobs(dependencies, (config, ctx) =>
     createAIOperations({
@@ -196,8 +252,86 @@ module.exports = function registerAIRoutes(app, dependencies) {
             ? filmRender.run(job, context)
             : job.kind === 'book'
               ? bookAgent.run(job, context)
-              : workflow.run(job, context);
+              : job.kind === 'edit'
+                ? elementAgent.run(job, context)
+                : workflow.run(job, context);
+  // Props of a new character are rendered after the book job, in their own task; the book never waits for them.
+  const queueNewCharacterProps = (job) => {
+    const wanted = [...(job.state.assetJobs || []), ...Object.keys(job.state.viewJobs || {})];
+    if (job.kind !== 'edit' || !wanted.length) return;
+    const done = job.state.assetsQueued || [];
+    const pending = wanted.filter((id) => !done.includes(id));
+    if (!pending.length) return;
+    for (const id of pending) {
+      try {
+        const views = job.state.viewJobs?.[id];
+        if (views) {
+          const stage = dependencies.readCurrentProject(id);
+          if (!stage?.content) continue;
+          queue.enqueue({
+            projectId: id,
+            kind: 'scenario',
+            token: randomUUID(),
+            payload: {
+              source: 'regenerate',
+              request: 'Ángulos del escenario',
+              scope: 'views',
+              references: [],
+              expectedContent: stage.content,
+              engine: views.engine,
+              category: stage.category,
+              viewPrompts: views.viewPrompts,
+              textConfig: job.payload.textConfig,
+              inferenceMode: job.payload.inferenceMode,
+              inferenceSettings: { ...(job.payload.inferenceSettings || {}), projectId: id },
+              localModel: job.payload.localModel,
+            },
+          });
+          continue;
+        }
+        const project = dependencies.readCurrentProject(id);
+        const choice = job.state.resourceModels?.[id];
+        const referenceImage = project?.covers?.[project.currentCoverIndex] || project?.covers?.[0];
+        if (!project || !choice || !referenceImage) continue;
+        queue.enqueue({
+          projectId: id,
+          kind: 'assets',
+          token: randomUUID(),
+          payload: {
+            engine: choice.engine,
+            referenceImage,
+            refreshAssets: false,
+            followUp: true,
+            expectedContent: project.content,
+            textConfig: job.payload.textConfig,
+            // Text keeps the book's provider and model; only the images follow the choice made for this character.
+            inferenceSettings: {
+              ...(job.payload.inferenceSettings || {}),
+              projectId: id,
+              imageMode: choice.mode,
+              ...(choice.mode === 'api' ? { imageModel: choice.engine } : {}),
+            },
+            inferenceMode: job.payload.inferenceMode,
+            localModel: job.payload.localModel,
+          },
+        });
+      } catch (error) {
+        console.error('[Jobs] No se pudieron encolar los props de', id, error?.message || error);
+      }
+    }
+    job.state.assetsQueued = [...done, ...pending];
+    queue.update(job);
+  };
   const queue = createJobQueue({
+    settled: (job) => {
+      queueNewCharacterProps(job);
+      // A model that misses the visual breakdown once usually succeeds on the next call: retry the props once.
+      if (job.kind === 'assets' && job.status === 'failed' && job.payload.followUp && !job.state.retried) {
+        job.state.retried = true;
+        queue.update(job);
+        queue.retry(job.id);
+      }
+    },
     directory: path.join(dependencies.ROOT_DIR, 'jobs'),
     run: (job, context) =>
       dependencies.inference
@@ -255,10 +389,87 @@ module.exports = function registerAIRoutes(app, dependencies) {
     }),
   );
   app.post(
+    '/api/jobs/edit',
+    endpoint(({ body }) => {
+      if (
+        !body ||
+        Object.keys(body).some((k) => !['projectId', 'request', 'context', 'token'].includes(k)) ||
+        !dependencies.security.UUID.test(body.projectId || '') ||
+        !dependencies.security.UUID.test(body.token || '') ||
+        typeof body.request !== 'string' ||
+        !body.request.trim() ||
+        body.request.length > 12000 ||
+        (body.context !== undefined &&
+          (!Array.isArray(body.context) ||
+            body.context.length > 6 ||
+            body.context.some((text) => typeof text !== 'string' || text.length > 1500)))
+      )
+        throw dependencies.security.fail('Solicitud de libro inválida.');
+      const { project } = elementAgent.read(body.projectId);
+      return {
+        status: 202,
+        body: {
+          job: queue.enqueue({
+            projectId: project.id,
+            kind: 'edit',
+            token: body.token,
+            payload: {
+              request: body.request,
+              context: body.context || [],
+              textConfig: dependencies.getLLMConfig(),
+              expectedContent: project.content,
+              inferenceMode: dependencies.inference?.currentMode() || 'hybrid',
+              inferenceSettings: dependencies.inference?.currentSettings() || {},
+              ...(dependencies.inference?.currentLocalModel()
+                ? { localModel: dependencies.inference.currentLocalModel() }
+                : {}),
+            },
+          }),
+        },
+      };
+    }),
+  );
+  app.post(
+    '/api/jobs/:jobId/resource-model',
+    endpoint(({ params, body }) => {
+      const job = queue.get(params.jobId),
+        pending = job?.state.pendingResource;
+      if (
+        job?.kind !== 'edit' ||
+        job.status !== 'awaiting_choice' ||
+        !pending ||
+        !body ||
+        Object.keys(body).some((key) => !['projectId', 'mode', 'engine'].includes(key)) ||
+        body.projectId !== pending.projectId ||
+        !['local', 'api'].includes(body.mode)
+      )
+        throw dependencies.security.fail('Decisión de modelo inválida.', 409);
+      dependencies.assertProject(job.projectId);
+      dependencies.assertProject(pending.projectId);
+      const engine = validateImageEngine(body.engine);
+      if ((body.mode === 'local') !== (engine.provider === 'local'))
+        throw dependencies.security.fail('El modelo no corresponde al modo elegido.', 422);
+      // Only the image provider is chosen here: the character keeps the book's text provider and model.
+      const text = job.payload.inferenceSettings || {};
+      dependencies.saveResourceInference(pending.projectId, {
+        mode: text.mode || job.payload.inferenceMode || 'api',
+        ...(text.localModel ? { localModel: text.localModel } : {}),
+        ...(text.textModel ? { textModel: text.textModel } : {}),
+        imageMode: body.mode,
+        imageModel: engine,
+      });
+      job.state.resourceModels ??= {};
+      job.state.resourceModels[pending.projectId] = { mode: body.mode, engine };
+      delete job.state.pendingResource;
+      queue.update(job);
+      return { status: 200, body: { job: queue.resumeChoice(job.id) } };
+    }),
+  );
+  app.post(
     '/api/jobs/:jobId/message',
     endpoint(({ params, body }) => {
       const job = queue.get(params.jobId);
-      if (!job || job.kind !== 'book' || !['queued', 'running'].includes(job.status))
+      if (!job || !['book', 'edit'].includes(job.kind) || !['queued', 'running'].includes(job.status))
         throw dependencies.security.fail('El trabajo no está activo.', 409);
       dependencies.assertProject(job.projectId);
       if (
@@ -345,6 +556,15 @@ module.exports = function registerAIRoutes(app, dependencies) {
           ...dependencies.inference.localStatus(),
         },
       })),
+    );
+    app.get(
+      '/api/ai/local-trace',
+      endpoint(({ query }) => {
+        const after = query?.after === undefined ? 0 : Number(query.after);
+        if (!Number.isSafeInteger(after) || after < 0 || !/^\d{1,12}$/.test(String(query?.after ?? '0')))
+          throw dependencies.security.fail('Posición de traza inválida.');
+        return { status: 200, body: dependencies.inference.localTrace.since(after) };
+      }),
     );
     app.post(
       '/api/ai/local-runtime',

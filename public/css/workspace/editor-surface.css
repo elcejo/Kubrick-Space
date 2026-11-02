@@ -1418,6 +1418,7 @@ html[data-theme='light'] .image-model-option {
 
 .screenplay-navigation__list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
@@ -1524,8 +1525,12 @@ html[data-theme='light'] .image-model-option {
 }
 
 .screenplay-scene {
+  box-sizing: border-box;
   margin-block: 24px;
+  padding: clamp(12px, 2vw, 20px);
   min-width: 0;
+  border: 1px dotted var(--glass-border-hover);
+  border-radius: 14px;
 }
 .screenplay-scene__body {
   min-height: 36px;
@@ -1538,7 +1543,7 @@ html[data-theme='light'] .image-model-option {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin: 2em 0 1em;
+  margin: 0 0 16px;
   padding: 8px;
   border: 0.8px dotted var(--glass-border-hover);
   border-radius: 8px;
@@ -1620,10 +1625,19 @@ html[data-theme='light'] .image-model-option {
   min-height: 1.3em;
   overflow-wrap: anywhere;
 }
+.screenplay-wysiwyg [contenteditable='true'][data-placeholder] {
+  position: relative;
+}
 .screenplay-wysiwyg [contenteditable='true'][data-placeholder]:is(:empty, :has(> br:only-child))::before {
   content: attr(data-placeholder);
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  padding: inherit;
   color: var(--text-muted);
+  font-style: italic;
   pointer-events: none;
+  user-select: none;
 }
 .screenplay-navigation__add {
   margin-top: 8px;
@@ -1631,4 +1645,424 @@ html[data-theme='light'] .image-model-option {
   border-radius: 8px;
   background: rgb(128 128 128 / 10%);
   font-size: 12px;
+}
+
+/* A shot is a technical boundary inside a scene, not another scene heading. */
+:is(.screenplay-wysiwyg, .screenplay-preview) h6 {
+  margin: 22px 0 12px;
+  padding: 10px 12px;
+  border: 0.8px solid var(--glass-border-hover);
+  border-left: 3px solid var(--accent-primary, #7819ff);
+  border-radius: 8px;
+  background: var(--input-bg);
+  font: inherit;
+  font-weight: 600;
+  text-transform: uppercase;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.screenplay-navigation__shots {
+  order: 1;
+  flex-basis: 100%;
+  display: grid;
+  gap: 4px;
+  padding: 4px 0 4px 24px;
+}
+.screenplay-navigation__shots button {
+  width: 100%;
+  height: auto;
+  text-align: left;
+  white-space: normal;
+  color: var(--text-secondary);
+  font-size: 0.85em;
+}
+
+.screenplay-wysiwyg h6:is(:empty, :has(> br:only-child))::before {
+  content: attr(data-placeholder);
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.screenplay-scene > .screenplay-scene__add-shot {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  aspect-ratio: auto;
+  margin-top: 18px;
+  padding: 10px 12px;
+  border: 0.8px solid var(--glass-border-hover);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: var(--input-bg);
+  cursor: pointer;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease;
+}
+.screenplay-scene > .screenplay-scene__add-shot[hidden] {
+  display: none;
+}
+.screenplay-scene > .screenplay-scene__add-shot:is(:hover, :focus-visible) {
+  color: var(--text-primary);
+  border-color: currentcolor;
+}
+.screenplay-scene__add-shot svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+/* Static numbering, themed framing and a native half-second duration stepper. */
+.screenplay-shot__controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.screenplay-scene [data-scene-number],
+.screenplay-shot__number {
+  flex: none;
+  user-select: none;
+}
+.screenplay-shot__controls .kai-select {
+  flex: 1 1 180px;
+  min-width: 0;
+  width: auto;
+}
+.screenplay-shot__controls .kai-select__trigger {
+  min-height: 32px;
+  padding: 4px 8px;
+  font: inherit;
+}
+.screenplay-shot__duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font: inherit;
+  text-transform: none;
+}
+.screenplay-shot__duration input {
+  box-sizing: border-box;
+  width: 76px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border: 0.8px solid var(--glass-border-hover);
+  border-radius: 4px;
+  color: inherit;
+  background: var(--input-bg);
+  font: inherit;
+  appearance: auto;
+}
+.screenplay-shot__duration input::-webkit-inner-spin-button {
+  opacity: 1;
+}
+.screenplay-shot__controls [data-shot-direction] {
+  flex: 1 1 100%;
+  min-width: 0;
+  width: 100%;
+  min-height: 28px;
+  padding: 2px 0;
+  border: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  font: inherit;
+  text-transform: none;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg blockquote {
+  min-height: 2.2em;
+  padding: 8px 10px;
+  border: 0.8px dotted var(--glass-border-hover);
+  border-radius: 8px;
+}
+
+/* Text editing has a caret and dotted boundary, without the general blue focus glow. */
+.editor-node.editor-node--screenplay
+  .screenplay-wysiwyg
+  :is([contenteditable='true'], input, textarea):focus {
+  box-shadow: none;
+  outline: none;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-shot__add-character {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 75%;
+  max-width: 100%;
+  min-height: 40px;
+  margin: 12px auto 18px;
+  padding: 8px 12px;
+  gap: 8px;
+  border: 1px dotted rgb(168 85 247 / 40%);
+  border-radius: 6px;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+.screenplay-shot__add-character svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.screenplay-wysiwyg :is(input, textarea)::placeholder {
+  font-style: italic;
+}
+
+/* Three distinct manuscript actions: dialogue, shot and scene. */
+.screenplay-scene > .screenplay-scene__add-shot {
+  gap: 8px;
+  font: inherit;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg > .screenplay-editor__add-scene {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  aspect-ratio: auto;
+  margin: 24px auto 0;
+  padding: 10px 12px;
+  border: 1px dotted var(--glass-border-hover);
+  border-radius: 8px;
+  color: var(--text-primary);
+  background: var(--input-bg);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Editor-only hierarchy: scene > complete shot > complete speaking intervention. */
+.screenplay-wysiwyg .screenplay-shot {
+  box-sizing: border-box;
+  margin: 22px 0 16px;
+  padding: 14px;
+  border: 0.8px solid var(--glass-border-hover);
+  border-left: 3px solid var(--accent-primary, #7819ff);
+  border-radius: 8px;
+  background: var(--input-bg);
+  min-width: 0;
+}
+.screenplay-wysiwyg .screenplay-shot > h6 {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-dialogue {
+  box-sizing: border-box;
+  width: 75%;
+  margin: 16px auto;
+  padding: 10px;
+  border: 1px dotted rgba(168, 85, 247, 0.4);
+  border-radius: 8px;
+  min-width: 0;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-dialogue > h3 {
+  width: 100%;
+  margin: 0;
+  border: 0 !important;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-dialogue > :is(h4, blockquote) {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Corner actions sit on the border intersection, outside the editable content. */
+.screenplay-wysiwyg :is(.screenplay-scene, .screenplay-shot, .screenplay-dialogue) {
+  position: relative;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-remove {
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  max-height: 24px;
+  aspect-ratio: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #000;
+  color: #ef4444;
+  transform: translate(50%, -50%);
+  cursor: pointer;
+}
+.screenplay-remove svg {
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+}
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-remove:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+/* Keep removal actions quiet until their own frame is being used. */
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-remove {
+  opacity: 0;
+  pointer-events: none;
+}
+.editor-node.editor-node--screenplay
+  .screenplay-wysiwyg
+  :is(.screenplay-scene, .screenplay-shot, .screenplay-dialogue):hover
+  > .screenplay-remove,
+.editor-node.editor-node--screenplay .screenplay-wysiwyg .screenplay-remove:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Screenplay link rails: characters (left) and stages (right) connect to dialogues and shots. */
+.screenplay-link-rail {
+  position: relative;
+  display: flex;
+  flex: 0 0 96px;
+  flex-direction: column;
+  align-items: center;
+  width: 96px;
+  height: var(--book-canvas-height, 1170px);
+  color: var(--text-primary);
+}
+.screenplay-link-rail[hidden],
+.screenplay-link-layer[hidden] {
+  display: none;
+}
+.screenplay-link-rail__title {
+  padding: 4px 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  user-select: none;
+}
+.screenplay-link-rail__track {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.screenplay-link-rail__empty {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2px dashed currentColor;
+  border-radius: 50%;
+  font-size: 10px;
+  text-align: center;
+  opacity: 0.4;
+}
+.screenplay-link-node {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-top: 10px;
+}
+.screenplay-link-node__disc {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--link-color1, #60a5fa), var(--link-color2, #a855f7));
+  color: #fff;
+  font-weight: 700;
+  user-select: none;
+}
+.screenplay-link-node__disc > img {
+  position: absolute;
+  inset: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-secondary);
+}
+.screenplay-link-node__name {
+  max-width: 88px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+.screenplay-link-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 23;
+  pointer-events: none;
+}
+.screenplay-link-port {
+  position: absolute;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #5ed9ff;
+  box-shadow: 0 0 8px rgba(74, 198, 255, 0.85);
+  cursor: crosshair;
+  opacity: 0.8;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+.screenplay-link-port:hover,
+.screenplay-link-port.is-link-dragging {
+  color: #c084fc;
+  opacity: 1;
+  box-shadow: 0 0 10px rgba(192, 132, 252, 0.95);
+}
+.screenplay-link-port > .kai-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.screenplay-link-port[data-timeline-fused] {
+  box-shadow: none;
+}
+.screenplay-link-port--rail {
+  top: 31px;
+}
+.screenplay-link-rail--character .screenplay-link-port--rail {
+  left: calc(50% + 21px);
+}
+.screenplay-link-rail--stage .screenplay-link-port--rail {
+  left: calc(50% - 35px);
+}
+.screenplay-link-port:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }

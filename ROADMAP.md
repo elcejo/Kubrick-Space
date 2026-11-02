@@ -1,5 +1,13 @@
 # Presentación y seguimiento del roadmap
 
+## Versión 0.1.2: Local como proveedor, edición por elementos y más piezas — 1 de noviembre de 2026
+
+Nuevo: se retira el selector API/Local; Local es un proveedor más y siempre aparece primero. Cada proyecto guarda un modo para texto y otro para imágenes. La edición del proyecto abierto por elementos trabaja por rondas, crea los personajes y lugares complementarios con foto y props, vincula los ingredientes y pregunta qué modelo usar para cada imagen; los trabajos son durables y se pueden detener, reanudar y reintentar.
+
+Corregido: al reanudar una edición, el trabajo trataba como ajeno al personaje que él mismo había creado y podía asignarle la descripción o la foto de otro recurso. Los props de un personaje nuevo se reintentan una vez si el modelo falla.
+
+Nuevo: la biblioteca visual añade siete grupos de Ropa (Brasieres, Baby dolls, Túnicas, Batas, Capas, Turbantes, Leggings) y catorce de Props (Cámaras, Libretas, Libros, Lápices, Varitas, Juguetes, Pelotas, Cangureras, Raquetas, Bates, Pancartas, Linternas, Toallas, Mascotas). Nombres únicos de ingredientes, comprobación de nombre en el asistente de creación, Story Book en prosa, botón de recarga de modelos de OpenRouter y modelos locales opcionales Qwen 3.8 27B y Gemma 4 E4B.
+
 ## Versión 0.1.1: escaneo de malware y editor de guión — 30 de octubre de 2026
 
 Nuevo: el almacén de claves de API cambia de nombre (ahora apiKeyVault, módulo api-key-vault.cjs) porque algunos escáneres de repositorios confundían el nombre anterior con carteras cripto; no cambia su comportamiento ni sus datos. Las plantillas HTML del historial de tareas dejan de ser líneas de más de 1000 caracteres. Se publican también las mejoras del largometraje (modelo de video local elegido en la barra superior, referencias del guión vinculado) y del editor de guión (tooltips, selectores propios, listas de escenarios y personajes vinculados).

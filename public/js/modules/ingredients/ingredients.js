@@ -3,6 +3,8 @@ import { createColorControl } from '../../color-picker.js';
 import { renderIcon } from '../../icons.js';
 import { faceImageUrl } from '../characters/character-face.js';
 import { mountIngredientCard } from './ingredient-card.js';
+import { ingredientPortrait } from './ingredient-portrait.js';
+import { normalizePseudonyms } from './ingredient-names.js';
 import { trapCoverFocus } from '../media/cover-workflow.js';
 import { safeHTML, safeContent, escapeHTML } from '../../safe-html.js';
 import { AppState } from '../../app-state.js';
@@ -922,34 +924,9 @@ export class EditorIngredients {
       const importContainer = document.createElement('div');
       importContainer.className = `${ing.type}-drawer-container`;
 
-      // Extract background image URL if any
-      let bgUrl = null;
-      let hasFacePreview = true;
-      if (isChar) {
-        try {
-          const charData = JSON.parse(ing.value || '{}');
-          const sheet = parseCharacterDocument(charData.content || '');
-          if (sheet) hasFacePreview = sheet.identity.base === 'humanoid';
-          if (charData.covers && charData.covers.length > 0) {
-            const idx =
-              typeof charData.currentCoverIndex === 'number'
-                ? charData.currentCoverIndex
-                : charData.covers.length - 1;
-            bgUrl = charData.covers[idx] || charData.covers[charData.covers.length - 1];
-          }
-        } catch (e) {}
-        if (!bgUrl && ing.covers && ing.covers.length > 0) {
-          const idx =
-            typeof ing.currentCoverIndex === 'number' ? ing.currentCoverIndex : ing.covers.length - 1;
-          bgUrl = ing.covers[idx] || ing.covers[ing.covers.length - 1];
-        }
-      } else {
-        if (ing.covers && ing.covers.length > 0) {
-          const idx =
-            typeof ing.currentCoverIndex === 'number' ? ing.currentCoverIndex : ing.covers.length - 1;
-          bgUrl = ing.covers[idx] || ing.covers[ing.covers.length - 1];
-        }
-      }
+      const portraitInfo = ingredientPortrait(ing);
+      const bgUrl = portraitInfo?.source || null;
+      const hasFacePreview = portraitInfo ? portraitInfo.face : true;
 
       importContainer.classList.add('ingredient-card__import');
       if (bgUrl && ing.importedProjectId) {
@@ -1006,7 +983,13 @@ export class EditorIngredients {
           }
 
           const query = searchInput.value.toLowerCase().trim();
-          const matches = projects.filter((p) => p.name.toLowerCase().includes(query));
+          // A project can be an ingredient of this one only once: the ones already linked are not offered.
+          const linked = new Set(
+            this.context.ingredients
+              .filter((other) => other !== ing && other.importedProjectId)
+              .map((other) => other.importedProjectId),
+          );
+          const matches = projects.filter((p) => !linked.has(p.id) && p.name.toLowerCase().includes(query));
 
           resultsList.innerHTML = safeHTML('');
           if (matches.length > 0) {
@@ -1037,7 +1020,11 @@ export class EditorIngredients {
             resultsList.classList.add('is-open');
             const emptyMsg = document.createElement('div');
             emptyMsg.className = 'ingredient-import-empty';
-            emptyMsg.textContent = query ? 'Sin resultados' : 'Escribe para buscar...';
+            emptyMsg.textContent = query
+              ? 'Sin resultados'
+              : projects.length
+                ? 'Ya añadiste todos los disponibles'
+                : 'Escribe para buscar...';
             resultsList.appendChild(emptyMsg);
           }
         };
@@ -1117,6 +1104,29 @@ export class EditorIngredients {
         card.appendChild(details);
 
         if (isChar) {
+          // Names the story may use for this character; each one is tagged like its real name.
+          const field = document.createElement('label');
+          field.className = 'ingredient-card__field';
+          const caption = document.createElement('span');
+          caption.textContent = 'Pseudónimos';
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'input ingredient-card__pseudonyms';
+          input.maxLength = 300;
+          input.placeholder = 'mamá, jefa… (separados por comas)';
+          input.value = ing.pseudonyms || '';
+          input.title = 'En el libro, estos nombres se etiquetan como el del personaje';
+          // Committed on blur or Enter: tagging while typing would label every partial name.
+          input.addEventListener('change', () => {
+            const names = normalizePseudonyms(input.value);
+            input.value = names;
+            if (names) ing.pseudonyms = names;
+            else delete ing.pseudonyms;
+            AppState.currentProject.ingredients = this.context.ingredients;
+            this.context.emitChange();
+          });
+          field.append(caption, input);
+          card.appendChild(field);
           addColorPickers(card);
         }
 
@@ -1134,6 +1144,7 @@ export class EditorIngredients {
             'lastAdaptedVersionId',
             'lastAdaptedVersionNumber',
             'lastAdaptedContent',
+            'pseudonyms',
           ])
             delete ing[key];
           ing.value = '';

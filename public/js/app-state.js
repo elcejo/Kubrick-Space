@@ -1,3 +1,4 @@
+import { canonicalLocalModel, localModelProfile } from './contracts/local-models.js';
 import { EventBus } from './event-bus.js';
 
 function readTheme() {
@@ -30,6 +31,7 @@ export const AppState = new Proxy(
     theme: readTheme(),
     canvasEffects: readCanvasEffects(),
     inferenceMode: 'api',
+    imageMode: 'api',
     localModel: 'local:qwen3.5-4b-int8-convrot',
   },
   {
@@ -57,6 +59,11 @@ export const AppState = new Proxy(
   },
 );
 
+/** The image provider follows the project mode until the user picks a different one for images. */
+export function imageModeOf(settings) {
+  return (settings?.imageMode || settings?.mode) === 'local' ? 'local' : 'api';
+}
+
 export function setCurrentView(view) {
   AppState.currentView = view;
 }
@@ -64,7 +71,9 @@ export function setCurrentView(view) {
 export function setActiveProject(project) {
   AppState.currentProject = project || null;
   AppState.inferenceMode = project?.inferenceSettings?.mode === 'local' ? 'local' : 'api';
-  AppState.localModel = project?.inferenceSettings?.localModel || 'local:qwen3.5-4b-int8-convrot';
+  AppState.imageMode = imageModeOf(project?.inferenceSettings);
+  AppState.localModel =
+    canonicalLocalModel(project?.inferenceSettings?.localModel) || 'local:qwen3.5-4b-int8-convrot';
 }
 
 /** Apply an acknowledged preference write only to its originating project. */
@@ -75,7 +84,8 @@ export function applyProjectInference(projectId, settings) {
   if (AppState.currentProject?.id !== projectId) return;
   AppState.currentProject.inferenceSettings = settings;
   AppState.inferenceMode = settings.mode === 'local' ? 'local' : 'api';
-  AppState.localModel = settings.localModel || 'local:qwen3.5-4b-int8-convrot';
+  AppState.imageMode = imageModeOf(settings);
+  AppState.localModel = canonicalLocalModel(settings.localModel) || 'local:qwen3.5-4b-int8-convrot';
   EventBus.emit('state:change', { key: 'inferenceSettings', value: settings });
 }
 
@@ -103,8 +113,8 @@ export function setInferenceMode(mode) {
   AppState.inferenceMode = mode;
 }
 export function setLocalModel(model) {
-  if (!/^local:qwen3\.5-(4b|9b)-int8-convrot$/.test(model)) return;
-  AppState.localModel = model;
+  if (!localModelProfile(model)) return;
+  AppState.localModel = canonicalLocalModel(model);
 }
 
 /** Apply a saved project snapshot to the active project and home collection. */

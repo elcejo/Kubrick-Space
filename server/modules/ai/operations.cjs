@@ -80,7 +80,7 @@ function createAIOperations(dependencies) {
    */
   const { request: proxyRequest } = createProvider(dependencies);
   function requireMediaModel() {
-    if (dependencies.inference?.currentMode() === 'local')
+    if (dependencies.inference?.currentImageMode() === 'local')
       throw security.fail(
         'No hay un modelo local configurado para generar imágenes, audio o video. Selecciona API o Híbrido para esta función.',
         422,
@@ -528,7 +528,7 @@ function createAIOperations(dependencies) {
   }
 
   async function generateImage({ body: inputBody, params = {}, headers = {}, query = {} } = {}, ports = {}) {
-    const local = dependencies.inference?.currentMode() === 'local';
+    const local = dependencies.inference?.currentImageMode() === 'local';
     const settings = dependencies.inference?.currentSettings();
     const selectedImage =
       !settings?.projectId || settings.projectId === inputBody.projectId ? settings?.imageModel : null;
@@ -1007,7 +1007,7 @@ function createAIOperations(dependencies) {
   }
 
   async function generateFlux({ body: inputBody, params = {}, headers = {}, query = {} } = {}, ports = {}) {
-    if (dependencies.inference?.currentMode() === 'local')
+    if (dependencies.inference?.currentImageMode() === 'local')
       return generateImage(
         { body: { ...inputBody, ...inputBody.input, prompt: inputBody.prompt || inputBody.input?.prompt } },
         ports,

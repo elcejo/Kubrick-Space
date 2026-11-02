@@ -1,9 +1,10 @@
 /** Portable feature-film document: scenes as independent video nodes. No DOM, network or storage. */
 export const FILM_SCHEMA = 'code-kai.feature-film';
-export const FILM_VERSION = 2;
+export const FILM_VERSION = 3;
 /** Version 1 documents (prompts only, no render state) are still read and upgraded on parse. */
-const FILM_READABLE_VERSIONS = Object.freeze([1, 2]);
-export const FILM_MAX_SCENES = 200;
+const FILM_READABLE_VERSIONS = Object.freeze([1, 2, 3]);
+/** Historical API name: this bounds shot clips, not dramatic scenes. */
+export const FILM_MAX_SCENES = 2000;
 export const FILM_MAX_REFERENCES = 4;
 export const FILM_MAX_SECONDS = 10;
 /** MiniMax H3 frame counts follow 17k + 5 at 24 fps. Every clip is at most 10 seconds, with no exception. */
@@ -28,6 +29,7 @@ const KEYS = Object.freeze({
   scene: [
     'id',
     'sourceSceneId',
+    'sourceShotId',
     'title',
     'script',
     'scriptHash',
@@ -162,6 +164,8 @@ function normalizeScene(value) {
   if (!UUID.test(value.id ?? '')) fail('ID de escena inválido.');
   if (typeof value.sourceSceneId !== 'string' || !ENTRY_ID.test(value.sourceSceneId))
     fail('Escena de origen inválida.');
+  const sourceShotId = value.sourceShotId ?? value.sourceSceneId;
+  if (typeof sourceShotId !== 'string' || !ENTRY_ID.test(sourceShotId)) fail('Plano de origen inválido.');
   const status = value.status ?? 'pending';
   if (!FILM_STATUSES.includes(status)) fail('Estado de escena inválido.');
   const frames = value.frames ?? FILM_FRAME_OPTIONS[0];
@@ -183,6 +187,7 @@ function normalizeScene(value) {
   return {
     id: value.id,
     sourceSceneId: value.sourceSceneId,
+    sourceShotId,
     title: text(value.title, LIMITS.title, 'Título de escena'),
     script: text(value.script, LIMITS.script, 'Texto de la escena'),
     scriptHash: text(value.scriptHash, 16, 'Huella de la escena'),
@@ -236,8 +241,7 @@ export function validateFilmDocument(value) {
   if (!Array.isArray(scenesSource) || scenesSource.length > FILM_MAX_SCENES) fail('Escenas inválidas.');
   const scenes = scenesSource.map(normalizeScene);
   if (new Set(scenes.map((scene) => scene.id)).size !== scenes.length) fail('Escenas repetidas.');
-  if (new Set(scenes.map((scene) => scene.sourceSceneId)).size !== scenes.length)
-    fail('Escenas de origen repetidas.');
+  if (new Set(scenes.map(filmSourceKey)).size !== scenes.length) fail('Planos de origen repetidos.');
   for (const scene of scenes)
     if (new Set(scene.references.map((reference) => reference.tag)).size !== scene.references.length)
       fail('Las referencias de una escena necesitan nombres distintos.');
@@ -316,17 +320,20 @@ export const filmNeedsConditioning = (scene) =>
   (!scene.conditioning || scene.conditioning.key !== filmConditioningKey(scene));
 
 /** Pure reconciliation of script scenes with existing nodes: keeps ids, prompts and seeds of unchanged scenes. */
+export const filmSourceKey = (clip) => `${clip.sourceSceneId}:${clip.sourceShotId ?? clip.sourceSceneId}`;
+
 export function reconcileFilmScenes(existing, incoming, newId) {
-  const bySource = new Map(existing.map((scene) => [scene.sourceSceneId, scene]));
+  const bySource = new Map(existing.map((scene) => [filmSourceKey(scene), scene]));
   const used = new Set();
   const result = incoming.map((scene) => {
-    const previous = bySource.get(scene.sourceSceneId);
-    used.add(scene.sourceSceneId);
+    const previous = bySource.get(filmSourceKey(scene));
+    used.add(filmSourceKey(scene));
     if (!previous)
       return { ...scene, id: newId(), status: 'pending', prompt: '', promptSource: '', promptHash: '' };
     const changed = previous.scriptHash !== scene.scriptHash;
     return {
       ...previous,
+      sourceShotId: scene.sourceShotId ?? scene.sourceSceneId,
       title: scene.title,
       script: scene.script,
       scriptHash: scene.scriptHash,
@@ -339,7 +346,7 @@ export function reconcileFilmScenes(existing, incoming, newId) {
     };
   });
   for (const scene of existing)
-    if (!used.has(scene.sourceSceneId)) result.push({ ...scene, sourceRemoved: true });
+    if (!used.has(filmSourceKey(scene))) result.push({ ...scene, sourceRemoved: true });
   return result;
 }
 

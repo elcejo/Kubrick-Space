@@ -30,8 +30,8 @@ const { characterDonorInventoryPrompt } = require('../../../public/js/contracts/
 const PROMPT_VARIANTS = Object.freeze({
   chat: [
     {
-      label: 'Escritura y revisión agéntica del libro',
-      prompt: require('./book-agent.cjs').BOOK_AGENT_PROMPT,
+      label: 'Edición puntual y revisión agéntica con documento completo',
+      prompt: require('./element-agent.cjs').ELEMENT_AGENT_PROMPT,
     },
   ],
   character_image_prompt: [

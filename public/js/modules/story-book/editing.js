@@ -12,4 +12,5 @@ export {
   replaceStoryBookCrossRowSelection,
 } from './story-book-rows.js';
 export { EditorTimeline } from './timeline.js';
+export { timelineCableGeometry, createTimelineFusion } from './timeline-fusion.js';
 export { renderStoryBookMode } from './story-book-view.js';

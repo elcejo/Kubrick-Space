@@ -47,14 +47,45 @@ function createImageCatalog({ getApiKeys, fetchImpl = (...args) => fetch(...args
                     !m.architecture?.output_modalities?.includes('image')
                   )
                     return;
-                  const params = m.supported_parameters || {};
-                  const count = params.input_references?.max || 0;
-                  const editing = m.architecture.input_modalities?.includes('image') && count >= 2;
+                  let params = m.supported_parameters || {};
                   const endpoints = await request(
                     `https://openrouter.ai/api/v1/images/models/${m.id}/endpoints`,
                     keys[provider],
                   );
-                  const eligible = (endpoints.endpoints || endpoints.data?.endpoints || []).filter(
+                  let available = endpoints.endpoints || endpoints.data?.endpoints || [];
+                  // Muse is still served by Meta's general endpoint while the Images discovery
+                  // endpoint returns no capabilities/providers. Preserve the existing, documented
+                  // Muse multi-reference adapter only after checking a live general provider.
+                  // Never infer editing support for unknown models or convert token prices to /image.
+                  let discoveryFallback = false;
+                  if (
+                    !available.length &&
+                    m.id === 'meta/muse-image' &&
+                    m.architecture.input_modalities?.includes('image')
+                  ) {
+                    const legacy = await request(
+                      `https://openrouter.ai/api/v1/models/${m.id}/endpoints`,
+                      keys[provider],
+                    );
+                    const healthy = (legacy.data?.endpoints || legacy.endpoints || []).filter(
+                      (e) => e.status === 0,
+                    );
+                    if (healthy.length) {
+                      discoveryFallback = true;
+                      params = {
+                        ...params,
+                        input_references: { min: 0, max: 8, ...params.input_references },
+                      };
+                      available = healthy.map((e) => ({
+                        provider_tag: e.tag,
+                        supported_parameters: { input_references: params.input_references },
+                        pricing: [],
+                      }));
+                    }
+                  }
+                  const count = params.input_references?.max || 0;
+                  const editing = m.architecture.input_modalities?.includes('image') && count >= 2;
+                  const eligible = available.filter(
                     (e) => !editing || (e.supported_parameters?.input_references?.max || 0) >= 2,
                   );
                   if (!eligible.length) return;
@@ -87,6 +118,7 @@ function createImageCatalog({ getApiKeys, fetchImpl = (...args) => fetch(...args
                       price: rates.length ? Math.min(...rates) : null,
                       priceFrom: extraCharges || new Set(rates).size > 1,
                       protocol: 'images',
+                      ...(discoveryFallback ? { discoverySource: 'general-endpoints' } : {}),
                       providerTags: eligible.map((e) => e.provider_tag).filter(Boolean),
                     }),
                   );
@@ -224,12 +256,12 @@ function createImageCatalog({ getApiKeys, fetchImpl = (...args) => fetch(...args
       keys: Object.fromEntries(Object.entries(keys).map(([p, key]) => [p, { configured: !!key }])),
     };
   }
-  async function list() {
+  async function list({ force = false } = {}) {
     const keys = getApiKeys(),
       next = JSON.stringify(
         ['openrouter', 'replicate', 'openai', 'gemini', 'artificial-analysis'].map((p) => keys[p] || ''),
       );
-    if (signature === next && cached && Date.now() < until) return cached;
+    if (!force && signature === next && cached && Date.now() < until) return cached;
     if (signature === next && pending) return pending;
     if (signature !== next) cached = null;
     signature = next;

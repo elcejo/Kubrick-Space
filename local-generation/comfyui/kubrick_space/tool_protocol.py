@@ -11,6 +11,9 @@ NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
 BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.S)
 FUNCTION = re.compile(r"\s*<function=([A-Za-z_][A-Za-z0-9_.-]{0,63})>(.*?)</function>\s*", re.S)
 PARAMETER = re.compile(r"<parameter=([A-Za-z_][A-Za-z0-9_.-]{0,63})>(.*?)</parameter>", re.S)
+# A small model often repeats a closing tag (</parameter></parameter>) or closes with the parameter name
+# (</items>). A stray closer carries no data, so it is ignored; any other leftover text is still rejected.
+STRAY_CLOSER = re.compile(r"</[A-Za-z_][A-Za-z0-9_.-]{0,63}>")
 RESERVED = {"__proto__", "constructor", "prototype"}
 
 
@@ -214,7 +217,7 @@ def build_prompt(system, prompt, tools_json, messages_json, choice="auto", think
 def _parameters(body, schema):
     arguments, position = {}, 0
     for match in PARAMETER.finditer(body):
-        if body[position:match.start()].strip():
+        if STRAY_CLOSER.sub("", body[position:match.start()]).strip():
             raise ValueError("Contenido fuera de un parámetro.")
         key, raw = match[1], match[2].strip()
         if key in arguments:
@@ -233,7 +236,7 @@ def _parameters(body, schema):
             value = raw
         arguments[key] = value
         position = match.end()
-    if body[position:].strip():
+    if STRAY_CLOSER.sub("", body[position:]).strip():
         raise ValueError("Parámetro incompleto o contenido inesperado.")
     return arguments
 

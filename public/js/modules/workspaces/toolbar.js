@@ -1,11 +1,7 @@
 import { renderIcon } from '../../icons.js';
 import { safeHTML } from '../../safe-html.js';
 import { openDocumentVersions } from '../documents/document-versions.js';
-import { enhanceSelect } from '../../custom-select.js';
-import { LocalInferenceControls } from './local-inference-controls.js';
-import { APIInferenceControls } from './api-inference-controls.js';
-import { API } from '../../api-service.js';
-import { Modal } from '../../ui-components.js';
+import { InferenceControls } from './inference-controls.js';
 /**
  * @module toolbar
  * @description Top toolbar bar with editable project name, autosave status
@@ -13,13 +9,7 @@ import { Modal } from '../../ui-components.js';
  */
 
 import { EventBus } from '../../event-bus.js';
-import {
-  AppState,
-  setTheme,
-  setCanvasEffects,
-  applyProjectInference,
-  renameProjectSummary,
-} from '../../app-state.js';
+import { AppState, setTheme, setCanvasEffects, renameProjectSummary } from '../../app-state.js';
 
 /** SVG icon helpers (inline, small). */
 const Icons = { save: renderIcon('save', 16), export: renderIcon('download', 16) };
@@ -40,9 +30,7 @@ export class Toolbar {
   /** @type {HTMLButtonElement|null} */ #exportBtn = null;
   /** @type {HTMLButtonElement|null} */ #saveBtn = null;
   #closeVersions = null;
-  #inferenceControl = null;
-  #localInference = null;
-  #apiInference = null;
+  #inference = null;
   setBackgroundBusy(busy) {
     const name = this.#root?.querySelector('#toolbar-project-name');
     if (name) {
@@ -192,46 +180,8 @@ export class Toolbar {
 
     exportWrap.append(this.#exportBtn, this.#dropdown);
     container.querySelectorAll('.video-import-button').forEach((button) => right.appendChild(button));
-    const inferenceSelect = document.createElement('select');
-    inferenceSelect.className = 'toolbar-inference';
-    inferenceSelect.setAttribute('aria-label', 'Modo de inferencia');
-    for (const [value, label] of [
-      ['local', 'Local'],
-      ['api', 'API'],
-    ]) {
-      const option = document.createElement('option');
-      option.value = value;
-      option.textContent = label;
-      inferenceSelect.append(option);
-    }
-    inferenceSelect.value = AppState.inferenceMode === 'local' ? 'local' : 'api';
-    inferenceSelect.addEventListener('change', async () => {
-      const mode = inferenceSelect.value;
-      inferenceSelect.disabled = true;
-      this.#inferenceControl?.refresh();
-      try {
-        applyProjectInference(projectData.id, await API.saveProjectInference(projectData.id, { mode }));
-      } catch (error) {
-        await Modal.alert({ title: 'Modo del proyecto', message: error.message });
-      } finally {
-        inferenceSelect.value = AppState.inferenceMode;
-        inferenceSelect.disabled = false;
-        this.#inferenceControl?.refresh();
-      }
-    });
-    this.#localInference = new LocalInferenceControls(projectData.id);
-    this.#apiInference = new APIInferenceControls(projectData.id);
-    right.append(
-      inferenceSelect,
-      this.#localInference.element,
-      this.#apiInference.element,
-      versionsBtn,
-      themeBtn,
-      fxBtn,
-      exportWrap,
-    );
-    this.#inferenceControl = enhanceSelect(inferenceSelect, { searchable: false });
-    this.#inferenceControl.root.classList.add('toolbar-inference-control');
+    this.#inference = new InferenceControls(projectData.id);
+    right.append(this.#inference.element, versionsBtn, themeBtn, fxBtn, exportWrap);
 
     this.#root.append(left, right);
     container.appendChild(this.#root);
@@ -290,10 +240,6 @@ export class Toolbar {
         updateThemeIcon();
       }
       if (key === 'canvasEffects') updateEffects();
-      if (key === 'inferenceMode' || key === 'currentProject') {
-        inferenceSelect.value = AppState.inferenceMode;
-        this.#inferenceControl?.refresh();
-      }
     };
 
     for (const [evt, fn] of Object.entries(this.#handlers)) {
@@ -333,12 +279,8 @@ export class Toolbar {
 
   /** Clean up. */
   destroy() {
-    this.#apiInference?.destroy();
-    this.#apiInference = null;
-    this.#localInference?.destroy();
-    this.#localInference = null;
-    this.#inferenceControl?.destroy({ restore: false });
-    this.#inferenceControl = null;
+    this.#inference?.destroy();
+    this.#inference = null;
     this.#closeVersions?.();
     this.#closeVersions = null;
     for (const [evt, fn] of Object.entries(this.#handlers)) {

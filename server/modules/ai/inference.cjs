@@ -1,3 +1,4 @@
+const { canonicalLocalModel } = require('../../../public/js/contracts/local-models.js');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const { createLocalProvider, LOCAL_ID } = require('./local-provider.cjs');
 const llmConfig = require('./config.cjs');
@@ -12,9 +13,15 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
     startEngine: !fetchImpl ? () => startLocalEngine(appRoot) : undefined,
   });
   const currentMode = () => scope.getStore()?.mode || 'hybrid';
+  // Text and image can run on different providers: a project may keep an LLM on OpenRouter and FLUX locally.
+  const currentImageMode = () => {
+    const store = scope.getStore();
+    return store?.settings?.imageMode || store?.mode || 'hybrid';
+  };
   const currentLocalModel = () => scope.getStore()?.localModel;
   const currentSettings = () => scope.getStore()?.settings || {};
   function run(mode, task, localModel, settings = {}) {
+    localModel = canonicalLocalModel(localModel);
     if (!['local', 'api', 'hybrid'].includes(mode))
       throw Object.assign(new Error('Modo de inferencia inválido.'), { status: 400 });
     if (
@@ -29,6 +36,7 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
     const config = llmConfig.normalize(raw);
     const mode = currentMode();
     for (const entry of Object.values(config.functions)) {
+      entry.model = canonicalLocalModel(entry.model);
       if (mode === 'local' && (currentLocalModel() || !llmConfig.isLocalModel(entry.model)))
         entry.model = currentLocalModel() || LOCAL_ID;
       else if (mode === 'api')
@@ -46,6 +54,10 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
     try {
       body = JSON.parse(options.body);
     } catch {}
+    // Image requests (other providers, or OpenRouter with image output) follow the image mode.
+    const imageCall =
+      !(target.origin === 'https://openrouter.ai' && target.pathname === '/api/v1/chat/completions') ||
+      (Array.isArray(body?.modalities) && body.modalities.includes('image'));
     if (llmConfig.isLocalModel(body?.model)) {
       if (currentMode() === 'api')
         throw Object.assign(new Error('API no admite modelos locales.'), {
@@ -67,7 +79,7 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
         );
       }
     }
-    if (currentMode() === 'local')
+    if ((imageCall ? currentImageMode() : currentMode()) === 'local')
       return Response.json(
         {
           error: { message: 'No hay un modelo local configurado para esta función.' },
@@ -80,12 +92,14 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
   return {
     run,
     currentMode,
+    currentImageMode,
     currentLocalModel,
     currentSettings,
     configure,
     models: local.models,
     fetch: routedFetch,
     localStatus: local.status,
+    localTrace: local.trace,
     controlLocal: local.control,
     imageModels: local.imageModels,
     /** Runs a film task on the local engine, serialized with every other local GPU operation. */

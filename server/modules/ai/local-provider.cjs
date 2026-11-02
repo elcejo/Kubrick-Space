@@ -1,17 +1,22 @@
+const { canonicalLocalModel, localModelProfile } = require('../../../public/js/contracts/local-models.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
 const { createLocalImage, localImageModels } = require('./local-image.cjs');
+const { createLocalTrace, describeMessages, clip } = require('./local-trace.cjs');
 const { createLocalVideo, LOCAL_VIDEO_ENGINE } = require('./local-video.cjs');
 
 const LOCAL_ID = 'local:qwen3.5-4b-int8-convrot';
 const fail = (message, code = 'LOCAL_INFERENCE_ERROR', status = 502) =>
   Object.assign(new Error(message), { code, status });
 
+const ENGINE_START_TIMEOUT_MS = 240_000;
+
 function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args), startEngine }) {
   const directory = path.join(appRoot, 'local-generation', 'comfyui');
   const base = 'http://127.0.0.1:8189';
+  const trace = createLocalTrace();
   let tail = Promise.resolve();
   let residency = { loadedModel: null, pinned: false, busy: false };
   let imageBusy = false;
@@ -35,7 +40,9 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
         throw fail('No se pudo verificar el motor local.', 'LOCAL_ENGINE_UNAVAILABLE', 503);
       await startEngine();
       let ready = false;
-      for (let count = 0; count < 90; count++) {
+      // Importing torch and the custom nodes takes over a minute on a cold start; wait on a deadline, not a count.
+      const deadline = Date.now() + ENGINE_START_TIMEOUT_MS;
+      while (Date.now() < deadline) {
         signal?.throwIfAborted();
         try {
           await stats();
@@ -62,13 +69,14 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
       const values = raw.version === 2 ? raw.models : [raw.textVision];
       if (!Array.isArray(values)) return [];
       return values.filter((config) => {
-        const match = /^qwen3\.5-(4b|9b)-int8-convrot$/.exec(config?.id || '');
-        if (!match || config.clipType !== 'qwen_image') return false;
-        const folder = `Qwen 3.5 ${match[1].toUpperCase()}`;
+        const profile = localModelProfile('local:' + config?.id);
         return (
-          config.path === `models/llm/${folder}/model.safetensors` &&
-          config.clipName === `${folder}/model.safetensors` &&
-          fs.existsSync(path.join(appRoot, config.path))
+          profile &&
+          config.id === profile.id.slice(6) &&
+          config.clipType === profile.clipType &&
+          config.path === profile.path &&
+          config.clipName === profile.clipName &&
+          fs.existsSync(path.join(appRoot, profile.path))
         );
       });
     } catch {
@@ -78,7 +86,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
   function models() {
     return profiles().map((config) => ({
       id: `local:${config.id}`,
-      name: `Qwen 3.5 ${config.id.includes('-9b-') ? '9B' : '4B'} · Local · INT8 ConvRot`,
+      name: localModelProfile('local:' + config.id).name,
       provider: 'local',
       description: 'Texto y visión en este equipo mediante ComfyUI. No requiere clave API.',
       inputModalities: ['text', 'image'],
@@ -100,6 +108,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     return response.json();
   }
   async function generate(body, signal, repairAttempt = 0) {
+    body = { ...body, model: canonicalLocalModel(body.model) };
     const config = profiles().find((entry) => `local:${entry.id}` === body.model);
     if (!config) throw fail('El modelo local no está instalado.', 'LOCAL_MODEL_UNAVAILABLE', 428);
     if (body.tools?.some((tool) => tool.type !== 'function'))
@@ -113,7 +122,6 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     const messages = [],
       systems = [],
       images = [];
-    let imageTurn = -1;
     for (const original of body.messages) {
       const message = { ...original };
       if (Array.isArray(message.content)) {
@@ -122,13 +130,6 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
           if (item.type === 'text' && typeof item.text === 'string') text.push(item.text);
           else if (item.type === 'image_url' && typeof item.image_url?.url === 'string') {
             if (message.role !== 'user') throw fail('Las imágenes locales requieren un mensaje de usuario.');
-            if (imageTurn !== -1 && imageTurn !== messages.length)
-              throw fail(
-                'El modelo local admite referencias visuales en un único turno por petición.',
-                'LOCAL_IMAGE_HISTORY_UNSUPPORTED',
-                422,
-              );
-            imageTurn = messages.length;
             const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(item.image_url.url);
             if (!match || match[2].length > 28_000_000 || images.length >= 8)
               throw fail(
@@ -146,13 +147,8 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
         systems.push(message.content);
       } else messages.push(message);
     }
-    const lastUser = messages.findLastIndex((message) => message.role === 'user');
-    if (imageTurn >= 0 && imageTurn !== lastUser)
-      throw fail(
-        'Las referencias visuales deben pertenecer al último turno del usuario.',
-        'LOCAL_IMAGE_HISTORY_UNSUPPORTED',
-        422,
-      );
+    // The engine sees every reference alongside the last user turn. A correction or repair message
+    // appended after the turn that carried the images therefore keeps them instead of failing.
     // Explicit preflight prevents huge manuscripts from exhausting a 12 GB GPU.
     if (JSON.stringify({ systems, messages, tools: body.tools }).length > 100000)
       throw fail(
@@ -162,6 +158,17 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
       );
     const choice = body.tool_choice;
     const forced = choice?.type === 'function' ? choice.function?.name : '';
+    trace.add({
+      kind: 'llm',
+      model: body.model,
+      repair: repairAttempt > 0,
+      systems: systems.map(clip),
+      messages: describeMessages(messages),
+      images: images.length,
+      tools: (body.tools || []).map((tool) => tool.function?.name).filter(Boolean),
+      toolChoice: forced || choice || 'auto',
+      maxNewTokens: Math.min(8192, body.max_completion_tokens || body.max_tokens || 2048),
+    });
     if (choice && !['auto', 'required', 'none'].includes(choice) && !forced)
       throw fail('Política de herramientas no disponible en Local.', 'LOCAL_TOOL_UNSUPPORTED', 422);
     const prompt = {
@@ -186,7 +193,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
           max_calls: Math.min(8, body.max_tool_calls || 4),
           max_new_tokens: Math.min(8192, body.max_completion_tokens || body.max_tokens || 2048),
           temperature: Math.max(0, Math.min(2, body.temperature ?? 0.3)),
-          seed: 0,
+          seed: repairAttempt * 7919,
           thinking: false,
         },
       },
@@ -238,9 +245,18 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
               'El motor local no completó la generación. La información anterior se conserva.',
               'LOCAL_GENERATION_FAILED',
             );
+          if (result.status === 'invalid')
+            trace.add({
+              kind: 'llm-result',
+              model: body.model,
+              status: 'invalid' + (repairAttempt ? ' (tras la reparación)' : ''),
+              error: clip(result.error || ''),
+              content: clip(result.text || ''),
+              toolCalls: [],
+            });
           if (
             result.status === 'invalid' &&
-            repairAttempt === 0 &&
+            repairAttempt < 2 &&
             body.tools?.length &&
             typeof result.error === 'string' &&
             result.error.length <= 1000 &&
@@ -253,12 +269,16 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
             // images, declared tools and cancellation/deadline. Never falls back to cloud.
             console.warn(
               '[Local proposal repair]',
-              JSON.stringify({ model: body.model, attempt: 2, reason: result.error }),
+              JSON.stringify({
+                model: body.model,
+                attempt: repairAttempt + 2,
+                reason: result.error,
+              }),
             );
             return await generate(
               {
                 ...body,
-                temperature: 0,
+                temperature: repairAttempt ? 0.4 : 0,
                 messages: [
                   ...body.messages,
                   {
@@ -270,7 +290,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
                 ],
               },
               signal,
-              1,
+              repairAttempt + 1,
             );
           }
           if (result.status === 'invalid')
@@ -287,6 +307,16 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
               throw fail('El modelo local no devolvió JSON válido.', 'LOCAL_RESPONSE_INVALID');
             }
           }
+          trace.add({
+            kind: 'llm-result',
+            model: body.model,
+            status: result.status,
+            content: clip(result.assistant_message.content || ''),
+            toolCalls: (result.assistant_message.tool_calls || []).map((call) => ({
+              name: call.function?.name,
+              arguments: clip(call.function?.arguments || ''),
+            })),
+          });
           const data = {
             id: `local-${promptId}`,
             model: body.model,
@@ -421,6 +451,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     }
   }
   function control(action, model) {
+    model = canonicalLocalModel(model);
     if (!['load', 'unload'].includes(action))
       throw fail('Control local inválido.', 'LOCAL_CONTROL_INVALID', 400);
     if (action === 'load' && !profiles().some((entry) => 'local:' + entry.id === model))
@@ -429,7 +460,14 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     tail = run;
     return run;
   }
-  const generateImage = createLocalImage({ appRoot, request, fetchImpl, ensureEngine, caption: generate });
+  const generateImage = createLocalImage({
+    appRoot,
+    request,
+    fetchImpl,
+    ensureEngine,
+    caption: generate,
+    trace,
+  });
   function image(body, signal) {
     const run = tail
       .catch(() => {})
@@ -473,6 +511,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     return run;
   }
   return {
+    trace,
     models,
     fetchLocal,
     video,

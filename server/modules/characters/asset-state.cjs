@@ -12,6 +12,8 @@ const {
 
 /** Public domain rules for Media; storage and copying remain with Media. */
 function readStoredState(project) {
+  // A shell that never received its sheet has no stored state, and must not make its deletion fail.
+  if (typeof project?.content !== 'string' || !project.content) return null;
   const document = validateCharacterDocument(JSON.parse(project.content));
   const library =
     project.characterVisualLibrary &&

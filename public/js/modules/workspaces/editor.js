@@ -1,5 +1,5 @@
 import { StoryBookEditing } from '../story-book/editing.js';
-import { ScreenplayWorkflow } from '../screenplay/workspace.js';
+import { ScreenplayWorkflow, ScreenplayLinks } from '../screenplay/workspace.js';
 import { CharacterLegacyEditing } from '../characters/editing.js';
 
 import { renderIcon } from '../../icons.js';
@@ -12,6 +12,7 @@ import { Mode } from '../../contracts/editor-mode.js';
 import { coverArtInstruction } from '../../contracts/text-instructions.js';
 import { EditorTimeline } from '../story-book/editing.js';
 import { EditorIngredients } from '../ingredients/editor-panel.js';
+import { characterPseudonyms } from '../ingredients/ingredient-names.js';
 import { EditorImages } from '../media/editor-media.js';
 import { EditorCropper } from '../media/editor-media.js';
 import { EditorViews } from './views.js';
@@ -19,6 +20,7 @@ import { EditorViews } from './views.js';
 import { normalizeAITextRange, applyAITextInBlock } from '../ai/ai-editing.js';
 import {
   parseScreenplayContent,
+  prepareScreenplayProject,
   screenplayToHTML,
   screenplayFromHTML,
   screenplayContext,
@@ -477,6 +479,7 @@ export class Editor {
   /** @type {Object|null} portable story-book document model */
   #storyBookDocument = null;
   #screenplayDocument = null;
+  #screenplayLinks = null;
   /** @type {Set<string>} collapsed chapter/theme IDs in the story-book tree */
 
   /** @type {Function[]} stored EventBus handlers */
@@ -533,6 +536,7 @@ export class Editor {
     if (projectData?.type === 'character') prepareCharacterProject(projectData);
     if (projectData?.type === 'stage') prepareScenarioProject(projectData);
     if (isFilmProject(projectData)) prepareFilmProject(projectData);
+    if (projectData) prepareScreenplayProject(projectData);
     this.#projectId = projectData?.id || null;
     this.#projectType = projectData?.type || null;
     const isStoryBook =
@@ -608,6 +612,10 @@ export class Editor {
 
     if (isStoryBook) {
       this.#timeline.mountLinks(this.#layoutWrapper);
+    }
+    if (this.#isScreenplay()) {
+      this.#screenplayLinks = new ScreenplayLinks(this.#layoutWrapper);
+      this.#screenplayLinks.mount();
     }
 
     this.syncIngredientsFromTags();
@@ -987,14 +995,39 @@ export class Editor {
     return { status: 'applied', projectId: this.#projectId };
   }
 
-  acceptBackgroundBook(content, expectedContent, busy) {
-    if (!this.#isStoryBook() || this.#destroyed) throw new Error('El libro ya no está abierto.');
+  async acceptBackgroundProject(response) {
+    const workspace = this.#views.scenarioWorkspace || this.#views.filmWorkspace;
+    if (!workspace) throw new Error('El proyecto ya no está abierto.');
+    await workspace.acceptBackgroundJob(response);
+    return this.getContent();
+  }
+
+  setAgentBusy(busy) {
+    this.#backgroundBusy = busy;
+    if (this.#node) this.#node.inert = busy;
+    if (this.#surface) this.#surface.inert = busy;
+  }
+
+  acceptBackgroundBook(content, expectedContent, busy, ingredients) {
+    if ((!this.#isStoryBook() && !this.#isScreenplay()) || this.#destroyed)
+      throw new Error('El documento ya no está abierto.');
     if (this.getContent() !== expectedContent)
       throw new Error('Hay cambios locales. Recarga el libro para ver el trabajo del servidor.');
-    this.#storyBookDocument = parseStoryBookContent(content);
-    this.#htmlContent = storyBookDocumentToHTML(this.#storyBookDocument);
+    if (this.#isScreenplay()) {
+      this.#screenplayDocument = parseScreenplayContent(content);
+      this.#htmlContent = screenplayToHTML(this.#screenplayDocument);
+    } else {
+      this.#storyBookDocument = parseStoryBookContent(content);
+      this.#htmlContent = storyBookDocumentToHTML(this.#storyBookDocument);
+    }
     this.#renderMode(this.#mode);
-    if (this.#surface) this.#surface.inert = busy;
+    // Characters and scenarios the server linked while it worked appear as soon as they exist.
+    if (Array.isArray(ingredients) && JSON.stringify(ingredients) !== JSON.stringify(this.#ingredients)) {
+      this.#ingredients = structuredClone(ingredients);
+      AppState.currentProject.ingredients = this.#ingredients;
+      this.#renderDrawers();
+    }
+    this.setAgentBusy(busy);
     return this.getContent();
   }
 
@@ -1120,7 +1153,7 @@ export class Editor {
     if (range && this.#surface?.contains(range.endContainer)) {
       const element =
         range.endContainer.nodeType === 1 ? range.endContainer : range.endContainer.parentElement;
-      const block = element?.closest('p, h1, h2, h3, h4, h5, blockquote, li, pre');
+      const block = element?.closest('p, h1, h2, h3, h4, h5, h6, blockquote, li, pre');
       if (block && this.#surface.contains(block)) {
         if ((this.#isStoryBook() || this.#isScreenplay()) && block.dataset.kaiId)
           target.nodeId = block.dataset.kaiId;
@@ -1334,6 +1367,8 @@ export class Editor {
     this.#cropper.destroy();
     this.#views.destroy();
     this.#handlers = {};
+    this.#screenplayLinks?.destroy();
+    this.#screenplayLinks = null;
     this.#layoutWrapper?.remove();
     this.#layoutWrapper = null;
 
@@ -1471,20 +1506,8 @@ export class Editor {
             } catch (e) {}
           }
           expectedName = (expectedName || '').trim();
-          let pseudonyms = '';
-          if (charIng.value) {
-            try {
-              const parsed = JSON.parse(charIng.value);
-              pseudonyms = parsed.traits?.pseudonyms || '';
-            } catch (e) {}
-          }
           const validNames = [expectedName.toLowerCase()];
-          if (pseudonyms) {
-            pseudonyms.split(',').forEach((p) => {
-              const trimmed = p.trim().toLowerCase();
-              if (trimmed) validNames.push(trimmed);
-            });
-          }
+          characterPseudonyms(charIng).forEach((p) => validNames.push(p.toLowerCase()));
           if (!expectedName || !validNames.includes(currentText.toLowerCase())) {
             shouldUnwrap = true;
           }
@@ -1785,25 +1808,18 @@ export class Editor {
     this.#ingredients.forEach((ing) => {
       if (ing.type === 'character') {
         let name = ing.importedProjectName || '';
-        let pseudonyms = '';
         if (ing.value) {
           try {
-            const parsed = JSON.parse(ing.value);
-            name = parsed.name || name;
-            pseudonyms = parsed.traits?.pseudonyms || '';
+            name = JSON.parse(ing.value).name || name;
           } catch (e) {}
         }
         if (name) {
           name = name.trim();
           const namesToMatch = [name];
-          if (pseudonyms) {
-            pseudonyms.split(',').forEach((p) => {
-              const trimmed = p.trim();
-              if (trimmed && !namesToMatch.some((n) => n.toLowerCase() === trimmed.toLowerCase())) {
-                namesToMatch.push(trimmed);
-              }
-            });
-          }
+          characterPseudonyms(ing).forEach((trimmed) => {
+            if (!namesToMatch.some((n) => n.toLowerCase() === trimmed.toLowerCase()))
+              namesToMatch.push(trimmed);
+          });
           namesToMatch.forEach((n) => {
             if (!activeNames.some((item) => item.nameToMatch.toLowerCase() === n.toLowerCase())) {
               activeNames.push({ nameToMatch: n, charId: ing.importedProjectId, charName: name });
@@ -2169,6 +2185,7 @@ export class Editor {
     ];
     if (screenplay)
       for (const [type, label] of [
+        ['shot', 'Plano'],
         ['dialogue', 'Diálogo'],
         ['parenthetical', 'Acotación'],
         ['transition', 'Transición'],

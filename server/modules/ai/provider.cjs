@@ -5,6 +5,11 @@ const {
   enrichGeneration,
 } = require('./request-metrics.cjs');
 const { readCompletionStream } = require('./completion-stream.cjs');
+const { prepareReasoning, retryReasoning } = require('./reasoning-fallback.cjs');
+
+// A local request first waits for the shared GPU queue and may have to start the engine and load the
+// model (over a minute cold); none of that is the model being slow, so it is not charged to the timeout.
+const LOCAL_QUEUE_ALLOWANCE_MS = 300000;
 
 function createProvider({
   security,
@@ -13,12 +18,18 @@ function createProvider({
   backgroundSignal,
   trackRequest,
 }) {
-  async function proxyRequest(
+  async function sendRequest(
     url,
     options,
     timeoutMs = 120000,
     { omitBody = false, completionStream = false } = {},
   ) {
+    try {
+      if (String(JSON.parse(options.body)?.model || '').startsWith('local:'))
+        timeoutMs += LOCAL_QUEUE_ALLOWANCE_MS;
+    } catch {
+      /* Not a JSON request: no local model involved. */
+    }
     let streaming = false;
     if (completionStream && url === 'https://openrouter.ai/api/v1/chat/completions') {
       const body = JSON.parse(options.body);
@@ -208,6 +219,14 @@ function createProvider({
       clearTimeout(totalTimer);
       if (onAbort) signal.removeEventListener('abort', onAbort);
     }
+  }
+
+  async function proxyRequest(url, options, ...rest) {
+    if (url !== 'https://openrouter.ai/api/v1/chat/completions') return sendRequest(url, options, ...rest);
+    options = prepareReasoning(options);
+    const result = await sendRequest(url, options, ...rest);
+    const retry = result.error ? retryReasoning(options, result.error) : null;
+    return retry ? sendRequest(url, retry, ...rest) : result;
   }
 
   return { request: proxyRequest };

@@ -296,7 +296,7 @@ export class CharacterComposerNode {
     footer.append(this.interpret);
     this.element.append(inputArea, this.attachmentPreview, attachmentFile, this.hint, footer, this.status);
     this.prompt.hidden = this.hint.hidden = footer.hidden = !creation.mode;
-    if (onUploadPhoto) {
+    if (onUploadPhoto && creation.mode) {
       const upload = action('Subir foto a la galería', 'upload', onUploadPhoto, 'btn btn-secondary');
       this.element.append(upload);
       this.directUpload = upload;

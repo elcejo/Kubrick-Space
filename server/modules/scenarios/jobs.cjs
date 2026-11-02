@@ -49,7 +49,7 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
     return url;
   };
   const engineFor = (project) => {
-    if (inference?.currentMode() === 'local') return { provider: 'local', model: 'flux3-klein' };
+    if (inference?.currentImageMode() === 'local') return { provider: 'local', model: 'flux3-klein' };
     const engine = project.inferenceSettings?.imageModel;
     if (!engine) throw security.fail('Selecciona un modelo de imagen en la barra superior.', 422);
     try {
@@ -158,7 +158,7 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
     const p = job.payload;
     const projectId = job.projectId;
     const operations = makeOperations(p.textConfig, ctx);
-    const local = p.inferenceMode === 'local';
+    const local = (p.inferenceSettings?.imageMode || p.inferenceMode) === 'local';
     const failure = (message, status = 422) => security.fail(message, status);
     // All writes are serialized and compare-and-set against the last content this job wrote.
     let tail = Promise.resolve();
@@ -322,6 +322,31 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
     }
     if (!panoramaUrl) throw failure('El escenario no tiene panorama de referencia.');
 
+    // A scenario created for a story is usable with its main picture; the four angles follow in their own task.
+    if (p.stopAfterPanorama) {
+      await ctx.step('scenario-finish', async () => {
+        await commit((document) => {
+          document.request = '';
+          document.creation.initialState = 'complete';
+          document.revision += 1;
+          document.history = [
+            ...document.history,
+            {
+              id: 'turn_' + job.id,
+              source: p.source,
+              text: p.request || 'Escenario creado para la historia',
+              status: 'applied',
+              message: '',
+              at: new Date().toISOString(),
+            },
+          ].slice(-40);
+          return document;
+        });
+        return { saved: true };
+      });
+      return { message: 'Escenario con imagen principal.', viewPrompts: brief?.viewPrompts || {} };
+    }
+
     // 4. Four angles that share the panorama as their reference. Local renders one at a time (VRAM).
     const targets =
       reuse && p.scope === 'view' ? SCENARIO_VIEWS.filter((view) => view.id === p.viewId) : SCENARIO_VIEWS;
@@ -330,7 +355,11 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
       const generated = await ctx.step(`scenario-view-${view.id}`, async () => {
         const stored = current.views.find((item) => item.id === view.id);
         const prompt = reuse
-          ? stored?.prompt || buildScenarioViewPrompt({ viewId: view.id, viewPrompt: current.description })
+          ? stored?.prompt ||
+            buildScenarioViewPrompt({
+              viewId: view.id,
+              viewPrompt: p.viewPrompts?.[view.id] || current.description,
+            })
           : buildScenarioViewPrompt({ viewId: view.id, viewPrompt: brief.viewPrompts[view.id] });
         return {
           url: await generate({ prompt, inputImages: [panoramaUrl], aspectRatio: SCENARIO_VIEW_RATIO }),

@@ -2393,3 +2393,22 @@ html[data-theme='light'] .studio-map-detail {
   display: block;
   flex: 0 0 18px;
 }
+
+/* Compact catalogue reload, shared by image and text model filters. */
+.settings-model-reload {
+  justify-content: center;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+}
+
+.settings-model-reload.is-loading svg {
+  animation: spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-model-reload.is-loading svg {
+    animation: none;
+  }
+}

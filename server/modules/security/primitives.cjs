@@ -18,9 +18,8 @@ function decodeImage(data) {
   if (!match) throw fail('Invalid image data');
   if (match[2].length > Math.ceil(MAX_IMAGE_BYTES / 3) * 4) throw fail('Image exceeds 15 MB', 413);
   const buffer = Buffer.from(match[2], 'base64');
-  const type = imageType(buffer);
-  if (type !== (match[1] === 'jpeg' ? 'jpg' : match[1])) throw fail('Image type does not match its content');
-  return { buffer, type };
+  // The bytes decide the type: browsers label a file by its extension, so a JPEG saved as .png is still a valid image.
+  return { buffer, type: imageType(buffer) };
 }
 
 module.exports = { UUID, IMAGE_NAME, MAX_IMAGE_BYTES, fail, imageType, decodeImage };

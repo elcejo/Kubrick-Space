@@ -1,4 +1,11 @@
-const commandNames = ['LEER_PROYECTO', 'CREAR_PROYECTO', 'EDITAR_DOCUMENTO', 'PERSONAJE', 'ESCRIBIR_LIBRO'];
+const commandNames = [
+  'LEER_PROYECTO',
+  'CREAR_PROYECTO',
+  'EDITAR_DOCUMENTO',
+  'PERSONAJE',
+  'ESCRIBIR_LIBRO',
+  'EDITAR_PROYECTO',
+];
 
 /** Keep internal commands (including partial names/JSON) out of live Markdown. */
 export function parseAgentResponse(source, final = false) {
@@ -126,13 +133,14 @@ export function storyBookIntent(source) {
     /\b(?:no|sin)\s+(?:(?:lo|la|los|las)\s+)?(?:quiero\s+que\s+)?(?:edites?|modifiques?|escribas?|reescribas?|cambies?|generes?)\b/.test(
       text,
     ) ||
-    /^(?:solo\s+)?(?:analiza|explica|aconseja|opina|dime|revisa si|hazme preguntas|que opinas|como (?:puedo|podria|deberia))\b/.test(
+    (/^(?:solo\s+)?(?:analiza|explica|aconseja|opina|dime|revisa si|hazme preguntas|que opinas|como (?:puedo|podria|deberia))\b/.test(
       text,
-    )
+    ) &&
+      !/\b(?:y (?:corrige|modifica|edita|reescribe)|haz(?:lo|la)?|modificalo|reescribelo)\b/.test(text))
   )
     return 'chat';
   if (
-    /\b(?:nuevo|otro)\s+(?:proyecto|libro)|\b(?:proyecto|libro)\s+(?:nuevo|aparte)|\b(?:crea|genera|agrega|anade)\s+(?:un[oa]?\s+)?personaje\b/.test(
+    /\b(?:nuevo|otro)\s+(?:proyecto|libro|guion|escenario|metraje)|\b(?:proyecto|libro|guion|escenario|metraje)\s+(?:nuevo|aparte)|\b(?:crea|genera|agrega|anade)\s+(?:un[oa]?\s+)?personaje\b/.test(
       text,
     )
   )

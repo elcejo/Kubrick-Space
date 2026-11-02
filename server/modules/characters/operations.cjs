@@ -2,6 +2,8 @@ const { randomUUID } = require('node:crypto');
 const {
   validateCharacterDocument,
   applyCharacterOperations,
+  normalizeCharacterProposal,
+  lenientCharacterProposal,
   CHARACTER_ASSISTANT_PROMPT,
   characterContextText,
   parseCharacterDocument,
@@ -32,7 +34,7 @@ const operationSchema = {
     key: {
       type: 'string',
       description:
-        'Clave existente exacta para update_field/remove_field; nueva custom.* para add_field; clave narrativa para set_narrative. No uses claves de ejemplos ajenas a la ficha.',
+        'Exact existing key for update_field/remove_field; a new custom.* key for add_field; a narrative key for set_narrative. Do not use example keys that are not in the sheet.',
     },
     label: { type: 'string' },
     type: { type: 'string', enum: CHARACTER_FIELD_TYPES },
@@ -42,7 +44,7 @@ const operationSchema = {
     show_empty: {
       type: 'boolean',
       description:
-        'Solo true si el usuario pide explícitamente un campo vacío para rellenar después. Los datos desconocidos deben seguir ocultos.',
+        'True only if the user explicitly asks for an empty field to fill in later. Unknown data must stay hidden.',
     },
     base: { type: 'string', enum: ['humanoid', 'animal', 'object', 'entity', 'hybrid'] },
     nature: { type: 'string' },
@@ -53,7 +55,7 @@ const tool = {
   function: {
     name: 'propose_character_changes',
     description:
-      'Propone cambios limitados a la ficha activa. El servidor valida cada operación; no guarda ni genera imágenes.',
+      'Proposes limited changes to the active sheet. The server validates every operation; it does not save or generate images.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -66,19 +68,19 @@ const tool = {
           uniqueItems: true,
           items: { type: 'string', enum: CHARACTER_DETAIL_TRAITS },
           description:
-            'Solicitudes explícitas de referencias independientes: eyes, eyebrows, eyelashes, nose, mouth, teeth, ears, skin. Solo si el usuario pide extraer/aislar esa pieza o añade esa característica desde una fotografía adjunta. No por describir un color o por observar un rasgo ordinario. Añade solo las nuevas solicitudes, sin eliminar las anteriores. Extraer una referencia sin cambiar la apariencia usa imageAction preserve.',
+            'Explicit requests for independent references: eyes, eyebrows, eyelashes, nose, mouth, teeth, ears, skin. Only if the user asks to extract/isolate that piece or adds that feature from an attached photograph. Not for describing a color or observing an ordinary trait. Add only the new requests, without removing earlier ones. Extracting a reference without changing the appearance uses imageAction preserve.',
         },
         imageAction: {
           type: 'string',
           enum: ['generate', 'preserve'],
           description:
-            'generate para cambios de apariencia o una nueva fotografía explícita; preserve para rasgos no visuales o narrativa.',
+            'generate for appearance changes or an explicit new photograph; preserve for non-visual traits or narrative.',
         },
         visualScopes: {
           type: 'array',
           maxItems: 24,
           description:
-            'Segmentos que el usuario pide cambiar, sin los que se conservan. Usa kind del componente (face, skin, hair, blouse, jacket, etc.) y facet component/color/shape/surface/layer/style. Cambiar solo el color no autoriza cambiar forma o peinado. Vacío para cambios narrativos.',
+            'Segments the user asks to change, without the ones that are kept. Use the component kind (face, skin, hair, blouse, jacket, etc.) and facet component/color/shape/surface/layer/style. Changing only the color does not authorize changing shape or hairstyle. Empty for narrative changes.',
           items: {
             type: 'object',
             additionalProperties: false,
@@ -92,12 +94,12 @@ const tool = {
         description: {
           type: 'string',
           description:
-            'Descripción breve y real del personaje, con los valores conocidos después de aplicar todas las operaciones. No es un título ni texto de plantilla.',
+            'A short, real description of the character, in Spanish, with the known values after applying every operation. It is not a title or template text.',
         },
         message: {
           type: 'string',
           description:
-            'Explica brevemente qué hechos de la petición se representaron y qué datos permanecen sin definir.',
+            'Briefly explain, in Spanish, which facts of the request were represented and which data remain undefined.',
         },
       },
     },
@@ -118,7 +120,7 @@ function characterTool(document, photoNumbers = []) {
         key: {
           type: 'string',
           description:
-            'Clave nueva custom.*. Tras set_identity, también puede completar una vez un campo común recién introducido, ausente en FICHA ACTUAL. Nunca añade una key que ya estaba en la ficha inicial.',
+            'A new custom.* key. After set_identity it may also fill once a newly introduced common field that is absent from CURRENT SHEET. It never adds a key that was already in the initial sheet.',
         },
         label: operationSchema.properties.label,
         type: operationSchema.properties.type,
@@ -186,7 +188,7 @@ function characterTool(document, photoNumbers = []) {
       additionalProperties: false,
       required: ['base', 'details'],
       description:
-        'Foto que conserva identidad/estilo y fotos donantes limitadas a atributos visuales. Usa todas y solo las fotos mencionadas; los números son los del catálogo, no el orden de adjuntos.',
+        'Photo that keeps identity/style and donor photos limited to visual attributes. Use all and only the photos mentioned; the numbers are the catalog numbers, not the attachment order.',
       properties: {
         base: { type: 'integer', enum: photoNumbers },
         details: {
@@ -482,7 +484,7 @@ function createCharacterOperations(dependencies) {
           'El modelo configurado para personajes no admite imágenes. Elige un modelo con visión en la barra superior.',
           428,
         );
-      const userText = `MODO: ${source}\nPETICIÓN DEL USUARIO:\n${body.request}\n\nFICHA ACTUAL (datos):\n${JSON.stringify(contextDocument)}\n\nINGREDIENTES (datos):\n${JSON.stringify(source === 'ingredients' ? ingredients : [])}\n\nPropón ahora los cambios de esta petición. Las únicas claves existentes AL COMIENZO son: ${document.fields.map((field) => field.key).join(', ') || 'NINGUNA: usa primero set_identity y luego add_field para los atributos conocidos, no update_field'}. set_identity introduce campos comunes vacíos si faltaban; puedes completarlos una vez mediante add_field en esta misma propuesta. No repitas una key ni añadas de nuevo claves de la ficha inicial.`;
+      const userText = `MODE: ${source}\nUSER REQUEST:\n${body.request}\n\nCURRENT SHEET (data):\n${JSON.stringify(contextDocument)}\n\nINGREDIENTS (data):\n${JSON.stringify(source === 'ingredients' ? ingredients : [])}\n\nPropose now the changes this request asks for. The only existing keys AT THE START are: ${document.fields.map((field) => field.key).join(', ') || 'NONE: use set_identity first and then add_field for the known attributes, not update_field'}. set_identity introduces empty common fields if they were missing; you may fill each of them once with add_field in this same proposal. Do not repeat a key and do not add again keys of the initial sheet. Write description, message and every text value in Spanish.`;
       const send = (extraMessages = []) =>
         proxyRequest(
           'https://openrouter.ai/api/v1/chat/completions',
@@ -703,7 +705,20 @@ function createCharacterOperations(dependencies) {
         if (source === 'options' && proposal.operations.some((operation) => operation.op !== 'set_narrative'))
           throw new Error('Las opciones elegidas por el usuario deben conservarse.');
         const { photoSelection, ...changes } = proposal;
-        nextDocument = applyCharacterOperations(document, changes, {
+        let applicable = normalizeCharacterProposal(document, changes, { source });
+        if (llmConfig.isLocalModel(model)) {
+          // A small local model gets most of a sheet right: keep what the sheet accepts, report the rest.
+          const { proposal: kept, dropped } = lenientCharacterProposal(document, applicable, { source });
+          if (dropped.length)
+            console.warn(
+              '[Character proposal] operaciones omitidas:',
+              JSON.stringify(
+                dropped.map(({ operation, reason }) => ({ op: operation.op, key: operation.key, reason })),
+              ),
+            );
+          applicable = kept;
+        }
+        nextDocument = applyCharacterOperations(document, applicable, {
           id: () => `attr_${randomUUID()}`,
           source,
         });

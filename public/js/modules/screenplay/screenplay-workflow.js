@@ -186,8 +186,19 @@ export class ScreenplayWorkflow {
         throw new Error(
           'El guión o sus ingredientes cambiaron. Se conservó tu trabajo; vuelve a generar la propuesta.',
         );
+      const linkedScenarios = new Set(
+        this.context.ingredients
+          .filter((item) => item.type === 'stage' && item.active !== false && item.importedProjectId)
+          .map((item) => item.importedProjectId),
+      );
       const availableScenarios = (AppState.projects || [])
-        .filter((project) => project.type === 'stage' && !project.deletedAt && !project.trashedAt)
+        .filter(
+          (project) =>
+            linkedScenarios.has(project.id) &&
+            project.type === 'stage' &&
+            !project.deletedAt &&
+            !project.trashedAt,
+        )
         .map(({ id, name }) => ({ id, name }));
       const response = await API.aiText({
         instruction: screenplayUpdateInstruction(),

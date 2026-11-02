@@ -54,7 +54,7 @@ export function screenplaySceneProposal(text, document, targetId) {
       delete result.speakerId;
       if (block.type === 'character') speaker = result.id;
       else if (speaker && ['dialogue', 'parenthetical'].includes(block.type)) result.speakerId = speaker;
-      else if (block.type === 'action' || block.type === 'transition') speaker = null;
+      else if (['action', 'transition', 'shot'].includes(block.type)) speaker = null;
       return result;
     }),
   };
@@ -97,7 +97,7 @@ export function parseScreenplayEdit(text, targetId) {
 
 export function applyScreenplayEdit(range, text, root, continuation = false) {
   const of = (node) =>
-    (node.nodeType === 1 ? node : node.parentElement)?.closest('p,h1,h2,h3,h4,h5,blockquote');
+    (node.nodeType === 1 ? node : node.parentElement)?.closest('p,h1,h2,h3,h4,h5,h6,blockquote');
   const block = of(range.startContainer);
   if (!block || !root.contains(block) || of(range.endContainer) !== block)
     throw new Error('Selecciona un único bloque, o utiliza la actualización por escena.');

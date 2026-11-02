@@ -25,6 +25,16 @@ function markComingSoon(bubble) {
   bubble.append(badge);
 }
 
+/** Comparison key of a project name: no case, accents or repeated spaces. */
+function nameKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 export class Wizard {
   /** @type {HTMLElement|null} */
   _container = null;
@@ -195,15 +205,19 @@ export class Wizard {
           <div class="wizard-form animate-scaleIn">
             <label class="input-label" for="wizard-name">
               ${mod.type === 'character' ? 'Nombre del personaje' : 'Nombre del proyecto'}
-              <input
-                type="text"
-                id="wizard-name"
-                class="input"
-                value="${defaultName}"
-                placeholder="${mod.type === 'character' ? 'Escribe su nombre' : 'Nombre del proyecto'}"
-                maxlength="120"
-                autofocus
-              />
+              <span class="wizard-name-field">
+                <input
+                  type="text"
+                  id="wizard-name"
+                  class="input"
+                  value="${defaultName}"
+                  placeholder="${mod.type === 'character' ? 'Escribe su nombre' : 'Nombre del proyecto'}"
+                  maxlength="120"
+                  autocomplete="off"
+                  autofocus
+                />
+                <span class="wizard-name-status" id="wizard-name-status" role="status" hidden></span>
+              </span>
             </label>
             <button class="wizard-create-btn btn btn-primary btn-lg" id="wizard-create">
               Crear Proyecto
@@ -215,6 +229,38 @@ export class Wizard {
         const createBtn = formStage.querySelector('#wizard-create');
 
         nameInput.focus();
+        const status = formStage.querySelector('#wizard-name-status');
+        // Names are unique among the projects of the same type; the check runs on every change of the text.
+        let taken = new Set();
+        const loadNames = async () => {
+          try {
+            const { projects = [] } = await API.getProjects();
+            taken = new Set(
+              projects.filter((p) => p.type === mod.type && !p.deletedAt).map((p) => nameKey(p.name)),
+            );
+          } catch {
+            /* Without the list the server still validates; the indicator stays hidden. */
+            taken = null;
+          }
+        };
+        const showAvailability = () => {
+          const key = nameKey(nameInput.value);
+          const free = taken && key ? !taken.has(key) : null;
+          status.hidden = free === null;
+          if (free === null) return true;
+          status.className = 'wizard-name-status ' + (free ? 'is-available' : 'is-taken');
+          const label = free ? 'Nombre disponible' : 'Nombre no disponible';
+          status.title = label;
+          status.setAttribute('aria-label', label);
+          status.innerHTML = safeHTML(renderIcon(free ? 'check' : 'close', 14));
+          createBtn.disabled = !free;
+          return free;
+        };
+        loadNames().then(showAvailability);
+        nameInput.addEventListener('input', () => {
+          createBtn.disabled = false;
+          showAvailability();
+        });
 
         nameInput.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' && !event.isComposing) {
@@ -227,6 +273,13 @@ export class Wizard {
           const name = nameInput.value.trim();
           if (!name) {
             Toast.show('El nombre del proyecto es obligatorio', 'warning');
+            nameInput.focus();
+            return;
+          }
+          // Re-read the projects so a name taken a moment ago in another tab is refused too.
+          await loadNames();
+          if (!showAvailability()) {
+            Toast.show('Ya existe un proyecto con ese nombre', 'warning');
             nameInput.focus();
             return;
           }

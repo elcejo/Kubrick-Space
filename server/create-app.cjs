@@ -20,6 +20,7 @@ const {
   registerDocumentRoutes,
   createBackgroundDraftWriter,
   applyBookAgentPatch,
+  applyElementPatch,
 } = require('./modules/documents/index.cjs');
 const {
   registerFileRoutes,
@@ -105,7 +106,9 @@ function createApp({
   app.use('/api', (req, res, next) => {
     // Scope is per request. Persistent jobs capture it explicitly before leaving HTTP.
     const relevant =
-      /^\/(?:ai\/|jobs\/(?:character|book|cover|scenario|film)|characters\/lore\/approve)/.test(req.path);
+      /^\/(?:ai\/|jobs\/(?:character|book|edit|cover|scenario|film)|characters\/lore\/approve)/.test(
+        req.path,
+      );
     if (!relevant) return next();
     try {
       const projectId = req.body?.projectId || req.get('X-Kubrick-Project-ID');
@@ -259,6 +262,39 @@ function createApp({
       };
     })(),
     applyBookAgentPatch,
+    applyElementPatch,
+    saveResourceInference(id, body) {
+      return createLibraryOperations({
+        repository,
+        ROOT_DIR,
+        security,
+        projectStore,
+        uuidv4,
+      }).updateInference({ params: { id }, body });
+    },
+    /** The project that already carries this name and type, if any. */
+    findStoryResource(resource) {
+      const normalized = (value) =>
+        String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim()
+          .toLowerCase();
+      const existing = repository
+        .read()
+        .projects.find(
+          (p) =>
+            !p.deletedAt && p.type === resource?.type && normalized(p.name) === normalized(resource?.name),
+        );
+      return existing ? { id: existing.id, name: existing.name, type: existing.type } : null;
+    },
+    /** A project the author explicitly asked to reuse, looked up by id. */
+    existingStoryResource(resource) {
+      const existing = repository
+        .read()
+        .projects.find((p) => !p.deletedAt && p.id === resource?.existingId && p.type === resource?.type);
+      return existing ? { id: existing.id, name: existing.name, type: existing.type, created: false } : null;
+    },
     createStoryResource(resource) {
       if (
         !resource ||
@@ -276,7 +312,9 @@ function createApp({
           .toLowerCase();
       const existing = repository
         .read()
-        .projects.find((p) => p.type === resource.type && normalized(p.name) === normalized(resource.name));
+        .projects.find(
+          (p) => !p.deletedAt && p.type === resource.type && normalized(p.name) === normalized(resource.name),
+        );
       if (existing) return { id: existing.id, name: existing.name, type: existing.type, created: false };
       const response = createLibraryOperations({
         repository,

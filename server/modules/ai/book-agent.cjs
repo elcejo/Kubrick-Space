@@ -330,6 +330,6 @@ function createBookAgent(deps) {
     ctx.checkpoint();
     return { message: 'Escritura y revisión completadas.', words: words(read(job.projectId).book) };
   }
-  return { read, run };
+  return { read, run, prepareResource: deps.prepareStoryResource };
 }
 module.exports = { createBookAgent, BOOK_AGENT_PROMPT };

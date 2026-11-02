@@ -21,6 +21,7 @@ const {
   characterContextText,
 } = require('../../../public/js/contracts/character-model.js');
 const { parseScenarioDocument, scenarioContextText } = require('../../../public/js/contracts/scenario.js');
+const { screenplayShots } = require('../../../public/js/contracts/screenplay.js');
 
 const REQUEST_KEYS = ['projectId', 'token', 'expectedContent', 'scope', 'sceneId', 'scriptProjectId'];
 const fold = (value) =>
@@ -206,35 +207,48 @@ function createFilmJobs(deps, { infer }) {
     const script = scripts.find(({ ingredient }) => ingredient.importedProjectId === p.scriptProjectId);
     if (!script) throw fail('El guión ya no está vinculado a la película.', 409);
 
-    // 1. Scenes: one node per screenplay scene, keeping what the author already has.
+    // 1. One clip per shot. Parent scenes retain place/time and never collapse the shot list.
     if (p.scope === 'all') {
-      ctx.progress('Creando un nodo por escena…');
+      ctx.progress('Creando un clip por plano…');
       await ctx.step('film-scenes', async () => {
         const screenplay = parseScreenplay(script.project.content);
-        if (screenplay.scenes.length > FILM_MAX_SCENES)
-          throw fail(`El guión supera ${FILM_MAX_SCENES} escenas.`);
-        const incoming = screenplay.scenes.map((scene) => {
-          const lines = [scene.heading.text, ...scene.blocks.map((block) => `${block.type}: ${block.text}`)];
-          const text = lines.filter(Boolean).join('\n').slice(0, 12000);
-          return {
-            id: randomUUID(),
-            sourceSceneId: scene.id,
-            title: (scene.heading.text || 'Escena').slice(0, 300),
-            script: text,
-            scriptHash: filmHash(text),
-            status: 'pending',
-            prompt: '',
-            promptSource: '',
-            promptHash: '',
-            frames: FILM_FRAME_OPTIONS[0],
-            shot: (scene.heading.shot || '').slice(0, 400),
-            seed: randomInt(0, 2 ** 31),
-            references: [],
-            sourceRemoved: false,
-            error: '',
-            video: null,
-          };
-        });
+        const incoming = screenplay.scenes.flatMap((scene, sceneIndex) =>
+          screenplayShots(scene).map((shot, shotIndex) => {
+            const lines = [
+              scene.heading.text,
+              ...(shot.explicit ? [shot.title] : []),
+              ...shot.blocks.map((block) => `${block.type}: ${block.text}`),
+            ];
+            const text = lines.filter(Boolean).join('\n');
+            if (text.length > 12000)
+              throw fail(
+                `El plano ${shotIndex + 1} de la escena ${sceneIndex + 1} es demasiado extenso; divídelo en varios planos.`,
+              );
+            return {
+              id: randomUUID(),
+              sourceSceneId: scene.id,
+              sourceShotId: shot.id,
+              title: (shot.explicit
+                ? `Escena ${sceneIndex + 1} · Plano ${shotIndex + 1} — ${scene.heading.location || scene.heading.text}`
+                : scene.heading.text || 'Escena'
+              ).slice(0, 300),
+              script: text,
+              scriptHash: filmHash(text),
+              status: 'pending',
+              prompt: '',
+              promptSource: '',
+              promptHash: '',
+              frames: FILM_FRAME_OPTIONS[0],
+              shot: (shot.explicit ? shot.title : scene.heading.shot || '').slice(0, 400),
+              seed: randomInt(0, 2 ** 31),
+              references: [],
+              sourceRemoved: false,
+              error: '',
+              video: null,
+            };
+          }),
+        );
+        if (incoming.length > FILM_MAX_SCENES) throw fail(`El guión supera ${FILM_MAX_SCENES} planos.`);
         await commit((film) => {
           film.source = {
             projectId: script.ingredient.importedProjectId,
@@ -250,7 +264,7 @@ function createFilmJobs(deps, { infer }) {
       });
     }
 
-    // 2. Prompts: one LLM call per scene that needs it. A failure keeps the rest of the film.
+    // 2. One LLM call per shot that needs a prompt. A failure keeps the rest of the film.
     const screenplay = parseScreenplay(script.project.content);
     const sceneById = new Map(screenplay.scenes.map((scene) => [scene.id, scene]));
     const everything = referenceCandidates(project(), script);
@@ -262,11 +276,13 @@ function createFilmJobs(deps, { infer }) {
       p.scope === 'scene' ? scene.id === p.sceneId : filmSceneNeedsPrompt(scene),
     );
 
-    function referencesFor(source) {
-      const text = [source.heading.text, ...source.blocks.map((block) => block.text)].join('\n');
+    function referencesFor(source, shot) {
+      const speakerIds = new Set(shot.blocks.map((block) => block.speakerId).filter(Boolean));
+      const blocks = [...shot.blocks, ...source.blocks.filter((block) => speakerIds.has(block.id))];
+      const text = [source.heading.text, shot.title, ...blocks.map((block) => block.text)].join('\n');
       const found = [];
       for (const entry of characters) {
-        const byBlock = source.blocks.find(
+        const byBlock = blocks.find(
           (block) => block.type === 'character' && block.characterId === entry.ingredient.importedProjectId,
         );
         const at = byBlock ? 0 : mentions(text, entry.project.name);
@@ -328,11 +344,11 @@ function createFilmJobs(deps, { infer }) {
         description,
       };
     }
-    function blocksOf(source) {
+    function blocksOf(source, shot) {
       const speakers = new Map(
         source.blocks.filter((block) => block.type === 'character').map((block) => [block.id, block]),
       );
-      return source.blocks.map((block) => ({
+      return shot.blocks.map((block) => ({
         type: block.type,
         speaker: block.speakerId ? speakers.get(block.speakerId)?.text : undefined,
         voice: block.type === 'character' ? block.voice : undefined,
@@ -343,25 +359,50 @@ function createFilmJobs(deps, { infer }) {
     const writeScene = async (scene) => {
       const source = sceneById.get(scene.sourceSceneId);
       if (!source) throw fail('La escena ya no existe en el guión.', 409);
+      const shots = screenplayShots(source);
+      const shot = shots.find((item) => item.id === (scene.sourceShotId || scene.sourceSceneId));
+      if (!shot) throw fail('El plano ya no existe en el guión. Actualiza desde el guión.', 409);
+      if (shot.blocks.length > 120 || shot.blocks.some((block) => block.text.length > 1200))
+        throw fail(
+          'Este plano supera el contenido admitido por clip; divídelo en varios planos sin eliminar texto.',
+          422,
+        );
+      const dialogueWords = shot.blocks
+        .filter((block) => block.type === 'dialogue')
+        .reduce((sum, block) => sum + block.text.trim().split(/\s+/).filter(Boolean).length, 0);
+      if (dialogueWords > 23)
+        throw fail(
+          'El diálogo de este plano no cabe en un clip. Divide el plano en el guión; no se recortará su texto.',
+          422,
+        );
+
       await commit((film) => {
         const node = film.scenes.find((item) => item.id === scene.id);
         node.status = 'prompting';
         node.error = '';
         return film;
       });
-      const references = referencesFor(source);
+      const references = referencesFor(source, shot);
       const index = screenplay.scenes.indexOf(source);
-      const previous = index > 0 ? screenplay.scenes[index - 1].heading.text : '';
+      const shotIndex = shots.indexOf(shot);
+      const previous =
+        shotIndex > 0
+          ? shots[shotIndex - 1].title
+          : index > 0
+            ? screenplay.scenes[index - 1].heading.text
+            : '';
       const result = await ctx.step(`film-prompt-${scene.id}`, async () => {
         const model = p.textConfig.functions.chat.model;
         const request = filmSceneRequest({
           film: project().name,
           scene: {
+            id: source.id,
+            shotId: shot.id,
             heading: source.heading.text,
-            shot: source.heading.shot,
+            shot: shot.explicit ? shot.title : source.heading.shot,
             location: source.heading.location,
             time: source.heading.time,
-            blocks: blocksOf(source),
+            blocks: blocksOf(source, shot),
           },
           references,
           previous,
@@ -371,7 +412,7 @@ function createFilmJobs(deps, { infer }) {
           infer(
             {
               model,
-              stage: 'del prompt de la escena',
+              stage: 'del prompt del plano',
               maxTokens: Math.min(p.textConfig.functions.chat.maxCompletionTokens || 3000, 3000),
               messages: [
                 { role: 'system', content: FILM_PROMPT_INSTRUCTION },
@@ -440,7 +481,7 @@ function createFilmJobs(deps, { infer }) {
     }
     ctx.throwIfAborted();
     if (failures.length) {
-      const message = `No se pudo escribir el prompt de ${failures.length} ${failures.length === 1 ? 'escena' : 'escenas'}: ${failures[0].error.message} Las demás se guardaron; reintenta el trabajo.`;
+      const message = `No se pudo escribir el prompt de ${failures.length} ${failures.length === 1 ? 'plano' : 'planos'}: ${failures[0].error.message} Las demás se guardaron; reintenta el trabajo.`;
       throw Object.assign(fail(message, 502), { publicMessage: message });
     }
     return {

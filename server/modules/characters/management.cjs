@@ -546,6 +546,7 @@ function createCharacterManagement({
             characterAssetPrompt(item),
             characterAssetReferences(item, ref),
             true,
+            { promptReady: true },
           );
           item.image = image;
           item.error = '';
@@ -824,6 +825,7 @@ function createCharacterManagement({
             characterAssetPrompt(item),
             characterAssetReferences(item, ref),
             true,
+            { promptReady: true },
           );
           if (item.image) {
             const archivedId = 'asset_' + job.id + '_' + index;

@@ -75,11 +75,6 @@ function createFilmRender(deps, { readImage }) {
       });
     /** The top bar decides: previews run only in Local mode with the video model chosen for this project. */
     const available = () => {
-      if (inference?.currentMode?.() !== 'local')
-        throw fail(
-          'El video del largometraje se genera solo con un modelo local. Cambia a Local en la barra superior.',
-          428,
-        );
       if (inference.currentSettings?.()?.videoModel?.model !== 'minimax-h3')
         throw fail(
           'Elige el modelo de video local en la barra superior para generar las previsualizaciones.',
@@ -133,7 +128,7 @@ function createFilmRender(deps, { readImage }) {
         const project = filmProject(body.projectId);
         const document = parseFilmDocument(project.content);
         const scene = document?.scenes.find((item) => item.id === body.sceneId && !item.sourceRemoved);
-        if (!scene) throw fail('La escena indicada no existe.');
+        if (!scene) throw fail('El plano indicado no existe.');
         if (body.action !== 'redo') {
           if (body.action === 'approve' && !scene.preview)
             throw fail('Esta escena aún no tiene previsualización que aprobar.', 409);
@@ -324,7 +319,7 @@ function createFilmRender(deps, { readImage }) {
         }
       }
       if (failures.length) {
-        const message = `No se completaron ${failures.length} ${failures.length === 1 ? 'escena' : 'escenas'}: ${failures[0].message} Lo demás se guardó; reintenta el trabajo.`;
+        const message = `No se completaron ${failures.length} ${failures.length === 1 ? 'plano' : 'planos'}: ${failures[0].message} Lo demás se guardó; reintenta el trabajo.`;
         throw Object.assign(fail(message, 502), { publicMessage: message });
       }
       return { message: 'Previsualizaciones listas.', previews: made };
