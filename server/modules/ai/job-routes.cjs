@@ -16,6 +16,7 @@ function registerJobRoutes(
     security,
     getLLMConfig,
     inference,
+    writeProject,
   },
 ) {
   const get = (id) => {
@@ -276,6 +277,29 @@ function registerJobRoutes(
       body: snapshot(get(params.jobId), query.projectId || get(params.jobId).projectId),
       headers: { 'Cache-Control': 'no-store' },
     })),
+  );
+  app.post(
+    '/api/jobs/:jobId/undo',
+    endpoint(({ params, body }) => {
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length)
+        throw security.fail('Petición de deshacer inválida.');
+      const job = get(params.jobId);
+      const view = queue.publicJob(job);
+      if (job.kind !== 'edit' || !job.payload?.adapt || !view.undoable)
+        throw security.fail('Esta adaptación ya no se puede deshacer.', 409);
+      const current = readCurrentProject(job.projectId);
+      // Only the screenplay exactly as the adaptation left it is restored; later edits are never overwritten.
+      if (current?.content !== job.state.expectedContent)
+        throw security.fail(
+          'El guión cambió después de la adaptación. No se sobrescribieron tus cambios; recupera una versión desde Versiones.',
+          409,
+        );
+      writeProject(job.projectId, { content: job.state.before }, job.state.expectedContent);
+      job.state.expectedContent = job.state.before;
+      job.state.undone = true;
+      queue.update(job);
+      return { status: 200, body: snapshot(get(params.jobId)) };
+    }),
   );
   app.post(
     '/api/jobs/:jobId/retry',

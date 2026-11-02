@@ -170,6 +170,15 @@ function createJobQueue({
       ...(['book', 'edit'].includes(job.kind)
         ? { progress: job.state.progress || 0, questions: job.state.questions || [] }
         : {}),
+      ...(job.kind === 'edit' && job.payload?.adapt
+        ? {
+            adaptPlan: job.state.adaptPlan || null,
+            undoable:
+              typeof job.state.before === 'string' &&
+              !job.state.undone &&
+              !['queued', 'running'].includes(job.status),
+          }
+        : {}),
       position:
         job.status === 'queued'
           ? [...jobs.values()].filter(

@@ -289,59 +289,146 @@ export class Home {
     else if (button.dataset.action === 'trash') this.showTrash();
     else if (button.dataset.action === 'retry') this.refresh();
   }
-  async showTrash() {
+  async showTrash(selected = new Set()) {
     try {
       const { projects } = await API.getTrash();
       if (this.abort.signal.aborted) return;
+      const ids = new Set(projects.map((project) => project.id));
+      for (const id of selected) if (!ids.has(id)) selected.delete(id);
       const content = document.createElement('div');
+      content.className = 'check-panel';
       const explanation = document.createElement('p');
+      explanation.className = 'check-panel__intro';
       explanation.textContent = projects.length
-        ? 'Estos proyectos conservan sus archivos. Restáuralos para volver a trabajar con ellos.'
+        ? 'Estos proyectos conservan sus archivos. Restáuralos para volver a trabajar con ellos o elimínalos para siempre.'
         : 'La papelera está vacía.';
       content.append(explanation);
-      for (const project of projects) {
-        const row = document.createElement('p');
-        const name = document.createElement('strong');
-        name.textContent = project.name;
-        const button = document.createElement('button');
-        button.className = 'btn btn-secondary';
-        button.textContent = 'Restaurar';
-        button.setAttribute('aria-label', 'Restaurar ' + project.name);
-        button.addEventListener('click', async () => {
-          button.disabled = true;
+      const countLabel = document.createElement('span');
+      const all = document.createElement('input');
+      all.type = 'checkbox';
+      all.id = 'trash-select-all';
+      const boxes = new Map();
+      if (projects.length) {
+        const toolbar = document.createElement('div');
+        toolbar.className = 'check-panel__toolbar';
+        const allLabel = document.createElement('label');
+        allLabel.className = 'check-panel__all';
+        allLabel.htmlFor = all.id;
+        allLabel.append(all, document.createTextNode('Seleccionar todos'));
+        countLabel.className = 'check-panel__count';
+        countLabel.setAttribute('aria-live', 'polite');
+        toolbar.append(allLabel, countLabel);
+        const list = document.createElement('ul');
+        list.className = 'check-panel__list';
+        for (const project of projects) {
+          const item = document.createElement('li');
+          const label = document.createElement('label');
+          label.className = 'check-panel__row';
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = selected.has(project.id);
+          box.setAttribute('aria-label', 'Seleccionar ' + project.name);
+          boxes.set(project.id, box);
+          const text = document.createElement('span');
+          text.className = 'check-panel__text';
+          const name = document.createElement('strong');
+          name.textContent = project.name || 'Sin título';
+          const meta = document.createElement('small');
+          const when = project.deletedAt
+            ? new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+                new Date(project.deletedAt),
+              )
+            : '';
+          meta.textContent = [(types[project.type] || types.all).short, when && 'Eliminado ' + when]
+            .filter(Boolean)
+            .join(' · ');
+          text.append(name, meta);
+          label.append(box, text);
+          item.append(label);
+          list.append(item);
+        }
+        content.append(toolbar, list);
+      }
+      const dialog = Modal.show({
+        title: 'Papelera',
+        content,
+        actions: [
+          { label: 'Restaurar', class: 'btn-secondary btn-md', onClick: () => restore() },
+          { label: 'Eliminar definitivamente', class: 'btn-danger btn-md', onClick: () => purge() },
+        ],
+      });
+      dialog.classList.add('modal-content--check');
+      const [restoreButton, purgeButton] = dialog.querySelectorAll('.modal-footer .btn');
+      const update = () => {
+        const n = selected.size;
+        all.checked = n > 0 && n === projects.length;
+        all.indeterminate = n > 0 && n < projects.length;
+        countLabel.textContent = n ? (n === 1 ? '1 seleccionado' : n + ' seleccionados') : '';
+        restoreButton.textContent = n > 1 ? 'Restaurar (' + n + ')' : 'Restaurar';
+        purgeButton.textContent = n > 1 ? 'Eliminar definitivamente (' + n + ')' : 'Eliminar definitivamente';
+        restoreButton.disabled = purgeButton.disabled = n === 0;
+      };
+      for (const [id, box] of boxes)
+        box.addEventListener('change', () => {
+          box.checked ? selected.add(id) : selected.delete(id);
+          update();
+        });
+      all.addEventListener('change', () => {
+        for (const [id, box] of boxes) {
+          box.checked = all.checked;
+          all.checked ? selected.add(id) : selected.delete(id);
+        }
+        update();
+      });
+      if (!projects.length) dialog.querySelector('.modal-footer').hidden = true;
+      update();
+      const restore = async () => {
+        const chosen = projects.filter((project) => selected.has(project.id));
+        restoreButton.disabled = purgeButton.disabled = true;
+        let failed = 0;
+        for (const project of chosen) {
           try {
             await API.restoreProject(project.id);
-            row.remove();
-            await this.refresh();
-            Toast.show('Proyecto restaurado.', 'success');
-            if (!content.querySelector('button')) explanation.textContent = 'La papelera está vacía.';
-          } catch (error) {
-            button.disabled = false;
-            Toast.show('No se pudo restaurar: ' + error.message, 'error');
+            selected.delete(project.id);
+          } catch {
+            failed++;
           }
-        });
-        const remove = document.createElement('button');
-        remove.className = 'btn btn-danger';
-        remove.textContent = 'Eliminar definitivamente';
-        remove.addEventListener('click', () =>
-          Alert.deleteProject(
-            project.name,
-            () => {},
-            async (phrase, keepProps) => {
+        }
+        await this.refresh();
+        const done = chosen.length - failed;
+        if (done)
+          Toast.show(done === 1 ? 'Proyecto restaurado.' : done + ' proyectos restaurados.', 'success');
+        if (failed) Toast.show('No se pudieron restaurar ' + failed + '.', 'error');
+        await this.showTrash(selected);
+      };
+      const purge = () => {
+        const chosen = projects.filter((project) => selected.has(project.id));
+        Alert.deleteProjects(
+          chosen.map((project) => project.name || 'Sin título'),
+          async (phrase, keepProps) => {
+            Loader.show();
+            let failed = 0;
+            for (const project of chosen) {
               try {
                 await API.deleteProjectFull(project.id, phrase, keepProps);
-                await this.showTrash();
-              } catch (error) {
-                Toast.show('No se pudo eliminar: ' + error.message, 'error');
+                selected.delete(project.id);
+              } catch {
+                failed++;
               }
-            },
-            { character: project.type === 'character', trashed: true },
-          ),
+            }
+            Loader.hide();
+            const done = chosen.length - failed;
+            if (done)
+              Toast.show(done === 1 ? 'Proyecto eliminado.' : done + ' proyectos eliminados.', 'success');
+            if (failed) Toast.show('No se pudieron eliminar ' + failed + '.', 'error');
+            await this.showTrash(selected);
+          },
+          {
+            characters: chosen.filter((project) => project.type === 'character').length,
+            onCancel: () => this.showTrash(selected),
+          },
         );
-        row.append(name, document.createTextNode(' '), button, remove);
-        content.append(row);
-      }
-      Modal.show({ title: 'Papelera', content });
+      };
     } catch (error) {
       Toast.show('No se pudo abrir la papelera: ' + error.message, 'error');
     }

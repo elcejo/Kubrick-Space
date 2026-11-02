@@ -1,5 +1,11 @@
 # Presentación y seguimiento del roadmap
 
+## Versión 0.1.3: guiones largos, formato único de plano y vínculos automáticos — 2 de noviembre de 2026
+
+Nuevo: el asistente adapta un Story Book vinculado a guión por unidades (plan, memoria de continuidad, guardado por ronda, reanudación, Stop y «Deshacer adaptación»), actualiza solo las escenas cuyos párrafos cambiaron y edita guiones muy largos por ventanas. Se retira la entrada de menú «Generar a partir del contexto»: se le pide al asistente.
+
+Nuevo: todo plano tiene siempre su acción y su transición (los guiones anteriores las ganan al abrirse), una escena admite de 1 a 24 planos, los personajes y lugares que escribe el asistente se vinculan por nombre y un personaje que aparece sin hablar queda como presencia silenciosa. Mientras el asistente edita se puede desplazar el documento; vincular un proyecto ofrece incorporar sus ingredientes; la papelera permite restaurar o eliminar varios proyectos a la vez.
+
 ## Versión 0.1.2: Local como proveedor, edición por elementos y más piezas — 1 de noviembre de 2026
 
 Nuevo: se retira el selector API/Local; Local es un proveedor más y siempre aparece primero. Cada proyecto guarda un modo para texto y otro para imágenes. La edición del proyecto abierto por elementos trabaja por rondas, crea los personajes y lugares complementarios con foto y props, vincula los ingredientes y pregunta qué modelo usar para cada imagen; los trabajos son durables y se pueden detener, reanudar y reintentar.

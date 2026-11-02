@@ -1,41 +1,6 @@
 import { Modal } from '../../ui-components.js';
 import { safeContent } from '../../safe-html.js';
 
-/** Data goes in the request content; this instruction never embeds a particular story. */
-export { screenplayUpdateInstruction } from '../../contracts/text-instructions.js';
-
-export function normalizeScreenplayProposal(text, titleHTML) {
-  const raw = String(text || '')
-    .replace(/```(?:html)?/gi, '')
-    .trim();
-  const inspection = new document.defaultView.DOMParser().parseFromString(raw, 'text/html');
-  if (
-    inspection.querySelector(
-      'form,input,select,textarea,button,details,[data-scene-properties],[data-screenplay-controls]',
-    )
-  )
-    throw new Error(
-      'La respuesta incluye formularios ajenos al formato de guión; se conservó el documento actual.',
-    );
-  const parsed = document.createElement('div');
-  parsed.innerHTML = safeContent(raw);
-  parsed.querySelectorAll('h1').forEach((title) => title.remove());
-  if (!parsed.querySelector('h2') || !parsed.textContent.trim())
-    throw new Error('La respuesta no contiene escenas válidas; se conservó el guión actual.');
-  // Unwrap presentation-only containers, but never accept prose outside cinematic blocks.
-  for (const wrapper of [...parsed.querySelectorAll('div')].reverse())
-    wrapper.replaceWith(...wrapper.childNodes);
-  const allowed = new Set(['H2', 'P', 'H3', 'BLOCKQUOTE', 'H4', 'H5', 'H6']);
-  if (
-    [...parsed.childNodes].some((node) =>
-      node.nodeType === 3 ? node.textContent.trim() : node.nodeType === 1 && !allowed.has(node.tagName),
-    ) ||
-    (parsed.firstElementChild && parsed.firstElementChild.tagName !== 'H2')
-  )
-    throw new Error('La respuesta no respeta los bloques cinematográficos; se conservó el guión actual.');
-  return safeContent(titleHTML + parsed.innerHTML);
-}
-
 export function reviewScreenplayProposal({ current, proposed, isCurrent, apply, cleanups }) {
   return new Promise((resolve) => {
     let dialog;

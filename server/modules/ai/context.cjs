@@ -38,11 +38,6 @@ const POLICIES = Object.freeze({
   continuar: { scope: 'book', ingredients: 'all', label: 'Continuar desde el cursor' },
   chat: { scope: 'book', ingredients: 'all', label: 'Asistente del proyecto' },
   generate_character: { scope: 'ingredients', ingredients: 'all', label: 'Crear rasgos de personaje' },
-  screenplay_context: {
-    scope: 'book',
-    ingredients: 'all',
-    label: 'Adaptar el libro vinculado a guión',
-  },
   screenplay_scene: { scope: 'book', ingredients: 'all', label: 'Actualizar una escena cinematográfica' },
   portada_prompt_unificado: {
     scope: 'cover',
@@ -425,11 +420,9 @@ function createContextManager({
       glossary,
       ingredients.length ? 'INGREDIENTES ACTIVOS:\n' + JSON.stringify(ingredients) : '',
       ['book', 'cover'].includes(policy.scope)
-        ? (action === 'screenplay_context'
-            ? 'GUIÓN ACTUAL (conservar todo lo compatible con el libro seleccionado):\n'
-            : snapshot.document?.includes?.('code-kai.screenplay')
-              ? 'GUIÓN DE REFERENCIA (no devolver ni modificar completo):\n'
-              : 'LIBRO DE REFERENCIA (no devolver ni modificar completo):\n') + manuscript
+        ? (snapshot.document?.includes?.('code-kai.screenplay')
+            ? 'GUIÓN DE REFERENCIA (no devolver ni modificar completo):\n'
+            : 'LIBRO DE REFERENCIA (no devolver ni modificar completo):\n') + manuscript
         : '',
       (WRITING_ACTIONS.has(action) || action === 'screenplay_scene') && snapshot.blocks.length
         ? 'FRAGMENTOS PROTEGIDOS: conservar literalmente.\n' + JSON.stringify(snapshot.blocks)

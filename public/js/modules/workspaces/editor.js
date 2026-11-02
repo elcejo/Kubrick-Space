@@ -1002,10 +1002,30 @@ export class Editor {
     return this.getContent();
   }
 
+  /**
+   * While the assistant edits, nothing can be typed or clicked, but the document can still be read: the surface is
+   * the element that scrolls, so it stays live and only what it contains (and the rest of the editor) is inert.
+   */
   setAgentBusy(busy) {
     this.#backgroundBusy = busy;
-    if (this.#node) this.#node.inert = busy;
-    if (this.#surface) this.#surface.inert = busy;
+    const surface = this.#surface;
+    if (this.#node) {
+      this.#node.inert = false;
+      for (const child of this.#node.children) child.inert = busy && child !== surface;
+    }
+    if (!surface) return;
+    surface.inert = false;
+    for (const child of surface.children) child.inert = busy;
+    surface.classList.toggle('editor-surface--agent-busy', busy);
+    // A surface that is itself editable (Story Book) is not typed into while the assistant writes.
+    if (busy && surface.dataset.editableBefore === undefined) {
+      surface.dataset.editableBefore = surface.getAttribute('contenteditable') ?? '';
+      surface.setAttribute('contenteditable', 'false');
+    } else if (!busy && surface.dataset.editableBefore !== undefined) {
+      if (surface.dataset.editableBefore === '') surface.removeAttribute('contenteditable');
+      else surface.setAttribute('contenteditable', surface.dataset.editableBefore);
+      delete surface.dataset.editableBefore;
+    }
   }
 
   acceptBackgroundBook(content, expectedContent, busy, ingredients) {
@@ -2667,10 +2687,6 @@ export class Editor {
     } else {
       const category = AppState.currentProject?.category;
       if (projectType === 'book' && category === 'screenplay') {
-        const genScreenplayBtn = addItem('Generar a partir del contexto', '🎬', () =>
-          this.#generateScreenplayFromContext(),
-        );
-        menu.appendChild(genScreenplayBtn);
         menu.appendChild(
           addItem('Actualizar esta escena con IA', 'refresh', () => this.#updateScreenplayScene()),
         );
@@ -2778,10 +2794,6 @@ export class Editor {
 
   async #updateScreenplayScene(...args) {
     return this.#screenplayWorkflow.updateScreenplayScene(...args);
-  }
-
-  async #generateScreenplayFromContext(...args) {
-    return this.#screenplayWorkflow.generateScreenplayFromContext(...args);
   }
 
   #handleContextMenu(e) {

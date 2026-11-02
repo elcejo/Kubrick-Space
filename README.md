@@ -162,6 +162,16 @@ custom node package (`kubrick_space`). Icons, fonts and the interface are origin
 
 ## Roadmap
 
+**Done in 0.1.3**
+
+* **Screenplays of any length.** Ask the assistant to generate the screenplay from the linked Story Book (the menu entry was removed). It works unit by unit: it plans the book first, adapts each unit with a continuity memory, saves after every round, can be stopped and resumed, and shows the plan, the progress and an **Undo adaptation** button. A screenplay with scenes already written from the book can be **updated** when the book changes: only the scenes whose paragraphs changed are rewritten and new text is added in place. Very long screenplays are edited through a window (the outline of every scene plus the scenes in focus) instead of being sent whole
+* **One shot format.** Every shot always has its action and its transition (empty when there is nothing to write); older screenplays gain them when opened, without touching what was written. A scene holds 1 to 24 shots and the model is told that every scene needs at least one
+* **Characters and places are linked by name.** What the assistant writes as "Marta" or a linked place is tied to the ingredient with that name; ambiguous names are never guessed. A character on screen without speaking is recorded as a **silent presence** (an acotación and no line), so it stays linked to the shot and is used as a reference for the film
+* **Read while the assistant edits.** The document can be scrolled while it is being edited (it stays locked for typing)
+* **Related ingredients.** Linking a project as an ingredient offers the ingredients of that project that the receiving project lacks, all selected, so a screenplay can bring in the characters and places of its book in one step
+* **Project trash.** Select several projects (or all) and restore them or delete them permanently with a single confirmation, in a redesigned dialog
+* Stricter checks of what the model proposes (framing names, durations, intervention rules) with precise messages, and a request without a chosen model is refused instead of using a default one
+
 **Done in 0.1.2**
 
 * **Local is a provider, not a mode.** The API/Local switch is gone: LLM, image and video lists show Local first, next to the cloud providers. Each project keeps one setting for text and another for images, so an OpenRouter LLM can write while FLUX 3 Klein draws locally (or the other way round). Film previews depend only on the local video model

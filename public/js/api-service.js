@@ -285,6 +285,10 @@ export const API = Object.freeze({
       { method: 'POST', body: '{}' },
     );
   },
+  /** Restore the screenplay as it was before an adaptation, while nothing else has touched it. */
+  undoAdaptation(id) {
+    return _fetch(`${BASE_URL}/jobs/${encodeURIComponent(id)}/undo`, { method: 'POST', body: '{}' });
+  },
   chooseCharacterJob(id, choice) {
     return _fetch(`${BASE_URL}/jobs/${encodeURIComponent(id)}/choice`, {
       method: 'POST',

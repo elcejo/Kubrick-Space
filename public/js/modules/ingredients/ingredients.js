@@ -23,6 +23,8 @@ import {
   ingredientPreviewText,
 } from './ingredient-versions.js';
 import { chooseIngredientVersion, confirmIngredientUpdates } from './ingredient-version-dialogs.js';
+import { relatedIngredients } from './ingredient-related.js';
+import { reviewRelatedIngredients } from './ingredient-related-dialog.js';
 
 /** Owns ingredientsPanel DOM and lifecycle; context is the explicit editor integration contract. */
 export class EditorIngredients {
@@ -104,9 +106,74 @@ export class EditorIngredients {
       JSON.stringify(ingredient) !== before
     )
       return false;
+    const newLink = !ingredient.importedProjectId;
     this.applySource(ingredient, source);
     this.commitIngredients();
+    if (newLink && choose) await this.offerRelated(source);
     return true;
+  }
+
+  /**
+   * After a project is linked: the ingredients it has that this project lacks are offered, all selected, and the
+   * ones kept are linked at their latest saved version. One level only: what is added does not offer more.
+   */
+  async offerRelated(source) {
+    try {
+      const items = relatedIngredients(source, this.context.ingredients, this.context.projectId);
+      if (!items.length || !this.isCurrent()) return;
+      const alive = [];
+      for (const item of items) {
+        try {
+          const project = await API.getProject(item.id);
+          if (project && !project.deletedAt) alive.push(item);
+        } catch {
+          /* A project that no longer exists is not offered. */
+        }
+      }
+      if (!alive.length || !this.isCurrent()) return;
+      const chosen = await reviewRelatedIngredients({
+        sourceName: source.project.name || 'El proyecto vinculado',
+        targetName: AppState.currentProject?.name || 'este proyecto',
+        items: alive,
+        cleanups: this.dialogCleanups,
+      });
+      if (!chosen.length || !this.isCurrent()) return;
+      let added = 0;
+      for (const id of chosen) {
+        if (this.context.ingredients.some((ingredient) => ingredient.importedProjectId === id)) continue;
+        const catalogue = await loadIngredientVersions(API, id);
+        if (!this.isCurrent()) return;
+        const related = await readIngredientVersion(API, catalogue, null);
+        if (
+          !this.isCurrent() ||
+          this.context.ingredients.some((ingredient) => ingredient.importedProjectId === id)
+        )
+          continue;
+        const type = related.project.type || alive.find((item) => item.id === id)?.type;
+        const ingredient = {
+          type,
+          label: '',
+          icon: type,
+          value: '',
+          active: true,
+          ...this.generateUniqueGradient(),
+        };
+        this.applySource(ingredient, related);
+        this.versionCatalogues.set(id, catalogue);
+        this.context.ingredients.push(ingredient);
+        added++;
+      }
+      if (added) {
+        this.commitIngredients();
+        Toast.show(
+          added === 1 ? '1 ingrediente incorporado.' : added + ' ingredientes incorporados.',
+          'success',
+        );
+      }
+    } catch (error) {
+      if (this.isCurrent())
+        Toast.show('No se pudieron incorporar los ingredientes: ' + error.message, 'error');
+    }
   }
 
   createVersionSelector(ingredient) {
@@ -664,6 +731,8 @@ export class EditorIngredients {
       this.commitIngredients();
       if (!deferToast)
         Toast.show('Ingrediente «' + (name || source.project.name) + '» vinculado.', 'success');
+      // The linking is complete before the question: a refused or ignored offer changes nothing.
+      if (!deferToast) await this.offerRelated(source);
       return true;
     } catch (error) {
       if (this.isCurrent()) Toast.show('Error al vincular ingrediente: ' + error.message, 'error');

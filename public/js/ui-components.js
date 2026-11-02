@@ -572,6 +572,78 @@ export const Alert = {
     inputEl.addEventListener('input', validate);
     checkboxEl.addEventListener('change', validate);
   },
+
+  /**
+   * One typed confirmation for permanently deleting several trashed projects at once.
+   *
+   * @param {string[]} names
+   * @param {Function} onDeleteFull — called with the typed phrase and the keepProps choice
+   * @param {{characters?: number, onCancel?: Function}} [opts]
+   */
+  deleteProjects(names, onDeleteFull, { characters = 0, onCancel } = {}) {
+    const CONFIRM_PHRASE = 'eliminar proyecto completo';
+    const content = document.createElement('div');
+    content.className = 'alert-delete-project';
+    content.innerHTML = safeHTML(`
+      <p>Se eliminarán <strong>${names.length === 1 ? '1 proyecto' : names.length + ' proyectos'}</strong> y todos sus archivos.</p>
+      <ul class="alert-delete-project__names">${names.map((name) => `<li>${escapeHTML(name)}</li>`).join('')}</ul>
+      <div class="alert-full-confirm">
+        ${characters ? '<label class="checkbox-label"><input type="checkbox" id="alert-keep-props" checked /><span>Conservar rasgos, ropa y props de los personajes en la biblioteca universal.</span></label>' : ''}
+        <label class="input-label">
+          <span>Escribe <code>${CONFIRM_PHRASE}</code> para confirmar:</span>
+          <input type="text" id="alert-del-input" class="input alert-full-confirm__input" autocomplete="off" spellcheck="false" />
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="alert-del-checkbox" />
+          <span>Entiendo que los archivos se eliminarán para siempre y no se podrán recuperar.</span>
+        </label>
+      </div>
+    `);
+    const inputEl = content.querySelector('#alert-del-input');
+    const checkboxEl = content.querySelector('#alert-del-checkbox');
+    const isConfirmed = () => inputEl.value.trim().toLowerCase() === CONFIRM_PHRASE && checkboxEl.checked;
+    let settled = false;
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      onCancel?.();
+    };
+    const dialog = Modal.show({
+      title: 'Eliminar definitivamente',
+      content,
+      role: 'alertdialog',
+      onDismiss: cancel,
+      initialFocus: '#alert-del-input',
+      actions: [
+        {
+          label: 'Cancelar',
+          class: 'btn-secondary btn-md',
+          onClick: () => {
+            Modal.hide();
+            cancel();
+          },
+        },
+        {
+          label: 'Eliminar para siempre',
+          class: 'btn-danger btn-md',
+          onClick: () => {
+            if (!isConfirmed() || settled) return;
+            settled = true;
+            Modal.hide();
+            onDeleteFull(inputEl.value.trim(), content.querySelector('#alert-keep-props')?.checked ?? true);
+          },
+        },
+      ],
+    });
+    dialog.classList.add('modal-content--delete-project');
+    const confirmBtn = dialog.querySelector('.modal-footer .btn-danger');
+    confirmBtn.disabled = true;
+    const validate = () => {
+      confirmBtn.disabled = !isConfirmed();
+    };
+    inputEl.addEventListener('input', validate);
+    checkboxEl.addEventListener('change', validate);
+  },
 };
 
 /* ═══════════════════════════════════════════════
@@ -644,6 +716,43 @@ export const Loader = {
 
     requestAnimationFrame(() => overlay.classList.add('visible'));
     Loader._el = overlay;
+  },
+
+  /**
+   * Show progress text under the loader and, optionally, a cancel button under that text.
+   * Safe to call repeatedly: later calls only change the text.
+   *
+   * @param {{message?: string, onCancel?: Function, cancelLabel?: string}} [opts]
+   */
+  update({ message, onCancel, cancelLabel = 'Cancelar' } = {}) {
+    const overlay = Loader._el;
+    if (!overlay) return;
+    let status = overlay.querySelector('.loader-status');
+    if (!status) {
+      status = document.createElement('p');
+      status.className = 'loader-status';
+      status.setAttribute('role', 'status');
+      status.setAttribute('aria-live', 'polite');
+      overlay.append(status);
+    }
+    if (message !== undefined) status.textContent = message;
+    if (onCancel && !overlay.querySelector('.loader-cancel')) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-secondary btn-md loader-cancel';
+      button.textContent = cancelLabel;
+      button.addEventListener(
+        'click',
+        () => {
+          button.disabled = true;
+          button.textContent = 'Cancelando…';
+          onCancel();
+        },
+        { once: true },
+      );
+      overlay.append(button);
+      button.focus();
+    }
   },
 
   /**

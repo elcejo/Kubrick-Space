@@ -164,9 +164,12 @@ export function validateScreenplayDocument(input, cleanInline = (html) => html) 
     if (scene.origins !== undefined) {
       if (!Array.isArray(scene.origins) || scene.origins.length > 20) error('fuentes de escena');
       for (const origin of scene.origins) {
-        object(origin, ['projectId', 'source', 'versionId', 'versionNumber', 'elementIds']);
+        object(origin, ['projectId', 'source', 'versionId', 'versionNumber', 'elementIds', 'sourceHash']);
         if (!reference.test(origin.projectId) || !['version', 'draft', 'legacy'].includes(origin.source))
           error('fuente de escena');
+        // Fingerprint of the source paragraphs when the scene was written: it tells an update what changed.
+        if (origin.sourceHash !== undefined && !/^[0-9a-f]{16,64}$/.test(origin.sourceHash))
+          error('huella de origen');
         if (
           origin.source === 'version' &&
           (!reference.test(origin.versionId) ||
@@ -380,7 +383,33 @@ export function upgradeScreenplayDocument(input, cleanInline = (html) => html) {
       }
       withParentheticals.push(block);
     }
-    scene.blocks = withParentheticals;
+    // Every shot carries the same fields: its action first and its transition last, empty when nothing was written.
+    // Screenplays made before those fields existed gain them here; text, order and identities are never touched.
+    const withFields = [];
+    let at = 0;
+    while (at < withParentheticals.length) {
+      const marker = withParentheticals[at++];
+      const fields = [];
+      while (at < withParentheticals.length && withParentheticals[at].type !== 'shot')
+        fields.push(withParentheticals[at++]);
+      withFields.push(marker);
+      if (!fields.some((block) => block.type === 'action'))
+        withFields.push({
+          id: allocate(legacyShotMarker(scene.id) + '-accion'),
+          type: 'action',
+          text: '',
+          html: '',
+        });
+      withFields.push(...fields);
+      if (!fields.some((block) => block.type === 'transition'))
+        withFields.push({
+          id: allocate(legacyShotMarker(scene.id) + '-transicion'),
+          type: 'transition',
+          text: '',
+          html: '',
+        });
+    }
+    scene.blocks = withFields;
   }
   return validateScreenplayDocument(doc, cleanInline);
 }

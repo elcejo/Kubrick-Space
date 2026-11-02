@@ -22,6 +22,7 @@ const { registerJobRoutes } = require('./job-routes.cjs');
 const { createBookAgent } = require('./book-agent.cjs');
 const { validateImageEngine } = require('../../../public/js/contracts/project-inference.js');
 const { createElementAgent } = require('./element-agent.cjs');
+const { createScreenplayAdapter, adaptationRequest } = require('./screenplay-adapter.cjs');
 const { createNarrativeResources } = require('./narrative-resources.cjs');
 const { createCoverJobs } = require('./cover-job.cjs');
 const { createScenarioJobs } = require('../scenarios/index.cjs');
@@ -218,6 +219,8 @@ module.exports = function registerAIRoutes(app, dependencies) {
     updateResourceNarrative: narrativeResources.narrative,
     requireResourceModel: true,
   });
+  // Adapting a linked book to a screenplay runs in bounded rounds of its own (CK-SCRIPT-018).
+  const screenplayAdapter = createScreenplayAdapter({ ...dependencies, infer: bookInfer });
   const coverJobs = createCoverJobs(dependencies, (config, ctx) =>
     createAIOperations({
       ...dependencies,
@@ -253,7 +256,9 @@ module.exports = function registerAIRoutes(app, dependencies) {
             : job.kind === 'book'
               ? bookAgent.run(job, context)
               : job.kind === 'edit'
-                ? elementAgent.run(job, context)
+                ? job.payload.adapt
+                  ? screenplayAdapter.run(job, context)
+                  : elementAgent.run(job, context)
                 : workflow.run(job, context);
   // Props of a new character are rendered after the book job, in their own task; the book never waits for them.
   const queueNewCharacterProps = (job) => {
@@ -405,7 +410,13 @@ module.exports = function registerAIRoutes(app, dependencies) {
             body.context.some((text) => typeof text !== 'string' || text.length > 1500)))
       )
         throw dependencies.security.fail('Solicitud de libro inválida.');
-      const { project } = elementAgent.read(body.projectId);
+      const { project, document, kind } = elementAgent.read(body.projectId);
+      const adapt =
+        kind === 'screenplay' &&
+        (project.ingredients || []).some(
+          (item) => item.type === 'book' && item.active !== false && item.importedProjectId,
+        ) &&
+        adaptationRequest(body.request, document);
       return {
         status: 202,
         body: {
@@ -414,6 +425,7 @@ module.exports = function registerAIRoutes(app, dependencies) {
             kind: 'edit',
             token: body.token,
             payload: {
+              ...(adapt ? { adapt: true } : {}),
               request: body.request,
               context: body.context || [],
               textConfig: dependencies.getLLMConfig(),

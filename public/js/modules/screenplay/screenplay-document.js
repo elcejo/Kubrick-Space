@@ -255,7 +255,8 @@ export function prepareScreenplayAdaptation(html, previousContent, scenarios = [
     if (selected) scene.locationId = selected.id;
     else delete scene.locationId;
   }
-  return validateScreenplayDocument(doc, safeContent);
+  // Same canonical layout as a script opened in the editor: every speech gets its acotación slot.
+  return upgradeScreenplayDocument(doc, safeContent);
 }
 
 /** Render the validated portable document as an editable HTML projection. */

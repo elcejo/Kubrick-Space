@@ -86,10 +86,7 @@ export function createAIContextClient(request) {
           { ...compact, contextSessionId: session.sessionId, contextVersion: session.contextVersion },
           transport,
         );
-        if (
-          writing.has(payload.action) ||
-          ['screenplay_context', 'screenplay_scene'].includes(payload.action)
-        ) {
+        if (writing.has(payload.action) || payload.action === 'screenplay_scene') {
           const current = provider === originProvider ? provider?.() : null;
           if (
             current?.projectId !== projectId ||

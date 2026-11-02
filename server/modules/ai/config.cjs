@@ -5,7 +5,6 @@ const {
   textContinuationPrompt,
   TEXT_EDIT_PROMPT,
   TEXT_CHAT_PROMPT,
-  screenplayUpdateInstruction,
   coverArtInstruction,
 } = require('../../../public/js/contracts/text-instructions.js');
 const fs = require('node:fs');
@@ -66,7 +65,6 @@ const PROMPT_SOURCES = Object.freeze({
   character_asset_direction: 'public/js/contracts/character-instructions.js#CHARACTER_ASSET_DIRECTION_PROMPT',
   character_composition: 'public/js/contracts/character-instructions.js#CHARACTER_REVIEW_PROMPT',
   character_lore: 'public/js/contracts/character-instructions.js#CHARACTER_LORE_PROMPT',
-  screenplay_context: 'public/js/contracts/text-instructions.js#screenplayUpdateInstruction',
   screenplay_scene:
     'server/modules/ai/context.cjs#prepare + public/js/contracts/text-instructions.js#TEXT_EDIT_PROMPT',
   portada_prompt_unificado: 'public/js/contracts/text-instructions.js#coverArtInstruction',
@@ -180,15 +178,6 @@ const PROMPT_DEFINITIONS = Object.freeze([
     defaultPrompt: CHARACTER_LORE_PROMPT,
   },
   {
-    id: 'screenplay_context',
-    label: 'Adaptar a guión',
-    usage:
-      'Editor de un proyecto Guión → Generar guión desde el contexto. Usa el ingrediente Story-book activo y los demás ingredientes como referencia.',
-    status: 'active-dynamic',
-    timeoutKey: 'screenplay',
-    defaultPrompt: screenplayUpdateInstruction(),
-  },
-  {
     id: 'screenplay_scene',
     label: 'Actualizar escena de guión',
     usage:
@@ -241,8 +230,6 @@ const CONTEXT_DESCRIPTIONS = Object.freeze({
   chat: 'Se agregan el proyecto activo, su contexto narrativo, ingredientes y la conversación reciente como mensajes dinámicos. El system prompt no contiene por sí solo esos datos.',
   generate_character:
     'Se agrega la ficha JSON activa y la petición; en el modo Desde ingredientes se incluyen referencias activas. El contrato de herramientas y su validación se aplican siempre, incluso si se personaliza este prompt.',
-  screenplay_context:
-    'El editor construye dinámicamente la adaptación: el Story-book vinculado, ingredientes activos, reglas de formato y opciones del flujo se envían como contexto de usuario.',
   screenplay_scene:
     'Se agrega el guión como referencia, los ingredientes en sus versiones elegidas y la escena objetivo con identificador. La salida JSON tipada solo puede actualizar esa escena y requiere revisión antes de aplicarse.',
   portada_prompt_unificado:

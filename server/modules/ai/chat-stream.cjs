@@ -89,6 +89,9 @@ async function streamChat(
         code: 'AI_STREAM_INTERRUPTED',
       });
     if (finishReason === 'length' || finishReason === 'content_filter' || finishReason === 'error') {
+      console.error(
+        JSON.stringify({ type: 'AI_TEXT_INCOMPLETE', model, finishReason, usage, characters: text.length }),
+      );
       throw Object.assign(new Error('El proveedor devolvió una respuesta incompleta.'), {
         code: 'AI_RESPONSE_TRUNCATED',
       });
@@ -97,6 +100,7 @@ async function streamChat(
       throw Object.assign(new Error('El proveedor no devolvió texto utilizable.'), {
         code: 'AI_EMPTY_RESPONSE',
       });
+    console.log(JSON.stringify({ type: 'AI_TEXT_RESPONSE', stream: true, model, finishReason, usage }));
     await send('done', { text, debug: { ...debug, model, finishReason, usage } });
   } catch (error) {
     if (res.destroyed) return;

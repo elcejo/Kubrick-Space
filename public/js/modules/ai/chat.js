@@ -2,6 +2,7 @@ import { renderIcon } from '../../icons.js';
 import { safeHTML, safeContent } from '../../safe-html.js';
 import { markdownToHTML } from './chat-markdown.js';
 import { parseAgentResponse, createReplyAnimator, storyBookIntent } from './chat-response.js';
+import { adaptationPlanMessage, adaptationDoneMessage } from './adaptation-messages.js';
 /**
  * @module chat
  * @description Collapsible right-side chat panel. Gathers editor context (content,
@@ -1260,7 +1261,7 @@ export class Chat {
     progress.value = 0;
     progress.setAttribute('aria-label', 'Avance estimado del proyecto');
     loader.append(label, progress);
-    let expected, response;
+    let expected, response, planShown;
     const questions = new Set();
     try {
       if (!existingId) await EventBus.emitAsync('autosave:flush');
@@ -1279,6 +1280,10 @@ export class Chat {
         expected = await this.#acceptBookJob(response, expected);
         progress.value = response.job.progress || 0;
         label.textContent = `${response.job.message} · ${progress.value}% estimado`;
+        if (response.job.adaptPlan && !planShown) {
+          planShown = true;
+          this.#addMessage('ai', adaptationPlanMessage(response.job.adaptPlan));
+        }
         for (const question of response.job.questions || [])
           if (!questions.has(question)) {
             questions.add(question);
@@ -1311,10 +1316,13 @@ export class Chat {
         if (!['queued', 'running'].includes(response.job.status)) {
           this.#addMessage(
             'ai',
-            response.job.status === 'completed'
-              ? `Proyecto editado y revisado.${response.job.result?.words ? ' ' + response.job.result.words + ' palabras guardadas en el borrador.' : ''}${(response.job.result?.warnings || []).map((warning) => '\n• ' + warning).join('')}`
-              : response.job.error || 'Trabajo detenido. Lo guardado se conserva.',
+            response.job.status === 'completed' && response.job.result?.adapt
+              ? adaptationDoneMessage(response.job)
+              : response.job.status === 'completed'
+                ? `Proyecto editado y revisado.${response.job.result?.words ? ' ' + response.job.result.words + ' palabras guardadas en el borrador.' : ''}${(response.job.result?.warnings || []).map((warning) => '\n• ' + warning).join('')}`
+                : response.job.error || 'Trabajo detenido. Lo guardado se conserva.',
           );
+          if (response.job.undoable) this.#offerUndo(response.job.id, expected);
           break;
         }
         await new Promise((resolve) => {
@@ -1337,6 +1345,30 @@ export class Chat {
       if (this.#sendBtn) this.#sendBtn.textContent = 'Enviar';
       if (this.#input) this.#input.placeholder = 'Pide una idea, una revisión o el siguiente paso…';
     }
+  }
+
+  /** After an adaptation: one button that puts the screenplay back as it was, if nothing else changed it. */
+  #offerUndo(jobId, expected) {
+    const undo = document.createElement('button');
+    undo.type = 'button';
+    undo.className = 'btn btn-secondary btn-md chat-undo-adaptation';
+    undo.textContent = 'Deshacer adaptación';
+    const projectId = AppState.currentProject?.id;
+    undo.addEventListener('click', async () => {
+      undo.disabled = true;
+      try {
+        const response = await API.undoAdaptation(jobId);
+        if (AppState.currentProject?.id === projectId)
+          await this.#acceptBookJob(response, this.#getEditorContext().document || expected);
+        undo.remove();
+        this.#addMessage('ai', 'Adaptación deshecha: el guión volvió a su estado anterior.');
+      } catch (error) {
+        undo.disabled = false;
+        this.#addMessage('ai', error.message);
+      }
+    });
+    this.#messageList.append(undo);
+    this.#scrollToBottom();
   }
 
   #createLiveReply(controller, loader, projectId) {

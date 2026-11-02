@@ -146,9 +146,9 @@ export function storyBookIntent(source) {
   )
     return 'chat';
   const act =
-    /\b(?:escrib(?:e|elo|ela|ir|as)|redact(?:a|alo|ala|ar|es)|cre(?:a|alo|ala|ar|es)|haz(?:lo|la)?|modific(?:a|alo|ala|ar|as|ues)|edit(?:a|alo|ala|ar|es)|reescrib(?:e|elo|ela|ir|as)|ampli(?:a|alo|ala|ar|es)|expand(?:e|elo|ela|ir|as)|alarg(?:a|alo|ala|ar|ues)|desarroll(?:a|alo|ala|ar|es)|complet(?:a|alo|ala|ar|es)|continu(?:a|alo|ala|ar|es)|cambi(?:a|alo|ala|ar|es)|corrig(?:e|elo|ela|es)|corrijas|elimin(?:a|alo|ala|ar|es)|anad(?:e|elo|ela|ir|as)|agreg(?:a|alo|ala|ar|ues)|sigue)\b/.test(
+    /\b(?:escrib(?:e|elo|ela|ir|as)|redact(?:a|alo|ala|ar|es)|cre(?:a|alo|ala|ar|es)|haz(?:lo|la)?|modific(?:a|alo|ala|ar|as|ues)|edit(?:a|alo|ala|ar|es)|reescrib(?:e|elo|ela|ir|as)|ampli(?:a|alo|ala|ar|es)|expand(?:e|elo|ela|ir|as)|alarg(?:a|alo|ala|ar|ues)|desarroll(?:a|alo|ala|ar|es)|complet(?:a|alo|ala|ar|es)|continu(?:a|alo|ala|ar|es)|cambi(?:a|alo|ala|ar|es)|corrig(?:e|elo|ela|es)|corrijas|elimin(?:a|alo|ala|ar|es)|anad(?:e|elo|ela|ir|as)|agreg(?:a|alo|ala|ar|ues)|sigue|actualiz(?:a|alo|ala|ar|es)|sincroniz(?:a|alo|ala|ar|es)|adapt(?:a|alo|ala|ar|es)|convierte(?:lo|la)?|convertir|transform(?:a|alo|ala|ar|es)|haz(?:me)?)\b/.test(
       text,
-    );
+    ) || /\bgener(?:a|alo|ala|ame|ar|es)\b[\s\S]*\b(?:guion|escenas?|planos?)\b/.test(text);
   const implied =
     /\bquiero\s+(?:(?:una?|que)\s+)?(?:historia|relato|libro|novela|reescritura|ampliacion)\b|\bhazlo\b/.test(
       text,

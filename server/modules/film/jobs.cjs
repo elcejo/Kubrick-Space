@@ -348,12 +348,15 @@ function createFilmJobs(deps, { infer }) {
       const speakers = new Map(
         source.blocks.filter((block) => block.type === 'character').map((block) => [block.id, block]),
       );
-      return shot.blocks.map((block) => ({
-        type: block.type,
-        speaker: block.speakerId ? speakers.get(block.speakerId)?.text : undefined,
-        voice: block.type === 'character' ? block.voice : undefined,
-        text: block.text,
-      }));
+      // A silent presence has no line: only its character and its acotación reach the prompt.
+      return shot.blocks
+        .filter((block) => block.type !== 'dialogue' || block.text.trim())
+        .map((block) => ({
+          type: block.type,
+          speaker: block.speakerId ? speakers.get(block.speakerId)?.text : undefined,
+          voice: block.type === 'character' ? block.voice : undefined,
+          text: block.text,
+        }));
     }
 
     const writeScene = async (scene) => {

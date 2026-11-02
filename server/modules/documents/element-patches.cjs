@@ -62,8 +62,11 @@ function speech(value = {}) {
     { ...block('dialogue', value.text || ''), speakerId: speaker.id },
   ];
 }
+/** A scene holds one to this many shots; a longer action continues in another scene of the same place and time. */
+const MAX_SHOTS_PER_SCENE = 24;
 function shot(value = {}) {
-  if (value.type && !SCREENPLAY_SHOTS.includes(value.type)) fail('Tipo de plano inválido.');
+  if (value.type && !SCREENPLAY_SHOTS.includes(value.type))
+    fail('Tipo de plano inválido: usa exactamente uno de ' + SCREENPLAY_SHOTS.join(', ') + '.');
   const seconds = value.seconds ?? 8;
   if (typeof seconds !== 'number' || seconds < 1 || seconds > 10 || (seconds * 2) % 1)
     fail('La duración debe estar entre 1 y 10 segundos en pasos de 0,5.');
@@ -72,7 +75,8 @@ function shot(value = {}) {
     `PLANO 1 — ${value.type || 'Plano general'}; ${txt(value.camera || '', 1000)}; ${seconds}s`,
   );
   const dialogues = value.dialogues === undefined ? [{}] : value.dialogues;
-  if (!Array.isArray(dialogues) || dialogues.length > 8) fail('Diálogos inválidos.');
+  if (!Array.isArray(dialogues)) fail('dialogues debe ser una lista (vacía si el plano no tiene diálogo).');
+  if (dialogues.length > 8) fail('Un plano admite hasta 8 intervenciones; reparte el diálogo en más planos.');
   return [
     marker,
     block('action', value.action || ''),
@@ -86,14 +90,70 @@ function scene(value = {}) {
     time = txt(value.time || '', 1000);
   const text = `${ie}. ${location} - ${time}`;
   const shots = value.shots || [{}];
-  if (!Array.isArray(shots) || !shots.length || shots.length > 6)
-    fail('La escena necesita al menos un plano.');
+  if (!Array.isArray(shots) || !shots.length)
+    fail('La escena necesita al menos un plano: shots debe ser una lista con uno o más planos.');
+  if (shots.length > MAX_SHOTS_PER_SCENE)
+    fail(
+      'Una escena admite hasta ' +
+        MAX_SHOTS_PER_SCENE +
+        ' planos; continúa la acción en otra escena del mismo lugar y momento.',
+    );
   return {
     id: 'scene-' + randomUUID(),
     heading: { text, html: escape(text), interiorExterior: ie, location, time },
     blocks: shots.flatMap(shot),
     ...(value.locationId ? { locationId: value.locationId } : {}),
   };
+}
+/** A name as people compare it: no accents, case, punctuation or trailing (V.O.). */
+const plainName = (value) =>
+  String(value || '')
+    .replace(/\([^)]*\)\s*$/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+/** The one linked project a written name stands for: the full name, or a part of it nobody else shares. */
+function linkedByName(name, candidates, { partial = true } = {}) {
+  const wanted = plainName(name);
+  if (!wanted) return null;
+  const exact = candidates.filter((item) => plainName(item.name) === wanted);
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  if (!partial) return null;
+  const words = wanted.split(' ');
+  const near = candidates.filter((item) => {
+    const own = plainName(item.name).split(' ');
+    return words.every((word) => own.includes(word)) || own.every((word) => words.includes(word));
+  });
+  return near.length === 1 ? near[0] : null;
+}
+/**
+ * What the model writes as "Marta" or "Café Central" is the linked character or place of that name. Only what this
+ * patch created is touched: a choice the author made by hand (a custom name, another link) is never rewritten.
+ */
+function linkNewByName(doc, ingredients, existing) {
+  const linked = (type) =>
+    (ingredients || [])
+      .filter((item) => item.type === type && item.active !== false && item.importedProjectId)
+      .map((item) => ({ id: item.importedProjectId, name: item.importedProjectName || item.label || '' }));
+  const characters = linked('character');
+  const places = linked('stage');
+  for (const scene of doc.scenes) {
+    if (!existing.has(scene.id) && !scene.locationId) {
+      const place = linkedByName(scene.heading.location, places, { partial: false });
+      if (place) scene.locationId = place.id;
+    }
+    for (const block of scene.blocks) {
+      if (block.type !== 'character' || existing.has(block.id) || block.characterId) continue;
+      const person = linkedByName(block.text, characters);
+      if (!person) continue;
+      block.characterId = person.id;
+      block.text = person.name;
+      block.html = escape(person.name);
+    }
+  }
 }
 function assertLinks(doc, ingredients) {
   const links = new Set(
@@ -107,8 +167,12 @@ function assertLinks(doc, ingredients) {
         fail('Vincula el personaje como ingrediente antes de asignarlo.');
   }
 }
-function applyElementPatch(project, document, operations) {
-  if (!Array.isArray(operations) || operations.length > 8 || JSON.stringify(operations).length > 24000)
+function applyElementPatch(project, document, operations, { maxOperations = 8, maxCharacters = 24000 } = {}) {
+  if (
+    !Array.isArray(operations) ||
+    operations.length > maxOperations ||
+    JSON.stringify(operations).length > maxCharacters
+  )
     fail('Lote de edición demasiado grande.');
   let next = structuredClone(document);
   const screenplay = project.category === 'screenplay';
@@ -334,6 +398,11 @@ function applyElementPatch(project, document, operations) {
           b.html = escape(b.text);
         }
     });
+    linkNewByName(
+      next,
+      project.ingredients,
+      new Set(document.scenes.flatMap((scene) => [scene.id, ...scene.blocks.map((block) => block.id)])),
+    );
     // Preserve existing links; validate only newly assigned project references.
     const oldLinks = new Set(
       document.scenes.flatMap((s) => [s.locationId, ...s.blocks.map((b) => b.characterId)]).filter(Boolean),
@@ -348,4 +417,7 @@ function applyElementPatch(project, document, operations) {
   if (project.type === 'video') return validateFilmDocument(next);
   return next;
 }
-module.exports = { applyElementPatch };
+module.exports = {
+  linkedByName,
+  applyElementPatch,
+};

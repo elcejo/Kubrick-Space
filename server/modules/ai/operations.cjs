@@ -10,7 +10,6 @@ const COVER_TEXT_ACTIONS = new Set(['portada_prompt_unificado']);
 const LUNA_FAST_MODEL = 'openai/gpt-5.6-luna';
 const LUNA_PRO_MODEL = 'openai/gpt-5.6-luna-pro';
 const FAST_TEXT_ACTIONS = new Set(['corregir', 'chat']);
-
 // Landscape requests (scenario panoramas and views) must never fall back to a portrait frame.
 const LANDSCAPE_RATIOS = ['2:1', '21:9', '16:9', '3:2', '4:3'];
 const isLandscape = (ratio) => LANDSCAPE_RATIOS.includes(ratio);
@@ -245,6 +244,15 @@ function createAIOperations(dependencies) {
         }
 
         const choice = result.data.choices?.[0];
+        console.log(
+          JSON.stringify({
+            type: 'AI_TEXT_RESPONSE',
+            action,
+            model: result.data.model || model,
+            finishReason: choice?.finish_reason || null,
+            usage: result.data.usage || null,
+          }),
+        );
         if (prepared && (typeof choice?.message?.content !== 'string' || !choice.message.content.trim())) {
           if (choice?.finish_reason === 'length') {
             return reply(
