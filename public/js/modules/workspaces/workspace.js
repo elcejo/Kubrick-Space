@@ -431,12 +431,9 @@ export class Workspace {
               )
             : content;
         },
-        applyDocumentChange: async (proposal, expectedContent) => {
-          const result = this.#editor.applyAssistantDocument(proposal, expectedContent);
-          await this.#autosave.forceSave();
-          return { ...result, saved: true };
-        },
         executeCharacterAction: (action, transport) => this.#editor.executeCharacterAction(action, transport),
+        executeScenarioAction: (action, transport) => this.#editor.executeScenarioAction(action, transport),
+        executeCoverAction: (action) => this.#editor.executeCoverAction(action),
         attachCharacterPhoto: (file) => this.#editor.attachCharacterPhoto(file),
       });
 

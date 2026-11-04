@@ -35,6 +35,18 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
   function configure(raw) {
     const config = llmConfig.normalize(raw);
     const mode = currentMode();
+    // Inside a project the only model that counts is the one chosen in the workspace's top bar: no function falls
+    // back to the model of the settings file or to a default.
+    if (
+      scope.getStore()?.settings?.projectId &&
+      !(mode === 'local' ? currentLocalModel() : currentSettings().textModel)
+    )
+      throw Object.assign(
+        new Error(
+          'Elige un modelo LLM en la barra superior del workspace para usar cualquier función de IA.',
+        ),
+        { status: 422, code: 'MODEL_NOT_SELECTED' },
+      );
     for (const entry of Object.values(config.functions)) {
       entry.model = canonicalLocalModel(entry.model);
       if (mode === 'local' && (currentLocalModel() || !llmConfig.isLocalModel(entry.model)))
@@ -105,6 +117,7 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
     /** Runs a film task on the local engine, serialized with every other local GPU operation. */
     runLocalVideo: local.video,
     localVideoAvailable: local.videoAvailable,
+    localUpscalerAvailable: local.upscalerAvailable,
     videoModels: local.videoModels,
     generateLocalImage: (body, signal) =>
       local.image({ ...body, localModel: currentLocalModel() || LOCAL_ID }, signal),

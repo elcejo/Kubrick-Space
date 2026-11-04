@@ -1288,3 +1288,81 @@
   overflow: auto;
   z-index: var(--z-canvas);
 }
+
+/* Video tasks of the local engine: stage bar, step and live preview of the sampling */
+.workspace-task__live {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.workspace-task__live p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+.workspace-task__live .workspace-task__live-stage {
+  color: var(--text-muted);
+}
+.workspace-task__live-preview {
+  width: 100%;
+  max-height: 180px;
+  border-radius: 10px;
+  background: #000;
+  object-fit: contain;
+}
+.workspace-task__phase-bar {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--glass-bg);
+}
+.workspace-task__phase {
+  min-width: 2px;
+  height: 100%;
+}
+.workspace-task__phase-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.workspace-task__phase-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.workspace-task__phase-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.workspace-task__phase-legend b {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.workspace-task__phases {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0;
+}
+.workspace-task__phases h4 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.workspace-task__phase-item p {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+.workspace-task__phase-item span {
+  color: var(--text-muted);
+  white-space: nowrap;
+}

@@ -270,6 +270,9 @@ export const API = Object.freeze({
   copyCharacterReference(body) {
     return _fetch(`${BASE_URL}/characters/reference`, { method: 'POST', body: JSON.stringify(body) });
   },
+  enqueueContinuityJob(payload) {
+    return _fetch(`${BASE_URL}/jobs/continuity`, { method: 'POST', body: JSON.stringify(payload) });
+  },
   cancelBackgroundJob(id) {
     return _fetch(`${BASE_URL}/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: '{}' });
   },
@@ -484,6 +487,14 @@ export const API = Object.freeze({
     return task;
   },
 
+  /** Keeps the project as it is now in its version history, without touching the project or its draft. */
+  saveProjectSnapshot(id, note) {
+    return _fetch(`${BASE_URL}/projects/${encodeURIComponent(id)}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+  },
+
   getDocumentVersions(id) {
     return _fetch(`${BASE_URL}/projects/${encodeURIComponent(id)}/versions`).then(
       (result) => result.versions || [],
@@ -541,6 +552,13 @@ export const API = Object.freeze({
    */
   getTrash() {
     return _fetch(`${BASE_URL}/trash`);
+  },
+  /** Renames a project as its title field does, in the project and in its draft. */
+  renameProject(id, name) {
+    return _fetch(`${BASE_URL}/projects/${encodeURIComponent(id)}/rename`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
   },
   restoreProject(id) {
     return _fetch(`${BASE_URL}/trash/${encodeURIComponent(id)}/restore`, { method: 'POST', body: '{}' }).then(
@@ -616,6 +634,11 @@ export const API = Object.freeze({
    */
   aiText(payload) {
     return getAIContext().send(payload);
+  },
+
+  /** One step of simulated thinking: the same request as the answer, plus `thinking`. */
+  aiThink(payload, { signal } = {}) {
+    return getAIContext().send(payload, { signal, route: '/ai/think' });
   },
 
   aiTextStream(payload, { onDelta, signal } = {}) {

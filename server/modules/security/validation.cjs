@@ -65,6 +65,7 @@ function context(value) {
   if (value.blocks !== undefined) blocks(value.blocks);
   if (value.ingredients !== undefined) ingredients(value.ingredients);
 }
+const reasoning = () => require('../../../public/js/contracts/assistant-reasoning.js');
 function validateAI(route, body) {
   if (
     body?.stream !== undefined &&
@@ -76,27 +77,29 @@ function validateAI(route, body) {
   )
     throw fail('Streaming disponible solo para el chat');
   const common = ['projectId', 'options'];
+  const textFields = [
+    'promptVariables',
+    'stream',
+    'instruction',
+    'action',
+    'length',
+    'content',
+    'selectedText',
+    'tags',
+    'blocks',
+    'ingredients',
+    'message',
+    'project',
+    'context',
+    'history',
+    'messages',
+    'prompt',
+    'coverReferenceIds',
+    'coverReferenceNames',
+  ];
   const fields = {
-    text: [
-      'promptVariables',
-      'stream',
-      'instruction',
-      'action',
-      'length',
-      'content',
-      'selectedText',
-      'tags',
-      'blocks',
-      'ingredients',
-      'message',
-      'project',
-      'context',
-      'history',
-      'messages',
-      'prompt',
-      'coverReferenceIds',
-      'coverReferenceNames',
-    ],
+    text: [...textFields, 'thinkingNotes'],
+    think: [...textFields, 'thinking'],
     image: ['prompt', 'imageType', 'inputImages', 'backend', 'provider', 'model', 'aspectRatio'],
     'local-runtime': ['action', 'model'],
     'character-visual-library': ['document', 'sourceImage'],
@@ -149,7 +152,9 @@ function validateAI(route, body) {
     [
       ...common,
       ...fields[route],
-      ...(route === 'text' ? ['contextSessionId', 'contextVersion', 'contextScope', 'target'] : []),
+      ...(['text', 'think'].includes(route)
+        ? ['contextSessionId', 'contextVersion', 'contextScope', 'target']
+        : []),
     ],
     'Petición de IA',
   );
@@ -177,7 +182,15 @@ function validateAI(route, body) {
     for (const [key, val] of Object.entries(body.target))
       text(val, key === 'nodeId' ? 300 : 2000000, 'Objetivo de IA');
   }
-  if (route === 'text' && JSON.stringify(body).length > 8000000)
+  if (body.thinking !== undefined) {
+    const reading = reasoning().checkThinkingRequest(body.thinking);
+    if (reading.problems.length) throw fail('Paso de pensamiento inválido: ' + reading.text);
+  }
+  if (body.thinkingNotes !== undefined) {
+    const reading = reasoning().checkThinkingNotes(body.thinkingNotes);
+    if (reading.problems.length) throw fail('Notas de pensamiento inválidas: ' + reading.text);
+  }
+  if (['text', 'think'].includes(route) && JSON.stringify(body).length > 8000000)
     throw fail('El contexto de IA supera 8 millones de caracteres', 413);
   if (body.projectId !== undefined && !UUID.test(body.projectId)) throw fail('Proyecto de IA inválido');
   if (route === 'character-design') {
@@ -192,7 +205,7 @@ function validateAI(route, body) {
   }
   for (const key of ['instruction', 'content', 'selectedText', 'message', 'prompt', 'text'])
     if (body[key] !== undefined)
-      text(body[key], ['content', 'selectedText'].includes(key) ? 2000000 : 100000, key);
+      text(body[key], ['content', 'selectedText', 'message'].includes(key) ? 2000000 : 100000, key);
   for (const key of ['action', 'length', 'voice', 'model'])
     if (body[key] !== undefined) text(body[key], 100, key);
   if (body.tags !== undefined) tags(body.tags);

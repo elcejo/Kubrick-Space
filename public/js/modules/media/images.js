@@ -763,50 +763,62 @@ export class EditorImages {
       confirmLabel: project.type === 'character' ? 'Mover a la papelera' : 'Eliminar',
       cancelLabel: 'Cancelar',
       type: 'danger',
-      onConfirm: async () => {
-        try {
-          Loader.show();
-          const updated = await updateDocumentDraft(projectId, (current) => {
-            if (current.type === 'character') return characterImageTrashPatch(current, imageUrl);
-            const selected = current.covers?.[current.currentCoverIndex];
-            const covers = (current.covers || []).filter((url) => url !== imageUrl);
-            return {
-              covers,
-              ...(current.type === 'character' && current.lastCharacterImage === imageUrl
-                ? { lastCharacterImage: '' }
-                : {}),
-              currentCoverIndex: covers.length ? Math.max(0, covers.indexOf(selected)) : -1,
-              coverVersions: (current.coverVersions || []).filter((version) => version.finalUrl !== imageUrl),
-            };
-          });
-          // Retain source files: backgrounds may be shared by other versions/drafts.
-          if (!this.context.destroyed && AppState.currentProject?.id === projectId) {
-            Object.assign(AppState.currentProject, {
-              covers: updated.covers,
-              currentCoverIndex: updated.currentCoverIndex,
-              coverVersions: updated.coverVersions,
-              ...(updated.type === 'character'
-                ? {
-                    lastCharacterImage: updated.lastCharacterImage,
-                    characterImageTrash: updated.characterImageTrash,
-                  }
-                : {}),
-            });
-            this.updateCoverVisuals(AppState.currentProject);
-          }
-
-          Toast.show(
-            project.type === 'character' ? 'Imagen movida a la papelera.' : 'Imagen eliminada con éxito.',
-            'success',
-          );
-        } catch (err) {
-          console.error('Error deleting image:', err);
-          Toast.show('Error al eliminar la imagen: ' + err.message, 'error');
-        } finally {
-          Loader.hide();
-        }
-      },
+      onConfirm: () => this.removeCover(projectId, imageUrl, project.type === 'character'),
     });
+  }
+
+  /** Removes a cover, as the dialog of deleteCover does once the person has confirmed (the assistant asks in its own). */
+  async removeCover(projectId, imageUrl, characterTrash = false) {
+    try {
+      Loader.show();
+      const updated = await updateDocumentDraft(projectId, (current) => {
+        if (current.type === 'character') return characterImageTrashPatch(current, imageUrl);
+        const selected = current.covers?.[current.currentCoverIndex];
+        const covers = (current.covers || []).filter((url) => url !== imageUrl);
+        return {
+          covers,
+          ...(current.type === 'character' && current.lastCharacterImage === imageUrl
+            ? { lastCharacterImage: '' }
+            : {}),
+          currentCoverIndex: covers.length ? Math.max(0, covers.indexOf(selected)) : -1,
+          coverVersions: (current.coverVersions || []).filter((version) => version.finalUrl !== imageUrl),
+        };
+      });
+      // Retain source files: backgrounds may be shared by other versions/drafts.
+      if (!this.context.destroyed && AppState.currentProject?.id === projectId) {
+        Object.assign(AppState.currentProject, {
+          covers: updated.covers,
+          currentCoverIndex: updated.currentCoverIndex,
+          coverVersions: updated.coverVersions,
+          ...(updated.type === 'character'
+            ? {
+                lastCharacterImage: updated.lastCharacterImage,
+                characterImageTrash: updated.characterImageTrash,
+              }
+            : {}),
+        });
+        this.updateCoverVisuals(AppState.currentProject);
+      }
+
+      Toast.show(characterTrash ? 'Imagen movida a la papelera.' : 'Imagen eliminada con éxito.', 'success');
+    } catch (err) {
+      console.error('Error deleting image:', err);
+      Toast.show('Error al eliminar la imagen: ' + err.message, 'error');
+    } finally {
+      Loader.hide();
+    }
+  }
+
+  /** Shows the cover with this number in the history (1 is the oldest), as the arrows of the history do. */
+  async selectCover(number) {
+    const project = AppState.currentProject;
+    const total = project?.covers?.length || 0;
+    if (!Number.isInteger(number) || number < 1 || number > total)
+      throw new Error(`No hay una portada número ${number}: el historial tiene ${total}.`);
+    project.currentCoverIndex = number - 1;
+    this.updateCoverVisuals(project);
+    await updateDocumentDraft(this.context.projectId, () => ({ currentCoverIndex: number - 1 }));
+    return number - 1;
   }
 
   async detectAndUploadFace(imageUrl, projectId = this.context.projectId) {

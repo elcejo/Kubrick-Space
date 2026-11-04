@@ -1,5 +1,6 @@
 const { createProvider } = require('./provider.cjs');
 const { createTextContext } = require('./text-context.cjs');
+const { thinkingInstruction } = require('../../../public/js/contracts/assistant-reasoning.js');
 const { createImageStorage } = require('../media/index.cjs');
 const {
   CHARACTER_MANNEQUIN_REFERENCES,
@@ -121,6 +122,12 @@ function createAIOperations(dependencies) {
 
     try {
       const { prepared, keys, runtimeConfig, messages } = prepareText(inputBody);
+      // The notes of the simulated thinking come right after the instructions, before the conversation.
+      if (inputBody.thinkingNotes?.length)
+        messages.splice(messages.map((m) => m.role).lastIndexOf('system') + 1, 0, {
+          role: 'system',
+          content: thinkingInstruction(inputBody.thinkingNotes),
+        });
       if (
         dependencies.inference?.currentMode() === 'api' &&
         !keys.openrouter &&

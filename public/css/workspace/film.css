@@ -1,8 +1,9 @@
-/* Feature film workspace: one row per scene, a video node and its generation parameters side by side.
-   Rows stack vertically. It reuses the character node material so every workspace shares one look. */
+/* Feature film workspace: the film is worked one scene of the script at a time. Each clip is a row of three nodes:
+   preview, prompt and parameters, final video. Rows stack vertically, with arrows to the previous and next scene. It reuses the character node material so every workspace shares one look. */
 .editor-layout-wrapper--film {
   display: grid;
-  grid-template-columns: 1240px auto;
+  /* A canvas of fixed width: 2000 px, a quarter for each video node and half for the prompt and parameters. */
+  grid-template-columns: 2000px auto;
   grid-template-rows: auto;
   gap: 24px;
   justify-content: start;
@@ -69,12 +70,45 @@
 
 .film-row {
   display: grid;
-  grid-template-columns: 640px 580px;
+  /* The prompt and parameters take half the width, the preview and the final video a quarter each. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
   gap: 20px;
   align-items: stretch;
 }
 .film-row.is-removed {
-  opacity: 0.6;
+  opacity: 0.92;
+}
+.film-row.is-removed .film-node--video,
+.film-row.is-removed .film-node--final {
+  outline: 1px dashed color-mix(in srgb, #f59e0b 60%, transparent);
+}
+.film-node__notice--removed {
+  color: var(--text-primary);
+}
+
+.film-scene-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 4px;
+}
+.film-scene-nav__label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.film-scene-nav__label strong {
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+}
+.film-header .film-scene-nav {
+  margin-top: 4px;
 }
 .film-node {
   display: flex;
@@ -88,7 +122,8 @@
   justify-content: space-between;
   gap: 12px;
 }
-.film-node--video .film-node__header {
+.film-node--video .film-node__header,
+.film-node--final .film-node__header {
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
@@ -289,4 +324,125 @@
 }
 .film-node__state.is-working {
   color: var(--text-primary);
+}
+
+.film-failures {
+  display: grid;
+  gap: 8px;
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, #f59e0b 55%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: var(--text-primary);
+}
+
+.film-failures__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.film-failures__list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.film-failures__item {
+  display: grid;
+  gap: 2px;
+}
+
+.film-failures__item span {
+  color: var(--text-muted);
+}
+
+.film-failures__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.film-references__warning {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  background: color-mix(in srgb, #f59e0b 10%, transparent);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Control de escena: the selectors of the film (all of the application's own glass design) */
+.film-header__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.film-header__fields .film-field {
+  min-width: 220px;
+}
+.film-aspect {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--text-muted);
+}
+.film-aspect-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The whole scene, played clip after clip, above the scene control */
+.film-node--scene .film-scene-nav {
+  padding: 0;
+}
+.film-video-frame--scene {
+  align-self: center;
+  max-width: 760px;
+}
+.film-node--scene .film-node__state {
+  text-align: center;
+}
+
+/* Continuity with the previous clip: mode, note, last frame as a reference and the start frame */
+.film-continuity {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.film-note {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.film-keyframe {
+  display: flex;
+  align-items: center;
+}
+.film-keyframe__image {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  object-fit: cover;
+  background: color-mix(in srgb, var(--bg-secondary) 60%, transparent);
+}
+.film-continuity .btn.is-active {
+  color: var(--status-success, #30a46c);
+  background: color-mix(in srgb, var(--status-success, #30a46c) 16%, transparent);
+}
+.film-header__look {
+  margin-top: 0;
 }

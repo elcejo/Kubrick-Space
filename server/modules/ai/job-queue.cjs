@@ -140,6 +140,20 @@ function createJobQueue({
         [job.projectId, ...(job.projectIds || [])].includes(projectId) &&
         ['queued', 'running', 'awaiting_choice'].includes(job.status),
     );
+  /**
+   * What the engine is doing, brought up to the moment it is read: the time since the last report is added to the
+   * running stage, so a panel that polls every few seconds still shows an advancing bar.
+   */
+  const liveView = (job) => {
+    const live = job.state.live;
+    if (!live) return null;
+    const grown =
+      job.status === 'running' && !live.finished ? Math.max(0, Date.now() - (live.at || Date.now())) : 0;
+    if (!grown) return live;
+    const segments = live.segments.map((segment) => ({ ...segment }));
+    if (segments.length) segments[segments.length - 1].ms += grown;
+    return { ...live, elapsedMs: live.elapsedMs + grown, segments };
+  };
   const publicJob = (job, { details = true } = {}) =>
     job && {
       id: job.id,
@@ -167,8 +181,35 @@ function createJobQueue({
         : {}),
       timing: publicTiming(job, now(), details),
       result: job.result || null,
-      ...(['book', 'edit'].includes(job.kind)
-        ? { progress: job.state.progress || 0, questions: job.state.questions || [] }
+      ...(job.kind === 'edit'
+        ? {
+            progress: job.state.progress || 0,
+            questions: job.state.questions || [],
+            round: (job.state.elementRound || 0) + 1,
+            estimatedRounds: job.state.estimatedRounds || null,
+            ...(Number.isFinite(job.state.words) ? { words: job.state.words } : {}),
+            ...(job.state.targetWords ? { targetWords: job.state.targetWords } : {}),
+          }
+        : {}),
+      ...(job.kind === 'film-render'
+        ? {
+            // What the engine is doing now and how long each finished video took, by stage (the colored bar).
+            live: liveView(job),
+            phases: Array.isArray(job.state.done) ? job.state.done : [],
+          }
+        : {}),
+      ...(job.kind === 'continuity'
+        ? {
+            progress:
+              job.status === 'completed'
+                ? 100
+                : job.state.partsTotal
+                  ? Math.min(99, Math.round(((job.state.partsDone || 0) / job.state.partsTotal) * 100))
+                  : 0,
+            part: Math.min((job.state.partsDone || 0) + 1, job.state.partsTotal || 1),
+            parts: job.state.partsTotal || null,
+            findings: (job.state.findings || []).length,
+          }
         : {}),
       ...(job.kind === 'edit' && job.payload?.adapt
         ? {

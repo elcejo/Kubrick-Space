@@ -5,18 +5,30 @@ import { Modal } from '../../ui-components.js';
 import { renderIcon } from '../../icons.js';
 import { safeHTML } from '../../safe-html.js';
 import {
+  FILM_ASPECT_RATIOS,
+  FILM_CONTINUITY_MODES,
   FILM_FRAME_OPTIONS,
   FILM_MAX_SECONDS,
   filmDimensions,
+  filmContinuityMode,
+  filmFinalBlocked,
+  filmGuideKey,
+  filmFinalDimensions,
+  filmFinalState,
   filmNeedsConditioning,
+  filmNeedsFinal,
   filmPictureLabel,
+  filmPreviewOutdated,
   filmSceneNeedsPrompt,
+  filmScenesOf,
   filmSeconds,
   filmSummary,
   parseFilmDocument,
   prepareFilmProject,
   validateFilmDocument,
 } from '../../contracts/film.js';
+import { filmRecomposePrompt } from '../../contracts/film-prompt.js';
+import { enhanceSelect } from '../../custom-select.js';
 import { FilmJobs } from './film-jobs.js';
 
 const RUNNING_STATES = ['queued', 'running'];
@@ -59,6 +71,39 @@ function iconButton(label, icon, onClick, className = '') {
   return button;
 }
 const duration = (seconds) => `${String(seconds).replace('.', ',')} s`;
+/** The resolutions offered for the final video, in megapixels (1 MP = 1024 × 1024). */
+const FINAL_MEGAPIXELS = Object.freeze([0.5, 0.8, 1, 1.5, 2, 3, 4]);
+/** The resolutions offered for the previews, the quick low-resolution pass. */
+const PREVIEW_MEGAPIXELS = Object.freeze([0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1]);
+/** A rectangle with the proportion of `ratio` ('16:9'), from the registered aspect-frame drawing. */
+function aspectFrame(ratio, size = 18) {
+  const span = el('span', 'film-aspect');
+  span.setAttribute('aria-hidden', 'true');
+  span.innerHTML = safeHTML(renderIcon('aspect-frame', size));
+  const [w, h] = ratio.split(':').map(Number);
+  const width = w >= h ? 20 : Math.max(4, Math.round((20 * w) / h));
+  const height = w >= h ? Math.max(4, Math.round((20 * h) / w)) : 20;
+  const rect = span.querySelector('rect');
+  if (rect) {
+    rect.setAttribute('x', String(12 - width / 2));
+    rect.setAttribute('y', String(12 - height / 2));
+    rect.setAttribute('width', String(width));
+    rect.setAttribute('height', String(height));
+  }
+  return span;
+}
+/** What each way of joining the previous clip does, as the tooltip of the mode selector says it. */
+const MODE_HELP = Object.freeze({
+  auto: 'Automática: el sistema elige por ti según el guión. Otra escena = escena nueva; otro plano de la misma escena = corte con continuidad. El primer clip de la película no sigue a nadie.',
+  take: 'Continuación (misma toma): para un plano que sigue la misma toma que el anterior, sin cambio de cámara (por ejemplo una acción larga que partiste en dos planos). Se genera con 22 fotogramas extra que repiten el final del clip anterior y guían su arranque; esos fotogramas no se reproducen. Necesita el clip anterior de su escena, se genera después de él y queda desactualizado si lo rehaces.',
+  cut: 'Corte con continuidad: otro plano de la misma escena con cambio de encuadre (de general a primer plano). El modelo escribe una nota con cómo está la acción al empezar (dónde está cada personaje, su postura, gesto y mirada, y de dónde viene la luz) a partir del final del clip anterior; puedes editarla. Opcionalmente, el último fotograma del anterior viaja como referencia.',
+  keyframe:
+    'Con fotograma inicial: el modelo de imagen genera un fotograma de arranque para este plano a partir del final del anterior, las fotos de los personajes y el escenario. Lo ves y lo cambias o regeneras antes de gastar GPU en el video, y el video arranca de él. Es el modo con más control; necesita el modelo de imagen de la barra superior.',
+  new: 'Escena nueva: otro lugar o momento, sin continuidad de postura ni de gesto con el clip anterior. Solo se conserva el aspecto de la escena (luz, clima, vestuario y objetos).',
+});
+/** Where a clip starts playing: after the frames that repeat the end of the clip it continues. */
+const playFrom = (media) => (media.overlap ? `#t=${(media.overlap / 24).toFixed(3)}` : '');
+const sceneKey = (projectId) => `kubrick-film-scene:${projectId}`;
 
 /** Printable outline for the shared exporter: scenes and their prompts, no media. */
 export function filmDocumentToHTML(document) {
@@ -80,9 +125,11 @@ export function filmDocumentToHTML(document) {
 }
 
 /**
- * Feature film workspace: every scene of the linked screenplay is one video node with a parameters node beside it.
- * Prompts, conditioning and preview videos are made by server jobs; this class requests, observes and lets the
- * author edit, approve or redo. Approving and redoing stay available while a job runs.
+ * Feature film workspace. The film is worked one dramatic scene of the script at a time: its clips (shots and their
+ * parts) are rows of three nodes, the preview on the left, the prompt and parameters in the middle and the final video,
+ * enlarged by the H3 latent upscaler, on the right; arrows go to the previous and next scene. Prompts, conditioning,
+ * previews and final videos are made by server jobs that run for the scene on screen; this class requests, observes
+ * and lets the author edit, approve or redo. Approving and redoing stay available while a job runs.
  */
 export class FilmWorkspace {
   constructor(node, { onChange, onBackgroundState } = {}) {
@@ -100,6 +147,16 @@ export class FilmWorkspace {
     this.header = null;
     this.rows = new Map();
     this.scriptId = '';
+    this.sceneId = '';
+    try {
+      this.sceneId = sessionStorage.getItem(sceneKey(this.projectId)) || '';
+    } catch {
+      // Without storage the film opens on its first scene.
+    }
+    this.footerNav = null;
+    this.selectControls = [];
+    this.sceneMode = '';
+    this.sceneVideo = null;
     this.node.classList.add('film-anchor');
     this.node.hidden = true;
     // The top bar decides: switching mode or the video model updates the buttons at once.
@@ -128,6 +185,8 @@ export class FilmWorkspace {
     this.jobs?.destroy();
     this.board?.remove();
     this.board = null;
+    for (const { control } of this.selectControls) control.destroy({ restore: false });
+    this.selectControls = [];
     this.rows.clear();
     this.node.hidden = false;
     this.node.classList.remove('film-anchor');
@@ -162,8 +221,36 @@ export class FilmWorkspace {
   videoHint() {
     return 'Elige el modelo de video local en la barra superior para generar las previsualizaciones.';
   }
+  /** The scene of the script on screen: the stored one, or the first when it left the script. */
+  pickScene(groups) {
+    const group = groups.find((item) => item.id === this.sceneId) || groups[0] || null;
+    this.sceneId = group?.id || '';
+    return group;
+  }
+  currentGroup() {
+    return this.pickScene(filmScenesOf(this.document));
+  }
+  goToScene(id) {
+    if (!this.current() || id === this.sceneId) return;
+    this.sceneId = id;
+    try {
+      sessionStorage.setItem(sceneKey(this.projectId), id);
+    } catch {
+      // The choice only lasts while the workspace is open.
+    }
+    this.mount();
+  }
+  /** Previews are made for the scene on screen only. */
   canRender() {
-    return this.document.scenes.some((scene) => !scene.sourceRemoved && scene.prompt);
+    return Boolean(this.currentGroup()?.clips.some((scene) => !scene.sourceRemoved && scene.prompt));
+  }
+  /** Final videos are made for the approved previews of the scene on screen. */
+  canFinalize() {
+    return Boolean(
+      this.currentGroup()?.clips.some((scene) =>
+        filmNeedsFinal(scene, this.document.params, filmGuideKey(this.document, scene)),
+      ),
+    );
   }
 
   // ── Layout ───────────────────────────────────────────────────────────
@@ -180,53 +267,194 @@ export class FilmWorkspace {
       this.board.setAttribute('aria-label', 'Largometraje');
       this.node.after(this.board);
     }
-    const header = this.buildHeader(intro);
+    const groups = filmScenesOf(this.document);
+    const group = this.pickScene(groups);
+    const header = this.buildHeader(intro, groups, group);
     if (this.header) this.header.replaceWith(header);
     else this.board.prepend(header);
     this.header = header;
+    const sceneNode = intro ? null : this.syncSceneVideo(group);
+    if (!sceneNode) {
+      this.sceneVideo?.node.remove();
+      this.sceneVideo = null;
+    } else if (sceneNode.nextSibling !== header) this.board.insertBefore(sceneNode, header);
 
     const wanted = new Map();
-    for (const [index, scene] of intro ? [] : this.document.scenes.entries()) {
+    for (const [index, scene] of intro ? [] : group.clips.entries()) {
       const signature = JSON.stringify([scene, index]);
-      // What the clip itself depends on; approving or redoing must not restart a clip the author is watching.
-      const videoKey = JSON.stringify([scene.preview, scene.title, index, scene.sourceRemoved]);
+      // What each video node depends on; approving or redoing must not restart a clip the author is watching.
+      const keys = [
+        JSON.stringify([scene.preview, scene.title, index, scene.sourceRemoved]),
+        '',
+        JSON.stringify([scene.final, scene.title, index, scene.sourceRemoved]),
+      ];
       const known = this.rows.get(scene.id);
       if (known?.signature === signature) wanted.set(scene.id, known);
       else {
         const fresh = this.buildRow(scene, index);
-        const node = known?.videoKey === videoKey ? this.adopt(known.node, fresh) : fresh;
-        wanted.set(scene.id, { signature, videoKey, node });
+        wanted.set(scene.id, {
+          signature,
+          keys,
+          node: known ? this.adopt(known, fresh, keys) : fresh,
+        });
       }
     }
     for (const [id, known] of this.rows) if (wanted.get(id)?.node !== known.node) known.node.remove();
+    this.footerNav?.remove();
     let cursor = header.nextSibling;
     for (const { node } of wanted.values()) {
       if (cursor === node) cursor = cursor.nextSibling;
       else this.board.insertBefore(node, cursor);
     }
+    this.footerNav = intro ? null : this.buildSceneNav(groups, group);
+    if (this.footerNav) this.board.append(this.footerNav);
     this.rows = wanted;
+    this.sweepSelects();
     this.updateBoard();
   }
-  /** Updates a row in place around its existing video element: everything but the frame is replaced. */
-  adopt(row, fresh) {
-    const [video, params] = row.children;
-    const [freshVideo, freshParams] = fresh.children;
-    const frame = video.querySelector('.film-video-frame');
-    while (frame.nextSibling) frame.nextSibling.remove();
-    let next = freshVideo.querySelector('.film-video-frame').nextSibling;
-    while (next) {
-      const after = next.nextSibling;
-      video.append(next);
-      next = after;
+  /**
+   * Updates a row in place: a video node whose video did not change keeps its element, so a clip the author is
+   * watching keeps playing; everything else is replaced.
+   */
+  adopt(known, fresh, keys) {
+    const row = known.node;
+    const olds = [...row.children];
+    const news = [...fresh.children];
+    for (const [index, old] of olds.entries()) {
+      const next = news[index];
+      const frame = old.querySelector('.film-video-frame');
+      if (index === 1 || !frame || known.keys[index] !== keys[index]) {
+        old.replaceWith(next);
+        continue;
+      }
+      while (frame.nextSibling) frame.nextSibling.remove();
+      let rest = next.querySelector('.film-video-frame').nextSibling;
+      while (rest) {
+        const after = rest.nextSibling;
+        old.append(rest);
+        rest = after;
+      }
     }
-    params.replaceWith(freshParams);
     row.classList.toggle('is-removed', fresh.classList.contains('is-removed'));
     return row;
   }
-  buildHeader(intro) {
+  /**
+   * The video of the whole scene: its clips played one after another, either the previews or the final videos. A
+   * version plays only when every clip of the scene has it; until then the node says how many are missing. The node is
+   * rebuilt only when what it plays changes, so a scene being watched is not restarted by unrelated edits.
+   */
+  syncSceneVideo(group) {
+    const params = this.document.params;
+    const live = group.clips.filter((clip) => !clip.sourceRemoved);
+    const versions = {
+      preview: live.map((clip) =>
+        clip.preview && !filmPreviewOutdated(clip, params, filmGuideKey(this.document, clip))
+          ? `${clip.preview.url}?v=${clip.preview.version}${playFrom(clip.preview)}`
+          : null,
+      ),
+      final: live.map((clip) =>
+        clip.final && filmFinalState(clip, params) === 'ready'
+          ? `${clip.final.url}?v=${clip.final.version}${playFrom(clip.final)}`
+          : null,
+      ),
+    };
+    const complete = (mode) => live.length > 0 && versions[mode].every(Boolean);
+    const mode = this.sceneMode || (complete('final') ? 'final' : 'preview');
+    const signature = JSON.stringify([group.id, mode, versions]);
+    if (this.sceneVideo?.signature === signature) return this.sceneVideo.node;
+    const section = el('section', 'character-node film-node film-node--scene');
+    section.setAttribute('aria-label', `Video de la escena ${group.number}`);
+    const header = el('header', 'film-node__header');
+    header.append(el('h2', 'character-eyebrow', `VIDEO DE LA ESCENA ${group.number}`));
+    const nav = el('nav', 'film-scene-nav');
+    nav.setAttribute('aria-label', 'Versión de la escena completa');
+    const previous = iconButton('Ver la escena en previsualización', 'chevron-left', () =>
+      this.showSceneVersion('preview'),
+    );
+    previous.dataset.sceneVersion = 'preview';
+    previous.disabled = mode === 'preview';
+    const next = iconButton('Ver la escena en resolución final', 'chevron-right', () =>
+      this.showSceneVersion('final'),
+    );
+    next.dataset.sceneVersion = 'final';
+    next.disabled = mode === 'final';
+    const label = el('p', 'film-scene-nav__label');
+    label.append(
+      el('strong', null, 'ESCENA COMPLETA'),
+      el('span', null, mode === 'final' ? 'Resolución final' : 'Previsualización'),
+    );
+    label.setAttribute('aria-live', 'polite');
+    nav.append(previous, label, next);
+    const frame = el('div', 'film-video-frame film-video-frame--scene');
+    const urls = versions[mode];
+    const missing = urls.filter((url) => !url).length;
+    const caption = el('p', 'film-node__state');
+    caption.setAttribute('role', 'status');
+    if (complete(mode)) {
+      frame.classList.add('has-video');
+      const video = el('video', 'film-video');
+      video.controls = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.setAttribute('aria-label', `Escena ${group.number} completa`);
+      let at = 0;
+      const show = () => {
+        video.src = urls[at];
+        caption.textContent = `Clip ${at + 1} de ${urls.length}`;
+      };
+      // The clips follow one another; after the last one the scene is ready to play again from the first.
+      video.addEventListener('ended', () => {
+        const last = at >= urls.length - 1;
+        at = last ? 0 : at + 1;
+        show();
+        if (!last) void video.play?.()?.catch?.(() => {});
+      });
+      show();
+      frame.append(video);
+    } else {
+      frame.setAttribute('role', 'img');
+      frame.setAttribute('aria-label', 'La escena completa aún no está disponible');
+      frame.append(glyph('video', 56), el('span', 'film-video-frame__text', 'Escena aún no disponible'));
+      caption.textContent = !live.length
+        ? 'Esta escena no tiene clips.'
+        : mode === 'final'
+          ? `Faltan ${missing} de ${urls.length} videos finales para ver la escena completa en resolución final.`
+          : `Faltan ${missing} de ${urls.length} previsualizaciones para ver la escena completa.`;
+    }
+    section.append(header, nav, frame, caption);
+    if (this.sceneVideo?.node.isConnected) this.sceneVideo.node.replaceWith(section);
+    this.sceneVideo = { signature, node: section };
+    return section;
+  }
+  showSceneVersion(mode) {
+    if (!this.current() || this.sceneMode === mode) return;
+    this.sceneMode = mode;
+    this.mount();
+  }
+  /** Arrows at both ends: the previous and the next scene of the script, when there is one. */
+  buildSceneNav(groups, group) {
+    const nav = el('nav', 'film-scene-nav');
+    nav.setAttribute('aria-label', 'Escenas de la película');
+    const at = groups.indexOf(group);
+    const previous = iconButton('Escena anterior', 'chevron-left', () => this.goToScene(groups[at - 1].id));
+    previous.dataset.sceneNav = 'previous';
+    previous.disabled = at <= 0;
+    const next = iconButton('Escena siguiente', 'chevron-right', () => this.goToScene(groups[at + 1].id));
+    next.dataset.sceneNav = 'next';
+    next.disabled = at < 0 || at >= groups.length - 1;
+    const label = el('p', 'film-scene-nav__label');
+    label.append(
+      el('strong', null, `ESCENA ${group.number} DE ${groups.length}`),
+      el('span', null, group.place || ''),
+    );
+    label.setAttribute('aria-live', 'polite');
+    nav.append(previous, label, next);
+    return nav;
+  }
+  buildHeader(intro, groups = [], group = null) {
     const header = el('header', 'character-node film-header');
     const title = el('div', 'film-header__title');
-    title.append(el('h2', 'character-eyebrow', 'PELÍCULA'));
+    title.append(el('h2', 'character-eyebrow', intro ? 'PELÍCULA' : 'CONTROL DE ESCENA'));
     if (intro) {
       title.append(
         el('h3', 'film-header__heading', 'Crea la película a partir de ingredientes'),
@@ -241,34 +469,37 @@ export class FilmWorkspace {
       const live = this.document.scenes.filter((scene) => !scene.sourceRemoved);
       const previews = live.filter((scene) => scene.preview).length;
       const approved = live.filter((scene) => scene.approved).length;
+      const finals = live.filter((scene) => filmFinalState(scene, this.document.params) === 'ready').length;
+      const failed = live.filter((scene) => scene.status === 'failed').length;
       title.append(
         el(
           'p',
           'film-header__text',
-          `${summary.total} ${summary.total === 1 ? 'plano' : 'planos'} · ${summary.ready} con prompt · ${previews} previsualizadas · ${approved} aprobadas · ${duration(Math.round(summary.seconds))} de metraje`,
+          `${groups.length} ${groups.length === 1 ? 'escena' : 'escenas'} · ${summary.total} ${summary.total === 1 ? 'clip' : 'clips'} · ${summary.ready} con prompt${failed ? ` · ${failed} sin poder escribirse` : ''} · ${previews} previsualizados · ${approved} aprobados · ${finals} en video final · ${duration(Math.round(summary.seconds))} de metraje`,
         ),
       );
     }
     header.append(title);
-    const controls = el('div', 'film-header__controls');
+    if (!intro && group) header.append(this.buildSceneNav(groups, group));
+    const fields = el('div', 'film-header__fields');
     const scripts = this.scripts();
     if (scripts.length > 1) {
-      const label = el('label', 'film-field');
-      label.append(el('span', 'film-field__label', 'Guión'));
-      this.scriptSelect = el('select', 'input');
-      for (const item of scripts) {
-        const option = el('option', null, item.importedProjectName || item.label || 'Guión');
-        option.value = item.importedProjectId;
-        this.scriptSelect.append(option);
-      }
-      this.scriptSelect.value =
-        this.scriptId || this.document.source?.projectId || scripts[0].importedProjectId;
-      this.scriptSelect.addEventListener('change', () => {
-        this.scriptId = this.scriptSelect.value;
-      });
-      label.append(this.scriptSelect);
-      controls.append(label);
+      const label = this.field(
+        'Guión',
+        scripts.map((item) => ({
+          value: item.importedProjectId,
+          text: item.importedProjectName || item.label || 'Guión',
+        })),
+        this.scriptId || this.document.source?.projectId || scripts[0].importedProjectId,
+        (value) => {
+          this.scriptId = value;
+        },
+      );
+      this.scriptSelect = label.querySelector('select');
+      fields.append(label);
     } else this.scriptSelect = null;
+    if (!intro) fields.append(...this.buildResolutionFields());
+    const controls = el('div', 'film-header__controls');
     this.generateButton = action(
       intro ? 'Generar película a partir de ingredientes' : 'Actualizar desde el guión',
       intro ? 'video' : 'refresh',
@@ -277,15 +508,157 @@ export class FilmWorkspace {
     );
     this.renderButton = action('Generar previsualizaciones', 'play', () => this.render(), 'btn btn-primary');
     this.renderButton.hidden = intro;
+    this.finalButton = action('Generar videos finales', 'play', () => this.renderFinal(), 'btn btn-primary');
+    this.finalButton.hidden = intro;
+    this.discardRemovedButton = action(
+      'Descartar los clips fuera del guión',
+      'close',
+      () => void this.discardRemoved(),
+    );
+    this.discardRemovedButton.hidden = !this.document.scenes.some((scene) => scene.sourceRemoved);
     this.retryButton = action('Reintentar', 'refresh', () => void this.jobs.retry());
+    this.retryFailedButton = action('Reintentar los fallidos', 'refresh', () => void this.retryFailed());
+    this.retryFailedButton.hidden = true;
     this.cancelButton = action('Cancelar', 'warning', () => void this.jobs.cancel());
     this.status = el('p', 'film-header__status');
     this.status.setAttribute('role', 'status');
     this.status.setAttribute('aria-live', 'polite');
     this.hint = el('p', 'film-header__hint');
-    controls.append(this.generateButton, this.renderButton, this.retryButton, this.cancelButton);
-    header.append(controls, this.status, this.hint);
+    controls.append(
+      this.generateButton,
+      this.retryFailedButton,
+      this.renderButton,
+      this.finalButton,
+      this.discardRemovedButton,
+      this.retryButton,
+      this.cancelButton,
+    );
+    header.append(fields, controls, this.status, this.hint);
+    const look = group && this.document.looks[group.id];
+    if (!intro && look)
+      header.append(el('p', 'film-header__hint film-header__look', `Aspecto de la escena · ${look.text}`));
+    const failed = this.document.scenes.filter((scene) => scene.status === 'failed' && !scene.sourceRemoved);
+    if (failed.length) header.append(this.buildFailures(failed));
     return header;
+  }
+  /**
+   * A labelled selector in the application's own glass design (never the browser's). `choices` are
+   * `{value, text, aspect?}`; an aspect choice is drawn with a rectangle of its proportion.
+   */
+  field(labelText, choices, value, onChange, { searchable = false } = {}) {
+    const label = el('label', 'film-field');
+    label.append(el('span', 'film-field__label', labelText));
+    const select = el('select', 'input');
+    for (const choice of choices) {
+      const option = el('option', null, choice.text);
+      option.value = choice.value;
+      if (choice.aspect) option.dataset.aspect = choice.aspect;
+      if (choice.title) option.title = choice.title;
+      select.append(option);
+    }
+    select.value = value;
+    select.title = choices.find((choice) => choice.value === value)?.title || '';
+    select.addEventListener('change', () => onChange(select.value));
+    label.append(select);
+    this.enhance(select, {
+      searchable,
+      label: (option) => {
+        if (!option?.dataset.aspect) return null;
+        const row = el('span', 'film-aspect-option');
+        row.append(aspectFrame(option.dataset.aspect), el('span', null, option.textContent));
+        return row;
+      },
+    });
+    return label;
+  }
+  /** Turns a select into the application's own control; it is released when its select leaves the page. */
+  enhance(select, options) {
+    this.selectControls.push({ select, control: enhanceSelect(select, options) });
+  }
+  /** Releases the controls whose select is no longer in the page (a rebuilt header or row). */
+  sweepSelects() {
+    this.selectControls = this.selectControls.filter(({ select, control }) => {
+      if (select.isConnected) return true;
+      control.destroy({ restore: false });
+      return false;
+    });
+  }
+  /** Aspect ratio, preview resolution and final resolution of the film, as selectors. */
+  buildResolutionFields() {
+    const params = this.document.params;
+    const sizeLabel = (megapixels) => {
+      const { width, height } = filmDimensions({ ...params, megapixels });
+      return `${String(megapixels).replace('.', ',')} MP · ${width}×${height}`;
+    };
+    const megapixelChoices = (list, current) =>
+      [...new Set([...list, current])]
+        .sort((a, b) => a - b)
+        .map((value) => ({ value: String(value), text: sizeLabel(value) }));
+    const aspects = FILM_ASPECT_RATIOS.some((item) => item.value === params.aspectRatio)
+      ? FILM_ASPECT_RATIOS
+      : [...FILM_ASPECT_RATIOS, { value: params.aspectRatio, name: 'Personalizada' }];
+    const set = (key) => (value) => {
+      this.change((document) => {
+        document.params[key] = key === 'aspectRatio' ? value : Number(value);
+      });
+      this.mount();
+    };
+    return [
+      this.field(
+        'Relación de aspecto',
+        aspects.map((item) => ({
+          value: item.value,
+          text: `${item.value} · ${item.name}`,
+          aspect: item.value,
+        })),
+        params.aspectRatio,
+        set('aspectRatio'),
+        { searchable: true },
+      ),
+      this.field(
+        'Resolución previsualización',
+        megapixelChoices(PREVIEW_MEGAPIXELS, params.megapixels),
+        String(params.megapixels),
+        set('megapixels'),
+      ),
+      this.field(
+        'Resolución final',
+        megapixelChoices(FINAL_MEGAPIXELS, params.finalMegapixels),
+        String(params.finalMegapixels),
+        set('finalMegapixels'),
+      ),
+    ];
+  }
+  /** What could not be written, in the board and not in a dialog: each clip with its reason. */
+  buildFailures(failed) {
+    const box = el('section', 'film-failures');
+    box.setAttribute('role', 'alert');
+    box.append(
+      el(
+        'h3',
+        'film-failures__title',
+        `${failed.length} ${failed.length === 1 ? 'clip no tiene' : 'clips no tienen'} prompt todavía`,
+      ),
+    );
+    const list = el('ul', 'film-failures__list');
+    for (const scene of failed.slice(0, 5)) {
+      const item = el('li', 'film-failures__item');
+      item.append(
+        el('strong', null, scene.title),
+        el('span', null, scene.error || 'No se pudo escribir el prompt.'),
+      );
+      list.append(item);
+    }
+    if (failed.length > 5) list.append(el('li', 'film-failures__item', `Y ${failed.length - 5} más.`));
+    box.append(
+      list,
+      el(
+        'p',
+        'film-failures__hint',
+        'Lo demás está guardado. Corrige el motivo y reintenta solo los que fallaron.',
+      ),
+    );
+    return box;
   }
   buildRow(scene, index) {
     const row = el('article', 'film-row');
@@ -293,8 +666,69 @@ export class FilmWorkspace {
     row.dataset.sourceSceneId = scene.sourceSceneId;
     row.dataset.sourceShotId = scene.sourceShotId;
     if (scene.sourceRemoved) row.classList.add('is-removed');
-    row.append(this.buildVideoNode(scene, index), this.buildParamsNode(scene, index));
+    row.append(
+      this.buildVideoNode(scene, index),
+      this.buildParamsNode(scene, index),
+      this.buildFinalNode(scene, index),
+    );
     return row;
+  }
+  /** The right node: the approved preview enlarged and refined by the H3 latent upscaler. */
+  buildFinalNode(scene, index) {
+    const params = this.document.params;
+    const section = el('section', 'character-node film-node film-node--final');
+    section.setAttribute('aria-label', `Video final del plano ${index + 1}`);
+    const header = el('header', 'film-node__header');
+    header.append(
+      el('h2', 'character-eyebrow', 'VIDEO FINAL · H3 LUP'),
+      el('h3', 'film-node__title', scene.title),
+    );
+    const frame = el('div', 'film-video-frame');
+    const state = filmFinalState(scene, params);
+    if (scene.final) {
+      frame.classList.add('has-video');
+      const video = el('video', 'film-video');
+      video.src = `${scene.final.url}?v=${scene.final.version}`;
+      video.controls = true;
+      video.loop = true;
+      video.playsInline = true;
+      video.preload = 'metadata';
+      video.setAttribute('aria-label', `Video final del plano ${index + 1}`);
+      frame.append(video);
+    } else {
+      frame.setAttribute('role', 'img');
+      frame.setAttribute('aria-label', 'Aún sin video final');
+      frame.append(glyph('video', 56), el('span', 'film-video-frame__text', 'Sin video final'));
+    }
+    const blocked = filmFinalBlocked(scene, params, filmGuideKey(this.document, scene));
+    const text =
+      scene.render === 'finalizing'
+        ? 'Escalando con H3 LUp…'
+        : state === 'stale'
+          ? 'El video final es de una previsualización o resolución anterior'
+          : state === 'none' && blocked
+            ? blocked
+            : state === 'none'
+              ? 'Pendiente de generar el video final'
+              : '';
+    const note = el('p', 'film-node__state', text);
+    note.setAttribute('role', 'status');
+    note.hidden = !text;
+    if (scene.render === 'finalizing') note.classList.add('is-working');
+    const target = scene.preview ? filmFinalDimensions(scene.preview, params.finalMegapixels) : null;
+    const meta = el(
+      'span',
+      'film-node__meta',
+      scene.final
+        ? `${duration(filmSeconds(scene.final.frames))} · 24 fps · ${scene.final.width}×${scene.final.height}${state === 'ready' ? ' · Al día' : ''}`
+        : target
+          ? `Destino ${target.width}×${target.height}`
+          : '',
+    );
+    const actions = el('div', 'film-video-actions');
+    actions.append(meta);
+    section.append(header, frame, actions, note);
+    return section;
   }
   renderState(scene) {
     if (scene.render === 'conditioning') return 'Preparando el conditioning…';
@@ -302,6 +736,8 @@ export class FilmWorkspace {
     if (scene.redo > 0) return 'En cola para rehacerla';
     if (scene.preview && scene.conditioning && scene.preview.key !== scene.conditioning.key)
       return 'La previsualización es de un prompt anterior';
+    if (scene.preview && filmPreviewOutdated(scene, this.document.params, filmGuideKey(this.document, scene)))
+      return 'La previsualización es de otra resolución, proporción o continuidad';
     if (scene.prompt && filmNeedsConditioning(scene)) return 'Pendiente de generar';
     return '';
   }
@@ -313,7 +749,15 @@ export class FilmWorkspace {
       el(
         'h2',
         'character-eyebrow',
-        `ESCENA ${[...new Set(this.document.scenes.map((item) => item.sourceSceneId))].indexOf(scene.sourceSceneId) + 1} · PLANO ${this.document.scenes.filter((item) => item.sourceSceneId === scene.sourceSceneId).indexOf(scene) + 1}`,
+        `PREVISUALIZACIÓN · PLANO ${
+          [
+            ...new Set(
+              this.document.scenes
+                .filter((item) => item.sourceSceneId === scene.sourceSceneId)
+                .map((item) => item.sourceShotId),
+            ),
+          ].indexOf(scene.sourceShotId) + 1
+        }${scene.sourceParts > 1 ? ` · PARTE ${scene.sourcePart}/${scene.sourceParts}` : ''}`,
       ),
       el('h3', 'film-node__title', scene.title),
     );
@@ -364,19 +808,34 @@ export class FilmWorkspace {
       el(
         'span',
         'film-node__meta',
-        `${duration(filmSeconds(scene.frames))} · 24 fps · ${scene.preview?.width ?? meta.width}×${scene.preview?.height ?? meta.height}${scene.approved ? ' · Aprobada' : ''}`,
+        `${duration(filmSeconds(scene.preview ? scene.preview.frames - (scene.preview.overlap || 0) : scene.frames))} · 24 fps · ${scene.preview?.width ?? meta.width}×${scene.preview?.height ?? meta.height}${scene.approved ? ' · Aprobada' : ''}`,
       ),
     );
     section.append(header, frame, actions, state);
+    // How the clip starts after the previous one lives with its preview, which fills the node under the video.
+    section.append(this.buildContinuity(scene));
     if (scene.renderError) {
       const error = el('p', 'film-node__error', scene.renderError);
       error.setAttribute('role', 'alert');
       section.append(error);
     }
-    if (scene.sourceRemoved)
+    if (scene.sourceRemoved) {
       section.append(
-        el('p', 'film-node__notice', 'Este plano ya no está en el guión. Se conserva por si la recuperas.'),
+        el(
+          'p',
+          'film-node__notice film-node__notice--removed',
+          'Este clip ya no está en el guión (suele pasar con un plano que se dividió en partes). Se conserva por si lo recuperas; puedes descartarlo.',
+        ),
       );
+      const discard = action(
+        'Descartar este clip',
+        'close',
+        () => void this.discard(scene),
+        'btn btn-primary',
+      );
+      discard.dataset.filmDiscard = 'true';
+      section.append(discard);
+    }
     return section;
   }
   statusOf(scene) {
@@ -433,6 +892,7 @@ export class FilmWorkspace {
         id: `film-limit-${scene.id}`,
       }),
     );
+    this.enhance(select, { searchable: false });
     const shot = el('label', 'film-field');
     shot.append(el('span', 'film-field__label', 'Plano'));
     const shotInput = el('input', 'input');
@@ -481,6 +941,11 @@ export class FilmWorkspace {
       }
       references.append(list);
     }
+    for (const note of scene.referenceNotes || []) {
+      const warning = el('p', 'film-references__warning', note);
+      warning.setAttribute('role', 'note');
+      references.append(warning);
+    }
     section.append(references);
 
     if (scene.error) {
@@ -500,6 +965,160 @@ export class FilmWorkspace {
     buttons.append(write);
     section.append(buttons);
     return section;
+  }
+
+  /** Changes one clip and puts its prompt together again, for what the prompt is made of (mode, note, references). */
+  updateClip(id, fn) {
+    this.change((document) => {
+      const node = document.scenes.find((item) => item.id === id);
+      fn(node, document);
+      node.prompt = filmRecomposePrompt(document, node);
+    });
+    this.mount();
+  }
+  /** How the clip joins the previous one: the mode, the note, the last frame as a reference and the start frame. */
+  buildContinuity(scene) {
+    const box = el('div', 'film-continuity');
+    box.append(el('span', 'film-field__label', 'Continuidad con el plano anterior'));
+    const mode = filmContinuityMode(this.document, scene);
+    if (mode === 'none') {
+      box.append(el('p', 'film-references__empty', 'Es el primer clip de la película: no sigue a otro.'));
+      return box;
+    }
+    const names = {
+      take: 'Continuación (misma toma)',
+      cut: 'Corte con continuidad',
+      keyframe: 'Con fotograma inicial',
+      new: 'Escena nueva',
+    };
+    const choices = FILM_CONTINUITY_MODES.map((value) => ({
+      value,
+      text: value === 'auto' ? `Automática · ${names[mode]}` : names[value],
+      title: MODE_HELP[value],
+    }));
+    box.append(
+      this.field('Modo', choices, scene.continuity.mode, (value) =>
+        this.updateClip(scene.id, (node) => {
+          node.continuity.mode = value;
+        }),
+      ),
+    );
+    const hint = {
+      take: 'El clip sigue la misma toma: se genera con 22 fotogramas más que repiten el final del anterior y guían su arranque. Esos fotogramas no se reproducen.',
+      cut: 'Otro plano de la misma escena: la nota describe cómo está la acción al empezar, y el último fotograma del anterior puede ir como referencia.',
+      keyframe:
+        'Se genera un fotograma inicial para el plano, a partir del final del anterior y de las referencias, y el video arranca de él.',
+      new: 'Otra escena: solo se conserva el aspecto de la escena (luz, clima, vestuario).',
+    }[mode];
+    if (hint) box.append(el('small', 'film-field__help', hint));
+    if (['cut', 'keyframe', 'take'].includes(mode)) {
+      const label = el('label', 'film-field film-field--note');
+      label.append(
+        el(
+          'span',
+          'film-field__label',
+          scene.continuity.noteSource === 'manual'
+            ? 'Nota de continuidad (editada por ti)'
+            : 'Nota de continuidad',
+        ),
+      );
+      const area = el('textarea', 'input character-text-input film-note');
+      area.value = scene.continuity.note;
+      area.maxLength = 900;
+      area.rows = 3;
+      area.placeholder = 'Dónde está cada personaje, cómo está y qué sostiene al empezar este plano.';
+      area.spellcheck = false;
+      area.addEventListener('change', () =>
+        this.updateClip(scene.id, (node) => {
+          node.continuity.note = area.value.trim().slice(0, 900);
+          node.continuity.noteSource = node.continuity.note ? 'manual' : '';
+        }),
+      );
+      label.append(area);
+      box.append(label);
+      const write = action(
+        'Escribir la nota con IA',
+        'refresh',
+        () => void this.writeContinuity(scene),
+        'btn btn-ghost film-scene-action',
+      );
+      write.dataset.sceneAction = 'continuity';
+      write.disabled = this.busy;
+      box.append(write);
+    }
+    if (mode === 'cut') {
+      const frame = action(
+        `Último fotograma del plano anterior como referencia: ${scene.continuity.frame ? 'sí' : 'no'}`,
+        'check',
+        () =>
+          this.updateClip(scene.id, (node) => {
+            node.continuity.frame = !node.continuity.frame;
+          }),
+        `btn btn-ghost${scene.continuity.frame ? ' is-active' : ''}`,
+      );
+      frame.setAttribute('aria-pressed', String(scene.continuity.frame));
+      frame.dataset.continuityFrame = 'true';
+      box.append(frame);
+    }
+    if (mode === 'keyframe') {
+      const start = scene.continuity.start;
+      const preview = el('div', 'film-keyframe');
+      if (start) {
+        const image = el('img', 'film-keyframe__image');
+        image.src = start.url;
+        image.alt = 'Fotograma inicial del plano';
+        image.loading = 'lazy';
+        preview.append(image);
+      } else preview.append(el('p', 'film-references__empty', 'Aún sin fotograma inicial.'));
+      box.append(preview);
+      const make = action(
+        start ? 'Generar otro fotograma inicial' : 'Generar el fotograma inicial',
+        'refresh',
+        () => void this.makeKeyframe(scene),
+        'btn btn-ghost film-scene-action',
+      );
+      make.dataset.sceneAction = 'keyframe';
+      make.disabled = this.busy;
+      box.append(make);
+      if (start)
+        box.append(
+          action(
+            'Quitar el fotograma inicial',
+            'close',
+            () =>
+              this.updateClip(scene.id, (node) => {
+                node.continuity.start = null;
+                node.approved = false;
+              }),
+            'btn btn-ghost',
+          ),
+        );
+    }
+    return box;
+  }
+  /** The note of continuity written again by the model, from how the previous clip ends. */
+  async writeContinuity(scene) {
+    if (!this.current() || this.busy) return;
+    const scriptProjectId = this.chosenScript() || this.document.source?.projectId;
+    await this.jobs.perform({
+      scope: 'continuity',
+      sceneId: scene.id,
+      ...(scriptProjectId ? { scriptProjectId } : {}),
+    });
+  }
+  /** A start frame for the shot, made by the image model of the top bar. The clip takes the keyframe mode. */
+  async makeKeyframe(scene) {
+    if (!this.current() || this.busy) return;
+    if (scene.continuity.mode !== 'keyframe')
+      this.updateClip(scene.id, (node) => {
+        node.continuity.mode = 'keyframe';
+      });
+    const scriptProjectId = this.chosenScript() || this.document.source?.projectId;
+    await this.jobs.perform({
+      scope: 'keyframe',
+      sceneId: scene.id,
+      ...(scriptProjectId ? { scriptProjectId } : {}),
+    });
   }
 
   // ── Editing ──────────────────────────────────────────────────────────
@@ -530,10 +1149,53 @@ export class FilmWorkspace {
     const scriptProjectId = this.chosenScript();
     await this.jobs.perform({ scope: 'all', ...(scriptProjectId ? { scriptProjectId } : {}) });
   }
-  /** Conditioning for every scene, then one preview video at a time. */
+  /** Takes a clip that left the script out of the film, with its prompt; its video stays on disk. */
+  async discard(scene) {
+    if (!this.current() || this.busy) return;
+    const confirmed = await Modal.confirm({
+      title: 'Descartar clip',
+      message: `«${scene.title}» ya no está en el guión. Se quitará de la película con su prompt y su aprobación; su video sigue en el disco.\n\n¿Descartarlo?`,
+      confirmLabel: 'Descartar',
+      type: 'warning',
+    });
+    if (!confirmed || !this.current()) return;
+    this.change((document) => {
+      document.scenes = document.scenes.filter((item) => item.id !== scene.id);
+    });
+    this.mount();
+  }
+  /** Writes again only the prompts that could not be written. */
+  async retryFailed() {
+    if (!this.current() || this.busy) return;
+    const scriptProjectId = this.chosenScript() || this.document.source?.projectId;
+    await this.jobs.perform({ scope: 'failed', ...(scriptProjectId ? { scriptProjectId } : {}) });
+  }
+  /** Conditioning for the clips of the scene on screen, then one preview video at a time. */
   async render() {
     if (!this.current() || this.busy || !this.canRender()) return;
-    await this.jobs.perform({}, 'render');
+    await this.jobs.perform({ sourceSceneId: this.sceneId, stage: 'preview' }, 'render');
+  }
+  /** The approved previews of the scene on screen, enlarged and refined by the H3 latent upscaler. */
+  async renderFinal() {
+    if (!this.current() || this.busy || !this.canFinalize()) return;
+    await this.jobs.perform({ sourceSceneId: this.sceneId, stage: 'final' }, 'render');
+  }
+  /** Takes every clip that left the script out of the film, after the author confirms. */
+  async discardRemoved() {
+    if (!this.current() || this.busy) return;
+    const gone = this.document.scenes.filter((scene) => scene.sourceRemoved);
+    if (!gone.length) return;
+    const confirmed = await Modal.confirm({
+      title: 'Descartar clips',
+      message: `${gone.length === 1 ? 'Hay 1 clip que ya no está' : `Hay ${gone.length} clips que ya no están`} en el guión (suelen ser planos que se dividieron en partes). Se quitarán de la película con sus prompts y aprobaciones; sus videos siguen en el disco.\n\n¿Descartarlos?`,
+      confirmLabel: 'Descartar',
+      type: 'warning',
+    });
+    if (!confirmed || !this.current()) return;
+    this.change((document) => {
+      document.scenes = document.scenes.filter((scene) => !scene.sourceRemoved);
+    });
+    this.mount();
   }
   /** Approve, withdraw approval or redo one scene. Works while a job runs: a redo goes ahead of the rest. */
   async sceneAction(scene, kind) {
@@ -585,7 +1247,13 @@ export class FilmWorkspace {
     const intro = !this.hasScenes();
     this.generateButton.disabled = this.busy || !this.scripts().length;
     this.renderButton.disabled = this.busy || !this.canRender() || !this.videoReady();
+    this.finalButton.disabled = this.busy || !this.canFinalize() || !this.videoReady();
+    this.discardRemovedButton.disabled = this.busy;
+    for (const { select } of this.selectControls) select.disabled = this.busy;
     this.retryButton.hidden = !failed || this.busy;
+    this.retryFailedButton.hidden =
+      this.busy || !this.document.scenes.some((scene) => scene.status === 'failed' && !scene.sourceRemoved);
+    this.retryFailedButton.disabled = !this.scripts().length;
     this.cancelButton.hidden = !running;
     this.hint.textContent = !this.scripts().length
       ? 'Añade un guión como ingrediente de la película (panel de ingredientes) para poder generarla.'
@@ -634,7 +1302,10 @@ export class FilmWorkspace {
       this.backgroundRevision = draft.revision;
       this.mount();
     } else this.updateBoard();
-    if (!busy && job?.error) this.showNotice(job.error, `job:${job.id}:${job.status}:${job.error}`);
+    // Prompts that could not be written are listed in the board with their reasons; a dialog is for the rest.
+    const listed = this.document.scenes.some((scene) => scene.status === 'failed' && !scene.sourceRemoved);
+    if (!busy && job?.error && !listed)
+      this.showNotice(job.error, `job:${job.id}:${job.status}:${job.error}`);
   }
   backgroundJobError(error, mayContinue = false) {
     if (!this.current()) return;

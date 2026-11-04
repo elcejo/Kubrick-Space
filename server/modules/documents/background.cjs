@@ -17,4 +17,17 @@ function createBackgroundDraftWriter({ assertProject, readCurrentProject, docume
     );
   };
 }
-module.exports = { createBackgroundDraftWriter };
+/**
+ * The version every change starts from: before an AI job edits a project, the state it has now (permanent record plus
+ * draft) is kept as a version with a note saying why, so the change can always be undone. Empty projects have nothing
+ * to keep; the same state twice is kept once.
+ */
+function createSafetyVersionWriter({ assertProject, readCurrentProject, documentStore }) {
+  return (id, note) => {
+    assertProject(id);
+    const current = readCurrentProject(id);
+    if (typeof current.content !== 'string' || !current.content.trim()) return null;
+    return documentStore.appendVersion(id, createDocumentDraftPayload(current), note);
+  };
+}
+module.exports = { createBackgroundDraftWriter, createSafetyVersionWriter };

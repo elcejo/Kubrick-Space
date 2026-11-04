@@ -1,6 +1,18 @@
 const {
   CHARACTER_MAKEUP_VISIBILITY_PROMPT,
 } = require('../../../public/js/contracts/character-instructions.js');
+const { checkToolArguments } = require('../../../public/js/contracts/tool-call.js');
+
+const PARAMETERS = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['visible', 'confidence', 'evidence'],
+  properties: {
+    visible: { type: 'boolean' },
+    confidence: { type: 'string', enum: ['high', 'low'] },
+    evidence: { type: 'string', minLength: 1, maxLength: 400 },
+  },
+};
 
 /** Confirm only proposed cosmetics from the original pixels, without inventory/description bias. */
 async function confirmMakeupVisibility({ image, model, key, limits, proxyRequest }) {
@@ -21,16 +33,7 @@ async function confirmMakeupVisibility({ image, model, key, limits, proxyRequest
               function: {
                 name,
                 description: 'Check actual applied cosmetics, without generating or extracting anything.',
-                parameters: {
-                  type: 'object',
-                  additionalProperties: false,
-                  required: ['visible', 'confidence', 'evidence'],
-                  properties: {
-                    visible: { type: 'boolean' },
-                    confidence: { type: 'string', enum: ['high', 'low'] },
-                    evidence: { type: 'string', maxLength: 400 },
-                  },
-                },
+                parameters: PARAMETERS,
               },
             },
           ],
@@ -57,17 +60,10 @@ async function confirmMakeupVisibility({ image, model, key, limits, proxyRequest
       calls = choice?.message?.tool_calls;
     if (choice?.finish_reason === 'length' || calls?.length !== 1 || calls[0].function?.name !== name)
       return 'uncertain';
-    const value = JSON.parse(calls[0].function.arguments);
-    if (
-      !value ||
-      Object.keys(value).some((key) => !['visible', 'confidence', 'evidence'].includes(key)) ||
-      typeof value.visible !== 'boolean' ||
-      !['high', 'low'].includes(value.confidence) ||
-      typeof value.evidence !== 'string' ||
-      !value.evidence.trim() ||
-      value.evidence.length > 400
-    )
-      return 'uncertain';
+    // Unknown fields are dropped; anything the schema declares must hold, or the layer is not confirmed.
+    const checked = checkToolArguments(PARAMETERS, calls[0].function.arguments);
+    if (checked.problems.length || !checked.value.evidence.trim()) return 'uncertain';
+    const value = checked.value;
     if (value.confidence !== 'high') return 'uncertain';
     return value.visible ? 'visible' : 'absent';
   } catch (error) {

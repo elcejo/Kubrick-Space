@@ -108,6 +108,26 @@ function createDocumentOperations(dependencies) {
       throw error;
     }
   }
-  return { readDraft, saveDraft, listVersions, getVersion, saveVersion };
+  /** The name of a project, changed as the title field of the workspace changes it: in the project and in its draft. */
+  function renameProject({ params = {}, body } = {}) {
+    assertProject(params.id);
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (!name || name.length > 300 || Object.keys(body).some((key) => key !== 'name'))
+      throw security.fail('El nombre debe tener entre 1 y 300 caracteres.');
+    dependencies.renameProject(params.id, name);
+    return { body: { id: params.id, name }, status: 200, headers: {} };
+  }
+  /** A named copy of the project as it is now, kept in its history; the project and its draft are not touched. */
+  function saveSnapshot({ params = {}, body } = {}) {
+    assertProject(params.id);
+    const note = typeof body?.note === 'string' ? body.note.trim() : '';
+    if (!note || note.length > 300 || Object.keys(body).some((key) => key !== 'note'))
+      throw security.fail('Indica una nota de hasta 300 caracteres para la versión.');
+    const saved = dependencies.saveSafetyVersion(params.id, note);
+    if (!saved) throw security.fail('El proyecto aún no tiene contenido que guardar.', 409);
+    const { snapshot, ...version } = saved.version;
+    return { body: { version, created: saved.created }, status: saved.created ? 201 : 200, headers: {} };
+  }
+  return { readDraft, saveDraft, listVersions, getVersion, saveVersion, saveSnapshot, renameProject };
 }
 module.exports = { createDocumentOperations };

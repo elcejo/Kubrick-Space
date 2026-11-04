@@ -4,7 +4,8 @@ export async function loadIngredientVersions(api, projectId) {
     api.getProject(projectId),
     api.getDocumentVersions(projectId),
   ]);
-  const versions = entries.slice().sort((a, b) => b.number - a.number);
+  // Versions kept automatically before an AI change are history, not sources an ingredient may pin.
+  const versions = entries.filter((entry) => !entry.auto).sort((a, b) => b.number - a.number);
   return { project, versions };
 }
 
@@ -26,7 +27,7 @@ export async function readIngredientVersion(api, catalogue, versionId = null) {
   }
   if (versionId) throw new Error('La versión elegida ya no está disponible.');
   const draft = await api.getProjectDraft(project.id);
-  if ((await api.getDocumentVersions(project.id)).length)
+  if ((await api.getDocumentVersions(project.id)).some((entry) => !entry.auto))
     throw new Error('El libro ya tiene versiones guardadas. Vuelve a seleccionarlo.');
   return { project: { ...project, ...(draft?.payload || {}) }, source: 'draft' };
 }

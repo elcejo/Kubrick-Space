@@ -17,6 +17,7 @@ function registerJobRoutes(
     getLLMConfig,
     inference,
     writeProject,
+    saveSafetyVersion,
   },
 ) {
   const get = (id) => {
@@ -115,7 +116,10 @@ function registerJobRoutes(
       const engine =
         inference?.currentImageMode() === 'local'
           ? { provider: 'local', model: 'flux3-klein' }
-          : project.inferenceSettings?.imageModel || body.engine || project.characterImageGeneration;
+          : inference?.currentSettings()?.imageModel ||
+            project.inferenceSettings?.imageModel ||
+            body.engine ||
+            project.characterImageGeneration;
       if (engine) {
         try {
           validateImageEngine(engine);
@@ -178,6 +182,7 @@ function registerJobRoutes(
         queue.retry(resumable.id);
         return { status: 202, body: snapshot(get(resumable.id)) };
       }
+      saveSafetyVersion?.(projectId, 'Antes de un cambio de personaje con IA (' + kind + ')');
       const created = queue.enqueue({ projectId, kind, token, payload });
       return { status: 202, body: snapshot(get(created.id)) };
     }),

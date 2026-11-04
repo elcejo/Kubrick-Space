@@ -13,3 +13,4 @@ kubrick_h3:
   text_encoders: models/video
   vae: models/video
   loras: models/video
+  vae_approx: models/video/h3/preview

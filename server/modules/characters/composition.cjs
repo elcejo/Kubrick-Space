@@ -1,5 +1,6 @@
 const { CHARACTER_REVIEW_PROMPT } = require('../../../public/js/contracts/character-instructions.js');
 const { createHash } = require('node:crypto');
+const { checkToolArguments } = require('../../../public/js/contracts/tool-call.js');
 const {
   planCharacterComposition,
   characterLocalCompositionPrompt,
@@ -190,6 +191,31 @@ function createCharacterCompositionReviewer({
     // call for that, discarding a correct review, so local runs keep the limit out of the schema and
     // normalizeReview truncates the text instead.
     const textLimit = (max) => (llmConfig.isLocalModel(limits.model) ? {} : { maxLength: max });
+    const reviewParameters = {
+      type: 'object',
+      additionalProperties: false,
+      required: ['preserved', 'checks', 'message'],
+      properties: {
+        preserved: { type: 'boolean' },
+        message: { type: 'string', ...textLimit(300) },
+        checks: {
+          type: 'array',
+          minItems: body.items.length,
+          maxItems: body.items.length,
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['id', 'status', 'message'],
+            properties: {
+              id: { type: 'string', enum: body.items.map((_, index) => `part_${index + 1}`) },
+              status: { type: 'string', enum: ['match', 'missing', 'mismatch', 'occluded', 'uncertain'] },
+              message: { type: 'string', ...textLimit(240) },
+            },
+          },
+        },
+      },
+    };
+    let lastProblem = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       const result = await proxyRequest(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -213,33 +239,7 @@ function createCharacterCompositionReviewer({
                   name: tool,
                   description:
                     'Comprueba por píxeles cada pieza solicitada y las zonas que deben conservarse.',
-                  parameters: {
-                    type: 'object',
-                    additionalProperties: false,
-                    required: ['preserved', 'checks', 'message'],
-                    properties: {
-                      preserved: { type: 'boolean' },
-                      message: { type: 'string', ...textLimit(300) },
-                      checks: {
-                        type: 'array',
-                        minItems: body.items.length,
-                        maxItems: body.items.length,
-                        items: {
-                          type: 'object',
-                          additionalProperties: false,
-                          required: ['id', 'status', 'message'],
-                          properties: {
-                            id: { type: 'string', enum: body.items.map((_, index) => `part_${index + 1}`) },
-                            status: {
-                              type: 'string',
-                              enum: ['match', 'missing', 'mismatch', 'occluded', 'uncertain'],
-                            },
-                            message: { type: 'string', ...textLimit(240) },
-                          },
-                        },
-                      },
-                    },
-                  },
+                  parameters: reviewParameters,
                 },
               },
             ],
@@ -250,7 +250,8 @@ function createCharacterCompositionReviewer({
                   llmConfig.characterPrompt(config, 'character_composition', CHARACTER_REVIEW_PROMPT) +
                   '\nReturn exactly one check for each item ID supplied in this request (part_1, part_2, etc.). Copy those IDs exactly. Never invent, omit or duplicate a check. preserved is a JSON boolean; status must use the tool enum. Do not include checks for components outside this batch. authorizedComposition, when supplied, explicitly permits that camera/framing/pose normalization. Do not mark preserved=false for those authorized composition changes; all selected components, identity and style still require verification.' +
                   (attempt
-                    ? '\nThe preceding response failed the output contract. Inspect the same images again and return a complete tool call using precisely the supplied IDs and statuses.'
+                    ? '\nThe preceding response failed the output contract. Inspect the same images again and return a complete tool call using precisely the supplied IDs and statuses.' +
+                      (lastProblem ? '\nExact errors of the previous response:\n' + lastProblem : '')
                     : ''),
               },
               {
@@ -312,7 +313,15 @@ function createCharacterCompositionReviewer({
           },
         };
       try {
-        const value = normalizeReview(reviewPayload(result.data?.choices?.[0], tool), body.items);
+        const payload = reviewPayload(result.data?.choices?.[0], tool);
+        let value;
+        try {
+          value = normalizeReview(payload, body.items);
+        } catch (error) {
+          // The normalization is tolerant on purpose; when it still fails, the schema says exactly where.
+          lastProblem = checkToolArguments(reviewParameters, payload).text;
+          throw error;
+        }
         return { status: 200, body: value };
       } catch (error) {
         const choice = result.data?.choices?.[0];

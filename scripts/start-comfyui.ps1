@@ -37,7 +37,7 @@ foreach ($directory in @($dataDirectory, $webDirectory, $reportDirectory)) {
 $nodeSource = Join-Path $engineRoot 'kubrick_space'
 $nodeDestination = Join-Path $dataDirectory 'custom_nodes\kubrick_space'
 New-Item -ItemType Directory -Path $nodeDestination -Force | Out-Null
-foreach ($file in @('__init__.py', 'nodes.py', 'tool_protocol.py', 'gemma_protocol.py', 'flux3_pdd.py', 'pdd_math.py', 'h3.py', 'h3_optimization.py', 'h3_upscale.py')) {
+foreach ($file in @('__init__.py', 'nodes.py', 'tool_protocol.py', 'gemma_protocol.py', 'flux3_pdd.py', 'pdd_math.py', 'h3.py', 'h3_optimization.py', 'h3_upscale.py', 'h3_preview.py', 'h3_tiny_preview.py', 'h3_tail.py')) {
     Copy-Item -LiteralPath (Join-Path $nodeSource $file) -Destination (Join-Path $nodeDestination $file) -Force
 }
 & $pythonExecutable -c 'import jsonschema' 2>$null

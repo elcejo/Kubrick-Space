@@ -19,7 +19,7 @@ const { registerProjectRoutes, createLibraryOperations } = require('./modules/li
 const {
   registerDocumentRoutes,
   createBackgroundDraftWriter,
-  applyBookAgentPatch,
+  createSafetyVersionWriter,
   applyElementPatch,
 } = require('./modules/documents/index.cjs');
 const {
@@ -106,7 +106,7 @@ function createApp({
   app.use('/api', (req, res, next) => {
     // Scope is per request. Persistent jobs capture it explicitly before leaving HTTP.
     const relevant =
-      /^\/(?:ai\/|jobs\/(?:character|book|edit|cover|scenario|film)|characters\/lore\/approve)/.test(
+      /^\/(?:ai\/|jobs\/(?:character|book|edit|cover|scenario|film|continuity)|characters\/lore\/approve)/.test(
         req.path,
       );
     if (!relevant) return next();
@@ -119,18 +119,34 @@ function createApp({
         ((req.path === '/ai/image' && req.body?.imageType === 'cover') || req.path === '/jobs/cover')
       )
         throw security.fail('Las portadas de guión se crean automáticamente.', 422);
-      const settings = project?.inferenceSettings || {};
+      // The models of a request are the ones in the top bar of the open workspace. A job for another project (the
+      // assistant in a book making a character's photograph) uses the target's own choice when it has one and the
+      // open workspace's for what the target has not chosen.
+      const settings = { ...(project?.inferenceSettings || {}) };
+      const openId = req.get('X-Kubrick-Project-ID');
+      if (project && openId && openId !== project.id && security.UUID.test(openId)) {
+        let open = null;
+        try {
+          open = readCurrentProject(openId)?.inferenceSettings || null;
+        } catch {
+          open = null;
+        }
+        if (open) {
+          if (!(settings.mode === 'local' ? settings.localModel : settings.textModel))
+            for (const key of ['mode', 'textModel', 'localModel'])
+              if (open[key] !== undefined) settings[key] = open[key];
+          if (!settings.imageModel && settings.imageMode !== 'local') {
+            if (open.imageModel) settings.imageModel = open.imageModel;
+            if (open.imageMode !== undefined) settings.imageMode = open.imageMode;
+          }
+        }
+      }
       const requestedMode = project ? settings.mode : req.get('X-Kubrick-Inference-Mode');
       const mode = project ? (requestedMode === 'local' ? 'local' : 'api') : requestedMode || 'hybrid';
       return inference.run(
         mode,
         next,
-        settings.localModel ||
-          (project
-            ? mode === 'local'
-              ? 'local:qwen3.5-4b-int8-convrot'
-              : undefined
-            : req.get('X-Kubrick-Local-Model') || undefined),
+        settings.localModel || (project ? undefined : req.get('X-Kubrick-Local-Model') || undefined),
         { ...settings, projectId: project?.id },
       );
     } catch (error) {
@@ -168,7 +184,7 @@ function createApp({
       });
     next();
   });
-  registerProjectRoutes(app, {
+  const libraryDependencies = {
     repository,
     ROOT_DIR,
     security,
@@ -182,7 +198,8 @@ function createApp({
         { ...project, ...(documentStore.getDraft(project.id)?.payload || {}), id: project.id },
         keep,
       ),
-  });
+  };
+  registerProjectRoutes(app, libraryDependencies);
   registerDocumentRoutes(app, {
     ensureCharacterFace,
     repository,
@@ -190,6 +207,22 @@ function createApp({
     security,
     documentStore,
     projectStore,
+    saveSafetyVersion: createSafetyVersionWriter({ assertProject, readCurrentProject, documentStore }),
+    // Renaming is what the title field does: the project record and, if it has one, the draft.
+    renameProject(id, name) {
+      const revision = repository.read().projects.find((p) => p.id === id)?.revision || 0;
+      const saved = createLibraryOperations(libraryDependencies).updateProject({
+        params: { id },
+        body: { name },
+        headers: { 'x-project-revision': String(revision) },
+      });
+      if (saved.status >= 400)
+        throw security.fail(saved.body?.error || 'No se pudo renombrar.', saved.status);
+      if (documentStore.getDraft(id))
+        createBackgroundDraftWriter({ assertProject, readCurrentProject, documentStore, security })(id, {
+          name,
+        });
+    },
   });
   registerConversationRoutes(app, { assertProject, security, chatStore });
   registerConfigurationRoutes(app, {
@@ -247,6 +280,7 @@ function createApp({
     appRoot,
     ROOT_DIR,
     documentStore,
+    saveSafetyVersion: createSafetyVersionWriter({ assertProject, readCurrentProject, documentStore }),
     writeProject: (() => {
       const write = createBackgroundDraftWriter({
         assertProject,
@@ -261,7 +295,6 @@ function createApp({
         return result;
       };
     })(),
-    applyBookAgentPatch,
     applyElementPatch,
     saveResourceInference(id, body) {
       return createLibraryOperations({

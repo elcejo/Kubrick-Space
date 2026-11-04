@@ -516,6 +516,7 @@ function createLocalProvider({ appRoot, fetchImpl = (...args) => fetch(...args),
     fetchLocal,
     video,
     videoAvailable: localVideo.available,
+    upscalerAvailable: localVideo.upscalerAvailable,
     videoModels: () =>
       localVideo.available()
         ? [

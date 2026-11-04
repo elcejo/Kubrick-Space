@@ -21,6 +21,12 @@ const {
   CHARACTER_NATURES,
   applyCharacterOption,
 } = require('../../../public/js/contracts/character-options.js');
+const {
+  validateSchema,
+  explainSchemaErrors,
+  pruneUndeclared,
+} = require('../../../public/js/contracts/json-schema.js');
+const { checkToolArguments, toolCorrection } = require('../../../public/js/contracts/tool-call.js');
 
 const operationSchema = {
   type: 'object',
@@ -106,7 +112,12 @@ const tool = {
   },
 };
 
-function characterTool(document, photoNumbers = []) {
+/**
+ * The tool the provider receives. With `anyKey` (what the server validates against) update_field and remove_field are
+ * always allowed and their key is free text: set_identity introduces common fields that the initial sheet did not have,
+ * and the sheet itself decides afterwards whether a key exists.
+ */
+function characterTool(document, photoNumbers = [], { anyKey = false } = {}) {
   const variant = (op, properties, required) => ({
     type: 'object',
     additionalProperties: false,
@@ -160,12 +171,14 @@ function characterTool(document, photoNumbers = []) {
       ['key', 'value'],
     ),
   ];
-  if (document.fields.length)
+  if (document.fields.length || anyKey)
     variants.push(
       variant(
         'update_field',
         {
-          key: { type: 'string', enum: document.fields.map((field) => field.key) },
+          key: anyKey
+            ? { type: 'string' }
+            : { type: 'string', enum: document.fields.map((field) => field.key) },
           label: operationSchema.properties.label,
           type: operationSchema.properties.type,
           section: operationSchema.properties.section,
@@ -177,8 +190,12 @@ function characterTool(document, photoNumbers = []) {
       ),
     );
   const removable = document.fields.filter((field) => !field.required).map((field) => field.key);
-  if (removable.length)
-    variants.push(variant('remove_field', { key: { type: 'string', enum: removable } }, ['key']));
+  if (removable.length || anyKey)
+    variants.push(
+      variant('remove_field', { key: anyKey ? { type: 'string' } : { type: 'string', enum: removable } }, [
+        'key',
+      ]),
+    );
   const scoped = JSON.parse(JSON.stringify(tool));
   scoped.function.parameters.properties.operations.items = { anyOf: variants };
   if (photoNumbers.length) {
@@ -624,7 +641,11 @@ function createCharacterOperations(dependencies) {
         for (const call of calls) {
           let data;
           try {
-            data = management.read(call.function.name, JSON.parse(call.function.arguments));
+            // Queries are checked against their own declared schema; the answer to a bad one says where it is wrong.
+            const declared = management.tools.find((item) => item.function.name === call.function.name);
+            const checked = checkToolArguments(declared.function.parameters, call.function.arguments);
+            if (checked.problems.length) data = { error: toolCorrection(checked.text) };
+            else data = management.read(call.function.name, checked.value);
           } catch (error) {
             data = { error: error.message };
           }
@@ -657,7 +678,7 @@ function createCharacterOperations(dependencies) {
           },
           result.status || 502,
         );
-      const choice = result?.data?.choices?.[0],
+      let choice = result?.data?.choices?.[0],
         calls = choice?.message?.tool_calls;
       if (
         management &&
@@ -665,12 +686,52 @@ function createCharacterOperations(dependencies) {
         calls?.length === 1 &&
         calls[0].function?.name === 'manage_character_projects'
       ) {
-        try {
-          const plan = management.plan(JSON.parse(calls[0].function.arguments));
-          return reply({ management: plan, message: plan.message, model, usage: result.data.usage || null });
-        } catch (error) {
-          return reply({ error: error.message, code: 'CHARACTER_INVALID_MANAGEMENT_PLAN' }, 422);
+        const planSchema = management.tools.find((item) => item.function.name === 'manage_character_projects')
+          .function.parameters;
+        let failure;
+        for (let attempt = 0; ; attempt++) {
+          try {
+            // The plan is checked against the schema the provider received; a failure, of the schema or of the
+            // characters themselves, goes back to the model once with its exact reason before the author sees it.
+            const checked = checkToolArguments(planSchema, calls[0].function.arguments);
+            if (checked.problems.length && !llmConfig.isLocalModel(model))
+              throw Error('El plan no respeta el formato (esquema de gestión): ' + checked.text);
+            const plan = management.plan(checked.value);
+            return reply({
+              management: plan,
+              message: plan.message,
+              model,
+              usage: result.data.usage || null,
+            });
+          } catch (error) {
+            failure = error;
+            console.warn('[Character management] plan rechazado (' + (attempt + 1) + '/2):', error.message);
+            if (attempt) break;
+            dependencies.reportProgress?.('Corrigiendo el plan de gestión · intento 2 de 2…');
+            dependencies.backgroundSignal?.throwIfAborted();
+            const retried = await send([
+              ...extraMessages,
+              { role: 'assistant', content: null, tool_calls: calls },
+              {
+                role: 'tool',
+                tool_call_id: calls[0].id,
+                content: JSON.stringify({ error: toolCorrection(error.message) }),
+              },
+            ]);
+            const next = retried?.data?.choices?.[0];
+            if (
+              retried?.error ||
+              next?.finish_reason === 'length' ||
+              next?.message?.tool_calls?.length !== 1 ||
+              next.message.tool_calls[0].function?.name !== 'manage_character_projects'
+            )
+              break;
+            result = retried;
+            choice = next;
+            calls = next.message.tool_calls;
+          }
         }
+        return reply({ error: failure.message, code: 'CHARACTER_INVALID_MANAGEMENT_PLAN' }, 422);
       }
       if (
         choice?.finish_reason === 'length' ||
@@ -694,88 +755,143 @@ function createCharacterOperations(dependencies) {
           502,
         );
       let proposal, nextDocument, photoReferences;
-      try {
-        proposal = JSON.parse(calls[0].function.arguments);
-        if (/^(descripci[oó]n|mensaje|summary|description)$/i.test(proposal.description?.trim() || ''))
-          throw new Error('La descripción contiene un texto de plantilla, no el personaje solicitado.');
-        if (source === 'summary' && proposal.operations.length)
-          throw new Error('La actualización de descripción no puede modificar campos.');
-        if (source === 'summary' && proposal.assetRequests?.length)
-          throw new Error('La actualización de descripción no puede solicitar nuevas piezas.');
-        if (source === 'options' && proposal.operations.some((operation) => operation.op !== 'set_narrative'))
-          throw new Error('Las opciones elegidas por el usuario deben conservarse.');
-        const { photoSelection, ...changes } = proposal;
-        let applicable = normalizeCharacterProposal(document, changes, { source });
-        if (llmConfig.isLocalModel(model)) {
-          // A small local model gets most of a sheet right: keep what the sheet accepts, report the rest.
-          const { proposal: kept, dropped } = lenientCharacterProposal(document, applicable, { source });
-          if (dropped.length)
-            console.warn(
-              '[Character proposal] operaciones omitidas:',
-              JSON.stringify(
-                dropped.map(({ operation, reason }) => ({ op: operation.op, key: operation.key, reason })),
-              ),
-            );
-          applicable = kept;
-        }
-        nextDocument = applyCharacterOperations(document, applicable, {
-          id: () => `attr_${randomUUID()}`,
-          source,
-        });
-        if (!nextDocument.identity.base || !nextDocument.identity.nature.trim())
-          throw new Error('La propuesta debe definir base y naturaleza.');
-        if (photoNumbers.length) {
-          if (
-            !photoSelection ||
-            Object.keys(photoSelection).some((key) => !['base', 'details'].includes(key)) ||
-            !Array.isArray(photoSelection.details)
-          )
-            throw Error('Falta la selección de fotos.');
-          const resolve = (number) => {
-            if (!photoNumbers.includes(number)) throw Error('Foto no solicitada.');
-            return gallery.find((photo) => photo.number === number);
-          };
-          photoReferences = validateCharacterPhotoReferences(
-            {
-              base: resolve(photoSelection.base),
-              details: photoSelection.details.map((item) => {
-                if (!item || Object.keys(item).some((key) => !['photo', 'keys'].includes(key)))
-                  throw Error('Donante inválido.');
-                return { ...resolve(item.photo), keys: item.keys };
-              }),
-            },
-            body.projectId,
-          );
-          if (
-            photoReferences.details.length + 1 !== photoNumbers.length ||
-            photoReferences.details.some((photo) =>
-              photo.keys.some(
-                (key) =>
-                  !nextDocument.fields.some(
-                    (field) =>
-                      field.key === key &&
-                      field.section === 'appearance' &&
-                      field.value !== null &&
-                      field.value !== '',
-                  ),
-              ),
-            )
-          )
-            throw Error('Las fotos deben aportar solo rasgos visuales definidos.');
-        } else if (photoSelection !== undefined) throw Error('No se solicitaron fotos numeradas.');
-      } catch (error) {
-        console.warn('Character proposal rejected:', error.message);
-        return reply(
-          {
-            error:
-              error.message === 'La característica ya existe; usa update_field.'
-                ? 'El ayudante repitió una característica en su propuesta. La ficha se conserva; puedes usar Reintentar solicitud.'
-                : 'El modelo devolvió una propuesta incompatible con esta ficha. No se aplicó ningún cambio; puedes usar Reintentar solicitud.',
-            code: 'CHARACTER_INVALID_PROPOSAL',
-          },
-          502,
+      // The proposal is checked against the very schema the provider was given; a first failure goes back to the model
+      // once, with the exact paths or the reason, before the author sees anything.
+      const proposalSchema = characterTool(document, photoNumbers, { anyKey: true }).function.parameters;
+      const sameProposal = (response) => {
+        const next = response?.data?.choices?.[0];
+        return (
+          !response?.error &&
+          next?.finish_reason !== 'length' &&
+          next?.message?.tool_calls?.length === 1 &&
+          next.message.tool_calls[0].function?.name === 'propose_character_changes'
         );
-      }
+      };
+      for (let attempt = 0; ; attempt++)
+        try {
+          proposal = JSON.parse(calls[0].function.arguments);
+          {
+            // A field the sheet's format does not have is discarded; what remains is validated strictly.
+            const cleaned = pruneUndeclared(proposal, proposalSchema);
+            proposal = cleaned.value;
+            if (cleaned.removed.length)
+              console.warn(
+                '[Character proposal] campos descartados:',
+                cleaned.removed.slice(0, 12).join(', '),
+              );
+            const problems = validateSchema(proposal, proposalSchema);
+            if (problems.length && !llmConfig.isLocalModel(model))
+              throw new Error(
+                'La propuesta no respeta el formato (esquema de ficha): ' + explainSchemaErrors(problems),
+              );
+          }
+          if (/^(descripci[oó]n|mensaje|summary|description)$/i.test(proposal.description?.trim() || ''))
+            throw new Error('La descripción contiene un texto de plantilla, no el personaje solicitado.');
+          if (source === 'summary' && proposal.operations.length)
+            throw new Error('La actualización de descripción no puede modificar campos.');
+          if (source === 'summary' && proposal.assetRequests?.length)
+            throw new Error('La actualización de descripción no puede solicitar nuevas piezas.');
+          if (
+            source === 'options' &&
+            proposal.operations.some((operation) => operation.op !== 'set_narrative')
+          )
+            throw new Error('Las opciones elegidas por el usuario deben conservarse.');
+          const { photoSelection, ...changes } = proposal;
+          let applicable = normalizeCharacterProposal(document, changes, { source });
+          if (llmConfig.isLocalModel(model)) {
+            // A small local model gets most of a sheet right: keep what the sheet accepts, report the rest.
+            const { proposal: kept, dropped } = lenientCharacterProposal(document, applicable, { source });
+            if (dropped.length)
+              console.warn(
+                '[Character proposal] operaciones omitidas:',
+                JSON.stringify(
+                  dropped.map(({ operation, reason }) => ({ op: operation.op, key: operation.key, reason })),
+                ),
+              );
+            applicable = kept;
+          }
+          nextDocument = applyCharacterOperations(document, applicable, {
+            id: () => `attr_${randomUUID()}`,
+            source,
+          });
+          if (!nextDocument.identity.base || !nextDocument.identity.nature.trim())
+            throw new Error('La propuesta debe definir base y naturaleza.');
+          if (photoNumbers.length) {
+            if (
+              !photoSelection ||
+              Object.keys(photoSelection).some((key) => !['base', 'details'].includes(key)) ||
+              !Array.isArray(photoSelection.details)
+            )
+              throw Error('Falta la selección de fotos.');
+            const resolve = (number) => {
+              if (!photoNumbers.includes(number)) throw Error('Foto no solicitada.');
+              return gallery.find((photo) => photo.number === number);
+            };
+            photoReferences = validateCharacterPhotoReferences(
+              {
+                base: resolve(photoSelection.base),
+                details: photoSelection.details.map((item) => {
+                  if (!item || Object.keys(item).some((key) => !['photo', 'keys'].includes(key)))
+                    throw Error('Donante inválido.');
+                  return { ...resolve(item.photo), keys: item.keys };
+                }),
+              },
+              body.projectId,
+            );
+            if (
+              photoReferences.details.length + 1 !== photoNumbers.length ||
+              photoReferences.details.some((photo) =>
+                photo.keys.some(
+                  (key) =>
+                    !nextDocument.fields.some(
+                      (field) =>
+                        field.key === key &&
+                        field.section === 'appearance' &&
+                        field.value !== null &&
+                        field.value !== '',
+                    ),
+                ),
+              )
+            )
+              throw Error('Las fotos deben aportar solo rasgos visuales definidos.');
+          } else if (photoSelection !== undefined) throw Error('No se solicitaron fotos numeradas.');
+          break;
+        } catch (error) {
+          console.warn('Character proposal rejected (' + (attempt + 1) + '/2):', error.message);
+          if (attempt === 0) {
+            dependencies.reportProgress?.('Corrigiendo la propuesta de la ficha · intento 2 de 2…');
+            dependencies.backgroundSignal?.throwIfAborted();
+            const retried = await send([
+              ...extraMessages,
+              { role: 'assistant', content: null, tool_calls: calls },
+              {
+                role: 'tool',
+                tool_call_id: calls[0].id,
+                content: JSON.stringify({
+                  error:
+                    'La propuesta no se aplicó. Corrige solo lo indicado y vuelve a llamar a propose_character_changes. ' +
+                    String(error.message).slice(0, 1500),
+                }),
+              },
+            ]);
+            if (sameProposal(retried)) {
+              result = retried;
+              choice = result.data.choices[0];
+              calls = choice.message.tool_calls;
+              continue;
+            }
+          }
+          return reply(
+            {
+              error:
+                error.message === 'La característica ya existe; usa update_field.'
+                  ? 'El ayudante repitió una característica en su propuesta. La ficha se conserva; puedes usar Reintentar solicitud.'
+                  : 'El modelo devolvió una propuesta incompatible con esta ficha. No se aplicó ningún cambio; puedes usar Reintentar solicitud.',
+              code: 'CHARACTER_INVALID_PROPOSAL',
+            },
+            502,
+          );
+        }
       responseHeaders['Cache-Control'] = 'no-store';
       return reply(
         {

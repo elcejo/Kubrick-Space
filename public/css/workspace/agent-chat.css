@@ -136,10 +136,277 @@
   opacity: 1;
 }
 
-.chat-loader--book progress {
+.chat-loader--book .task-progress {
   width: 100%;
-  height: 6px;
-  accent-color: var(--color-accent, #818cf8);
+}
+
+/* Progress bar of the tasks the assistant runs: measured when the server knows a total, otherwise a moving bar. */
+.task-progress {
+  --task-color: var(--accent, #6366f1);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.task-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.task-progress__label {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-progress__value {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.task-progress__track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--task-color) 18%, transparent);
+}
+
+.task-progress__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--task-color), color-mix(in srgb, var(--task-color) 55%, #ffffff));
+  transition: width 0.6s ease;
+}
+
+.task-progress[data-indeterminate='true'] .task-progress__fill {
+  width: 38%;
+  animation: task-progress-slide 1.4s ease-in-out infinite;
+}
+
+.task-progress[data-state='completed'] {
+  --task-color: #22c55e;
+}
+
+.task-progress[data-state='failed'],
+.task-progress[data-state='interrupted'] {
+  --task-color: #ef4444;
+}
+
+.task-progress__detail {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes task-progress-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(270%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-progress__fill {
+    transition: none;
+  }
+
+  .task-progress[data-indeterminate='true'] .task-progress__fill {
+    width: 100%;
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+/* Cards of the conversation: the task the assistant started or the result it finished. The colors are the card's
+   own and do not change with the theme, because the text sits over a photograph. */
+.chat-msg--card {
+  display: block;
+  align-self: stretch;
+  max-width: none;
+  padding: 0;
+  background: none;
+}
+
+.chat-card {
+  --card-a: #7819ff;
+  --card-b: #e11d9b;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 168px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--card-a), var(--card-b));
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.28);
+  color: #ffffff;
+}
+
+.chat-card[data-kind='stage'] {
+  --card-a: #0891b2;
+  --card-b: #2563eb;
+}
+
+.chat-card[data-kind='book'] {
+  --card-a: #f59e0b;
+  --card-b: #ea580c;
+}
+
+.chat-card[data-kind='video'] {
+  --card-a: #059669;
+  --card-b: #0d9488;
+}
+
+.chat-card[data-state='failed'],
+.chat-card[data-state='interrupted'] {
+  --card-a: #b91c1c;
+  --card-b: #7f1d1d;
+}
+
+.chat-card[data-state='cancelled'] {
+  --card-a: #475569;
+  --card-b: #1e293b;
+}
+
+.chat-card__image {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.chat-card__shade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.1) 0%, rgb(0 0 0 / 0.78) 100%);
+}
+
+.chat-card:not(.chat-card--photo) .chat-card__shade {
+  background: linear-gradient(180deg, rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0.3) 100%);
+}
+
+.chat-card__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.chat-card__header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chat-card__kicker {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-card__time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.chat-card__title {
+  overflow: hidden;
+  font-size: 20px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.5);
+}
+
+.chat-card__summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.55);
+}
+
+.task-progress[hidden],
+.chat-card__open[hidden],
+.chat-card__cancel[hidden] {
+  display: none;
+}
+
+.chat-card .task-progress {
+  --task-color: #ffffff;
+  color: #ffffff;
+}
+
+.chat-card .task-progress__track {
+  background: rgb(255 255 255 / 0.28);
+}
+
+.chat-card .task-progress__detail {
+  color: rgb(255 255 255 / 0.85);
+}
+
+.chat-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-card__open,
+.chat-card__cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgb(255 255 255 / 0.55);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.32);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.chat-card__open:hover,
+.chat-card__cancel:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.22);
+}
+
+.chat-card__open:focus-visible,
+.chat-card__cancel:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.chat-card__cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Project assistant: guidance and context stay visible without interrupting
@@ -301,4 +568,77 @@ html[data-theme='light'] .chat-panel {
 
 .workspace__chat .chat-panel.is-collapsed .chat-header__toggle {
   margin-left: 0;
+}
+
+/* Simulated thinking of local models: the level selector next to Send, and the block of notes in the conversation. */
+.chat-thinking-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chat-thinking-controls[hidden],
+.chat-thinking-custom[hidden] {
+  display: none;
+}
+
+.chat-thinking-select,
+.chat-thinking-custom {
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  background: var(--color-glass, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.chat-thinking-custom {
+  width: 56px;
+}
+
+.chat-thinking-select:focus-visible,
+.chat-thinking-custom:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chat-thinking {
+  --task-color: #a78bfa;
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #a78bfa 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, #7819ff 12%, transparent);
+  color: var(--text-primary);
+}
+
+.chat-thinking__summary {
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.chat-thinking__notes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chat-thinking:not([open]) .task-progress {
+  display: none;
+}
+
+.chat-thinking__error {
+  margin: 0;
+  font-size: 12px;
+  color: #fca5a5;
 }

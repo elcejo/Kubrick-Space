@@ -32,6 +32,7 @@ const REQUEST_KEYS = [
   'scope',
   'viewId',
   'references',
+  'workspaceProjectId',
 ];
 
 /**
@@ -50,7 +51,8 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
   };
   const engineFor = (project) => {
     if (inference?.currentImageMode() === 'local') return { provider: 'local', model: 'flux3-klein' };
-    const engine = project.inferenceSettings?.imageModel;
+    // The image model of the open workspace (the request's scope) counts before the scenario's own.
+    const engine = inference?.currentSettings()?.imageModel || project.inferenceSettings?.imageModel;
     if (!engine) throw security.fail('Selecciona un modelo de imagen en la barra superior.', 422);
     try {
       return validateImageEngine(engine);
@@ -77,7 +79,8 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
           !SOURCES.includes(body.source) ||
           typeof body.expectedContent !== 'string' ||
           (body.request !== undefined && (typeof body.request !== 'string' || body.request.length > 12000)) ||
-          (body.scope !== undefined && !SCOPES.includes(body.scope))
+          (body.scope !== undefined && !SCOPES.includes(body.scope)) ||
+          (body.workspaceProjectId !== undefined && !security.UUID.test(body.workspaceProjectId))
         )
           throw security.fail('Trabajo de escenario inválido.');
         assertProject(body.projectId);
@@ -124,32 +127,51 @@ function createScenarioJobs(deps, { infer, makeOperations, readImage }) {
           if (!document.views.some((view) => view.id === body.viewId))
             throw security.fail('Ese ángulo todavía no existe.');
         } else if (body.viewId !== undefined) throw security.fail('El ángulo solo aplica a regenerar uno.');
-        const engine = engineFor(project);
-        return {
-          status: 202,
-          body: snapshot(
-            queue.enqueue({
-              projectId: project.id,
-              kind: 'scenario',
-              token: body.token,
-              payload: {
-                source: body.source,
-                request,
-                scope: body.source === 'regenerate' ? scope : 'all',
-                viewId: body.viewId,
-                references,
-                expectedContent: project.content,
-                engine,
-                category: project.category,
-                textConfig: deps.getLLMConfig(),
-                inferenceMode: inference?.currentMode() || 'api',
-                inferenceSettings: inference?.currentSettings() || {},
-                localModel: inference?.currentLocalModel(),
-              },
-            }).id,
-            project.id,
-          ),
+        // A scenario asked for from another workspace (the assistant in a book) is generated with the models chosen
+        // in the top bar of that workspace, since the scenario may have none of its own.
+        const workspace = body.workspaceProjectId
+          ? (assertProject(body.workspaceProjectId), readCurrentProject(body.workspaceProjectId))
+          : null;
+        const settings = workspace?.inferenceSettings || {};
+        const enqueue = () => {
+          const engine = engineFor(project);
+          if (scenarioHasContent(document))
+            deps.saveSafetyVersion?.(
+              project.id,
+              'Antes de un cambio del escenario con IA (' + body.source + ')',
+            );
+          return {
+            status: 202,
+            body: snapshot(
+              queue.enqueue({
+                projectId: project.id,
+                kind: 'scenario',
+                token: body.token,
+                payload: {
+                  source: body.source,
+                  request,
+                  scope: body.source === 'regenerate' ? scope : 'all',
+                  viewId: body.viewId,
+                  references,
+                  expectedContent: project.content,
+                  engine,
+                  category: project.category,
+                  textConfig: deps.getLLMConfig(),
+                  inferenceMode: inference?.currentMode() || 'api',
+                  inferenceSettings: inference?.currentSettings() || {},
+                  localModel: inference?.currentLocalModel(),
+                },
+              }).id,
+              project.id,
+            ),
+          };
         };
+        return workspace && inference
+          ? inference.run(settings.mode === 'local' ? 'local' : 'api', enqueue, settings.localModel, {
+              ...settings,
+              projectId: workspace.id,
+            })
+          : enqueue();
       }),
     );
   }

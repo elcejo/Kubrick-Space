@@ -79,6 +79,7 @@ function createCoverJobs(deps, makeOperations) {
           throw security.fail('El historial admite 100 portadas.');
         if (inference?.currentImageMode() !== 'local' && !inference?.currentSettings()?.imageModel)
           throw security.fail('Selecciona un modelo de imagen en la barra superior.', 422);
+        deps.saveSafetyVersion?.(project.id, 'Antes de generar una portada con IA');
         let document = '';
         try {
           const parsed = JSON.parse(project.content);

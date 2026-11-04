@@ -158,7 +158,9 @@ class KubrickExtension(ComfyExtension):
         from .flux3_pdd import KubrickFlux3Turbo
         from .h3 import KubrickH3Conditioning, KubrickLoadConditioning, KubrickSaveConditioning
         from .h3_optimization import KubrickH3Optimization
+        from .h3_preview import KubrickH3Preview
+        from .h3_tail import KubrickH3Tail
         from .h3_upscale import KubrickH3LatentUpscaler
         return [KubrickToolGenerate, KubrickReferenceImage, KubrickModelControl, KubrickFlux3Turbo,
                 KubrickH3Conditioning, KubrickSaveConditioning, KubrickLoadConditioning, KubrickH3Optimization,
-                KubrickH3LatentUpscaler]
+                KubrickH3LatentUpscaler, KubrickH3Preview, KubrickH3Tail]

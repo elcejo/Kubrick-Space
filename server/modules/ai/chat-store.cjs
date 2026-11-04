@@ -35,6 +35,15 @@ function createProjectChatStore(projectsDir) {
       if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
     }
   };
+  /** A result card of the chat: the task it follows (optional) and the project it is about. */
+  const validCard = (card) =>
+    card &&
+    typeof card === 'object' &&
+    !Array.isArray(card) &&
+    Object.keys(card).every((key) => ['projectId', 'jobId', 'kind'].includes(key)) &&
+    /^[a-f0-9-]{36}$/.test(card.projectId) &&
+    (card.jobId === undefined || /^[a-f0-9-]{36}$/.test(card.jobId)) &&
+    (card.kind === undefined || (typeof card.kind === 'string' && /^[a-z-]{1,40}$/.test(card.kind)));
   const validate = (value) => {
     if (
       !value ||
@@ -54,7 +63,7 @@ function createProjectChatStore(projectsDir) {
         !item ||
         typeof item !== 'object' ||
         Array.isArray(item) ||
-        Object.keys(item).some((key) => !['role', 'text', 'time', 'visible'].includes(key))
+        Object.keys(item).some((key) => !['role', 'text', 'time', 'visible', 'card'].includes(key))
       ) {
         throw Object.assign(new Error('Hay un mensaje inválido en la conversación.'), { status: 400 });
       }
@@ -63,11 +72,18 @@ function createProjectChatStore(projectsDir) {
         typeof item.text !== 'string' ||
         item.text.length > 2_000_000 ||
         (item.time !== undefined && (typeof item.time !== 'string' || item.time.length > 40)) ||
-        (item.visible !== undefined && typeof item.visible !== 'boolean')
+        (item.visible !== undefined && typeof item.visible !== 'boolean') ||
+        (item.card !== undefined && !validCard(item.card))
       ) {
         throw Object.assign(new Error('Hay un mensaje inválido en la conversación.'), { status: 400 });
       }
-      return { role: item.role, text: item.text, time: item.time || '', visible: item.visible !== false };
+      return {
+        role: item.role,
+        text: item.text,
+        time: item.time || '',
+        visible: item.visible !== false,
+        ...(item.card ? { card: { ...item.card } } : {}),
+      };
     });
     if (!messages.some((item) => item.visible && item.role === 'user' && item.text.trim())) {
       throw Object.assign(new Error('La conversación no contiene mensajes visibles.'), { status: 400 });

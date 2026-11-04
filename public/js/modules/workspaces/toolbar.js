@@ -31,6 +31,7 @@ export class Toolbar {
   /** @type {HTMLButtonElement|null} */ #saveBtn = null;
   #closeVersions = null;
   #inference = null;
+  #renameListener = null;
   setBackgroundBusy(busy) {
     const name = this.#root?.querySelector('#toolbar-project-name');
     if (name) {
@@ -62,6 +63,13 @@ export class Toolbar {
     nameInput.id = 'toolbar-project-name';
     nameInput.maxLength = 300;
     nameInput.addEventListener('input', () => this.#saveProjectName(projectData.id, nameInput.value));
+    // The assistant renames the open project through the same field.
+    this.#renameListener = ({ id, name }) => {
+      if (id !== projectData.id || typeof name !== 'string') return;
+      nameInput.value = name;
+      this.#saveProjectName(id, name);
+    };
+    EventBus.on('workspace:rename', this.#renameListener);
     nameInput.addEventListener('blur', () => {
       nameInput.value = nameInput.value.trim() || projectData.name;
       this.#saveProjectName(projectData.id, nameInput.value);
@@ -281,6 +289,8 @@ export class Toolbar {
   destroy() {
     this.#inference?.destroy();
     this.#inference = null;
+    if (this.#renameListener) EventBus.off('workspace:rename', this.#renameListener);
+    this.#renameListener = null;
     this.#closeVersions?.();
     this.#closeVersions = null;
     for (const [evt, fn] of Object.entries(this.#handlers)) {

@@ -51,7 +51,7 @@ export function openDocumentVersions(project, presentation = {}) {
       const heading = document.createElement('h3');
       heading.textContent = `${version.name} · Versión ${version.number}`;
       const timestamp = document.createElement('p');
-      timestamp.textContent = date(version.savedAt);
+      timestamp.textContent = date(version.savedAt) + (version.note ? ' · ' + version.note : '');
       const body = document.createElement('article');
       const content = version.snapshot?.content || '';
       let structured;
@@ -183,6 +183,11 @@ export function openDocumentVersions(project, presentation = {}) {
           const time = document.createElement('span');
           time.textContent = date(entry.savedAt);
           button.append(title, time);
+          if (entry.note) {
+            const note = document.createElement('small');
+            note.textContent = entry.note;
+            button.append(note);
+          }
           button.addEventListener('click', () => select(entry, button));
           list.appendChild(button);
           if (index === 0) select(entry, button);

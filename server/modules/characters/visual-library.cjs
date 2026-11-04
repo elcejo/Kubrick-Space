@@ -1,6 +1,7 @@
 const { confirmMakeupVisibility } = require('./makeup-visibility.cjs');
 const { characterDonorInventoryPrompt } = require('../../../public/js/contracts/character-instructions.js');
 const { randomUUID } = require('node:crypto');
+const { checkToolArguments } = require('../../../public/js/contracts/tool-call.js');
 const { validateCharacterDocument } = require('../../../public/js/contracts/character-model.js');
 const {
   characterAssetImage,
@@ -174,8 +175,10 @@ function createCharacterVisualLibraryOperation(dependencies) {
         delete tool.function.parameters.properties.visibility;
         tool.function.parameters.properties.items.items.properties.category.enum = categories;
       }
-      let correction = '';
+      let correction = '',
+        schemaText = '';
       for (let attempt = 0; attempt < 2; attempt++) {
+        schemaText = '';
         dependencies.backgroundSignal?.throwIfAborted();
         dependencies.reportProgress?.(
           attempt
@@ -268,7 +271,12 @@ function createCharacterVisualLibraryOperation(dependencies) {
             calls[0].function?.name !== tool.function.name
           )
             throw Error('Invalid inventory');
-          const raw = JSON.parse(calls[0].function.arguments);
+          // Fields the schema does not have are dropped; the normalization below is tolerant on purpose, and when it
+          // still fails the correction carries the exact schema paths.
+          const checked = checkToolArguments(tool.function.parameters, calls[0].function.arguments);
+          schemaText = checked.text;
+          if (checked.value === undefined) throw Error('Invalid inventory');
+          const raw = checked.value;
           const proposal = body.extractionScope
             ? normalizeCharacterAssetPlan(raw, document)
             : normalizeCharacterInventory(raw, document, { complete: llmConfig.isLocalModel(model) });
@@ -350,6 +358,7 @@ function createCharacterVisualLibraryOperation(dependencies) {
               : 'The inventory failed the deterministic completeness check. Reinspect the SAME portrait and return the complete corrected inventory and visibility checklist. Separate visible facial hair, makeup and head-worn accessories (earrings, hats, headbands/clips, eyewear, headphones) from face; include face and hair/bald scalp where applicable, and every visible mandatory distinctive trait. Do not invent absent features. Do not extract optional facial details unless requested.';
             if (/^Faltan piezas independientes visibles:/.test(error.message))
               correction += ` ${error.message.slice(0, 300)}`;
+            if (schemaText) correction += `\nSchema errors of the previous call:\n${schemaText}`;
             continue;
           }
           return {

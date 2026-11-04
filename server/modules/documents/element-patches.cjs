@@ -9,7 +9,14 @@ const {
   SCREENPLAY_VOICES,
 } = require('../../../public/js/contracts/screenplay.js');
 const { validateScenarioDocument, SCENARIO_FIELDS } = require('../../../public/js/contracts/scenario.js');
-const { validateFilmDocument } = require('../../../public/js/contracts/film.js');
+const { validateFilmDocument, FILM_FRAME_OPTIONS } = require('../../../public/js/contracts/film.js');
+const { filmRecomposePrompt } = require('../../../public/js/contracts/film-prompt.js');
+const { calendarDate, compareCalendarDates } = require('../../../public/js/contracts/calendar-date.js');
+const { applyInlineOperation, INLINE_OPERATIONS } = require('./inline-marks.cjs');
+const {
+  normalizeTimeline,
+  syncStoryBookTimelineMetadata,
+} = require('../../../public/js/contracts/story-book.js');
 const escape = (value) =>
   value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
 const fail = (message) => {
@@ -167,6 +174,103 @@ function assertLinks(doc, ingredients) {
         fail('Vincula el personaje como ingrediente antes de asignarlo.');
   }
 }
+/**
+ * The timeline of a Story Book, edited as a person edits it: dates and ranges of their own, and links from a chapter, a
+ * theme or a paragraph to them. Entries are named by their date (two entries never share one); the ids are the server's.
+ * The dates each element shows are rebuilt from the links afterwards, so they cannot drift from them.
+ */
+function timelineOperation(next, op) {
+  const timeline = (next.timeline = normalizeTimeline(next.timeline));
+  const valid = (value) =>
+    calendarDate(value) || fail('Fecha inválida: usa AAAA-MM-DD (año negativo para AC).');
+  const pointOf = (value) => timeline.points.find((point) => point.date === valid(value));
+  const rangeOf = (start, end) =>
+    timeline.ranges.find((range) => range.start === valid(start) && range.end === valid(end));
+  const ordered = (start, end) =>
+    compareCalendarDates(end, start) >= 0 || fail('El fin del rango no puede ser anterior a su inicio.');
+  const ensurePoint = (value) => {
+    let point = pointOf(value);
+    if (!point) {
+      point = { id: 'timeline-point-' + randomUUID(), date: valid(value), order: timeline.points.length };
+      timeline.points.push(point);
+    }
+    return point;
+  };
+  const ensureRange = (start, end, color) => {
+    valid(start);
+    valid(end);
+    ordered(start, end);
+    let range = rangeOf(start, end);
+    if (!range) {
+      range = {
+        id: 'timeline-range-' + randomUUID(),
+        start,
+        end,
+        ...(color ? { color } : {}),
+        order: timeline.ranges.length,
+      };
+      timeline.ranges.push(range);
+    } else if (color) range.color = color;
+    return range;
+  };
+  const element = () => {
+    const found = [
+      ...next.chapters.map((node) => ['chapter', node]),
+      ...next.chapters.flatMap((chapter) => chapter.themes.map((node) => ['theme', node])),
+      ...next.chapters.flatMap((chapter) =>
+        chapter.themes.flatMap((theme) => theme.paragraphs.map((node) => ['paragraph', node])),
+      ),
+    ].find(([, node]) => node.id === op.id);
+    return (
+      found ||
+      fail('Elemento inexistente: solo un capítulo, un tema o un párrafo se vincula a la línea de tiempo.')
+    );
+  };
+  const link = (entry, targetType) => {
+    const [nodeType, node] = element();
+    if (!timeline.connections.some((item) => item.nodeId === node.id && item.targetId === entry.id))
+      timeline.connections.push({
+        id: 'timeline-connection-' + randomUUID(),
+        nodeId: node.id,
+        nodeType,
+        targetType,
+        targetId: entry.id,
+        order: timeline.connections.length,
+      });
+  };
+  const unlink = (entry) => {
+    const [, node] = element();
+    const before = timeline.connections.length;
+    timeline.connections = timeline.connections.filter(
+      (item) => !(item.nodeId === node.id && item.targetId === entry.id),
+    );
+    if (timeline.connections.length === before) fail('El elemento no está vinculado a esa fecha.');
+  };
+  const existing = (entry) => entry || fail('No existe esa fecha o rango en la línea de tiempo.');
+  const drop = (entry, list) => {
+    timeline[list] = timeline[list].filter((item) => item.id !== entry.id);
+    timeline.connections = timeline.connections.filter((item) => item.targetId !== entry.id);
+  };
+  if (op.op === 'add_date') ensurePoint(op.date);
+  else if (op.op === 'add_range') ensureRange(op.start, op.end, op.color);
+  else if (op.op === 'edit_date') existing(pointOf(op.date)).date = valid(op.newDate);
+  else if (op.op === 'edit_range') {
+    const range = existing(rangeOf(op.start, op.end));
+    const start = op.newStart !== undefined ? valid(op.newStart) : range.start;
+    const end = op.newEnd !== undefined ? valid(op.newEnd) : range.end;
+    ordered(start, end);
+    Object.assign(range, { start, end, ...(op.color ? { color: op.color } : {}) });
+  } else if (op.op === 'remove_date') drop(existing(pointOf(op.date)), 'points');
+  else if (op.op === 'remove_range') drop(existing(rangeOf(op.start, op.end)), 'ranges');
+  else if (op.op === 'link_date') link(ensurePoint(op.date), 'point');
+  else if (op.op === 'link_range') link(ensureRange(op.start, op.end, op.color), 'range');
+  else if (op.op === 'unlink_date') unlink(existing(pointOf(op.date)));
+  else if (op.op === 'unlink_range') unlink(existing(rangeOf(op.start, op.end)));
+  else return false;
+  // Dates that now coincide become one entry; each element's dates are rebuilt from the links.
+  syncStoryBookTimelineMetadata(next);
+  return true;
+}
 function applyElementPatch(project, document, operations, { maxOperations = 8, maxCharacters = 24000 } = {}) {
   if (
     !Array.isArray(operations) ||
@@ -192,8 +296,52 @@ function applyElementPatch(project, document, operations, { maxOperations = 8, m
       continue;
     }
     if (project.type === 'video') {
-      if (op.op !== 'set_field' || !['aspectRatio', 'megapixels', 'steps'].includes(op.id))
-        fail('Edita el guión fuente para cambiar planos de un largometraje.');
+      if (op.op === 'remove_scene') {
+        const gone = next.scenes.find((item) => item.id === op.id);
+        if (!gone) fail('El clip indicado no existe en el metraje.');
+        if (!gone.sourceRemoved) fail('Solo se descarta un clip que ya no está en el guión.');
+        next.scenes = next.scenes.filter((item) => item.id !== op.id);
+        continue;
+      }
+      if (op.op === 'set_scene_continuity') {
+        const scene = next.scenes.find((item) => item.id === op.id);
+        if (!scene || scene.sourceRemoved) fail('El plano indicado no existe en el metraje.');
+        const continuity = { ...scene.continuity };
+        if (op.mode !== undefined) continuity.mode = op.mode;
+        if (op.frame !== undefined) continuity.frame = op.frame === true;
+        if (op.note !== undefined) {
+          continuity.note = txt(op.note, 900).trim();
+          continuity.noteSource = continuity.note ? 'manual' : '';
+          continuity.noteKey = '';
+        }
+        scene.continuity = continuity;
+        // The prompt carries the note, so it is put together again; one the author wrote by hand is left as it is.
+        scene.prompt = filmRecomposePrompt(next, scene);
+        continue;
+      }
+      if (op.op === 'set_scene_prompt' || op.op === 'set_scene_frames') {
+        const scene = next.scenes.find((item) => item.id === op.id);
+        if (!scene || scene.sourceRemoved) fail('El plano indicado no existe en el metraje.');
+        if (op.op === 'set_scene_frames') {
+          if (!FILM_FRAME_OPTIONS.includes(op.frames))
+            fail('La duración debe ser una de: ' + FILM_FRAME_OPTIONS.join(', ') + ' fotogramas.');
+          scene.frames = op.frames;
+        } else {
+          // As writing the prompt by hand does: the prompt is the author's, and the clip has to be approved again.
+          const prompt = txt(op.prompt, 6000).trim();
+          scene.prompt = prompt;
+          scene.promptSource = prompt ? 'manual' : '';
+          scene.promptHash = prompt ? scene.scriptHash : '';
+          scene.status = prompt ? 'ready' : 'pending';
+          scene.error = '';
+          scene.approved = false;
+        }
+        continue;
+      }
+      if (op.op !== 'set_field' || !['aspectRatio', 'megapixels', 'steps', 'finalMegapixels'].includes(op.id))
+        fail(
+          'Edita el guión fuente para cambiar los planos de un largometraje; aquí solo se cambian sus parámetros, el prompt y la duración de un plano.',
+        );
       next.params[op.id] = op.value;
       continue;
     }
@@ -273,7 +421,52 @@ function applyElementPatch(project, document, operations, { maxOperations = 8, m
           fail('Retira primero los vínculos temporales del elemento.');
         if ([...ids].some((id) => next.properties?.lockedIds?.includes(id))) fail('Elemento protegido.');
         list.splice(list.indexOf(node), 1);
-      } else fail('Operación de libro desconocida.');
+      } else if (op.op === 'move_element') {
+        const located = (() => {
+          const chapter = next.chapters.find((c) => c.id === op.id);
+          if (chapter) return { type: 'chapter', node: chapter, list: next.chapters };
+          for (const c of next.chapters) {
+            const theme = c.themes.find((t) => t.id === op.id);
+            if (theme) return { type: 'theme', node: theme, list: c.themes };
+            for (const t of c.themes) {
+              const paragraph = t.paragraphs.find((p) => p.id === op.id);
+              if (paragraph) return { type: 'paragraph', node: paragraph, list: t.paragraphs };
+            }
+          }
+          return null;
+        })();
+        if (!located) fail('Elemento inexistente: se mueve un capítulo, un tema o un párrafo.');
+        const { type, node, list } = located;
+        if (type === 'chapter' && op.toId !== undefined)
+          fail('Un capítulo no tiene destino: solo se reordena entre capítulos.');
+        let target = list;
+        if (op.toId !== undefined) {
+          target =
+            type === 'theme'
+              ? next.chapters.find((c) => c.id === op.toId)?.themes
+              : themes().find((t) => t.id === op.toId)?.paragraphs;
+          if (!target)
+            fail(type === 'theme' ? 'Capítulo de destino inexistente.' : 'Tema de destino inexistente.');
+        }
+        if (op.afterId === op.id) fail('Un elemento no se coloca tras sí mismo.');
+        const moved = [
+          node,
+          node.title,
+          ...(node.themes || []).flatMap((t) => [t, t.title, ...t.paragraphs]),
+          ...(node.paragraphs || []),
+        ].filter(Boolean);
+        if (moved.some(protectedNode)) fail('No se puede mover un bloque protegido.');
+        if (moved.some((n) => next.properties?.lockedIds?.includes(n.id))) fail('Elemento protegido.');
+        if (type !== 'paragraph' && target !== list && list.length === 1)
+          fail('Debe conservarse capítulo y tema.');
+        list.splice(list.indexOf(node), 1);
+        insert(target, node, op.afterId);
+      } else if (INLINE_OPERATIONS.includes(op.op)) {
+        const node = [...paragraphs(), ...titles()].find((n) => n.id === op.id);
+        if (!node) fail('Elemento inexistente.');
+        if (op.op !== 'unprotect_text' && protectedNode(node)) fail('Elemento protegido.');
+        applyInlineOperation(node, op);
+      } else if (!timelineOperation(next, op)) fail('Operación de libro desconocida.');
       next.chapters.forEach((c, i) => {
         c.order = i;
         c.themes.forEach((t, j) => {
@@ -352,6 +545,40 @@ function applyElementPatch(project, document, operations, { maxOperations = 8, m
         while (at < end && ['dialogue', 'parenthetical'].includes(s.blocks[at].type)) at++;
       }
       s.blocks.splice(at, 0, ...speech(op));
+    } else if (INLINE_OPERATIONS.includes(op.op)) {
+      if (!node || node.type === 'shot') fail('Elemento inexistente o técnico.');
+      if (op.op !== 'unprotect_text' && protectedNode(node)) fail('Elemento protegido.');
+      applyInlineOperation(node, op);
+    } else if (op.op === 'move_scene') {
+      if (op.id !== s.id) fail('Escena inexistente.');
+      if (op.afterId === s.id) fail('Una escena no se coloca tras sí misma.');
+      next.scenes.splice(next.scenes.indexOf(s), 1);
+      insert(next.scenes, s, op.afterId);
+    } else if (op.op === 'move_shot') {
+      if (node?.type !== 'shot') fail('Plano inexistente.');
+      let end = s.blocks.findIndex((b, i) => i > index && b.type === 'shot');
+      if (end < 0) end = s.blocks.length;
+      const segment = s.blocks.slice(index, end);
+      if (segment.some(protectedNode)) fail('El plano contiene elementos protegidos.');
+      const destination =
+        op.toSceneId === undefined
+          ? s
+          : next.scenes.find((candidate) => candidate.id === op.toSceneId) ||
+            fail('Escena de destino inexistente.');
+      if (destination !== s && screenplayShots(s).length === 1) fail('Debe quedar un plano.');
+      if (destination !== s && screenplayShots(destination).length >= MAX_SHOTS_PER_SCENE)
+        fail('La escena de destino ya tiene el máximo de planos.');
+      if (op.afterId === node.id) fail('Un plano no se coloca tras sí mismo.');
+      s.blocks.splice(index, end - index);
+      let at = destination.blocks.length;
+      if (op.afterId === null) at = 0;
+      else if (op.afterId !== undefined) {
+        const start = destination.blocks.findIndex((b) => b.type === 'shot' && b.id === op.afterId);
+        if (start < 0) fail('Plano de destino inexistente.');
+        at = destination.blocks.findIndex((b, i) => i > start && b.type === 'shot');
+        if (at < 0) at = destination.blocks.length;
+      }
+      destination.blocks.splice(at, 0, ...segment);
     } else if (op.op === 'remove_element') {
       if (op.id === s.id) {
         if (next.scenes.length === 1) fail('Debe quedar una escena.');

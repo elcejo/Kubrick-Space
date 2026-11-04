@@ -2,4 +2,5 @@
 module.exports = {
   createFilmJobs: require('./jobs.cjs').createFilmJobs,
   createFilmRender: require('./render.cjs').createFilmRender,
+  createVideoFrames: require('./video-frame.cjs').createVideoFrames,
 };

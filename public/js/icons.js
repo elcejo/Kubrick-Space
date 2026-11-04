@@ -1065,8 +1065,16 @@ export const ICONS = Object.freeze({
   ],
   download: ['Exportar', 'Toolbar · configuración', '<path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/>'],
   upload: ['Subir', 'Portadas · retratos · archivos', '<path d="M12 16V4m-5 5 5-5 5 5M4 15v5h16v-5"/>'],
-  'chevron-left': ['Anterior', 'Volver · calendario · historial', '<path d="m15 5-7 7 7 7"/>'],
-  'chevron-right': ['Siguiente', 'Calendario · historial · agente · submenús', '<path d="m9 5 7 7-7 7"/>'],
+  'chevron-left': [
+    'Anterior',
+    'Volver · calendario · historial · escena anterior del largometraje',
+    '<path d="m15 5-7 7 7 7"/>',
+  ],
+  'chevron-right': [
+    'Siguiente',
+    'Calendario · historial · agente · submenús · escena siguiente del largometraje',
+    '<path d="m9 5 7 7-7 7"/>',
+  ],
   'chevron-down': ['Desplegar', 'Listas · árbol del libro', '<path d="m5 9 7 7 7-7"/>'],
   'chevron-up': ['Contraer', 'Listas · árbol del libro', '<path d="m5 15 7-7 7 7"/>'],
   close: ['Cerrar', 'Modales · paneles · eliminación de vínculo', '<path d="m6 6 12 12M18 6 6 18"/>'],
@@ -1303,6 +1311,11 @@ export const ICONS = Object.freeze({
   warning: ['Advertencia', 'Avisos de la aplicación', '<path d="m12 3 10 18H2L12 3ZM12 9v5m0 3v.1"/>'],
   info: ['Información', 'Ayuda y estados', '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.1"/>'],
   clock: ['Tiempo', 'Metadatos y fechas', '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 3"/>'],
+  'aspect-frame': [
+    'Relación de aspecto',
+    'Selector de proporción del largometraje: el rectángulo se ajusta a cada relación de aspecto',
+    '<rect class="aspect-frame__shape" x="2" y="6" width="20" height="12" rx="2"/>',
+  ],
 });
 
 const aliases = Object.freeze({

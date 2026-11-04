@@ -2,7 +2,18 @@ import { API } from '../../api-service.js';
 import { renderIcon } from '../../icons.js';
 import { safeHTML, escapeHTML } from '../../safe-html.js';
 
-import { active, states, kinds, timingMarkup } from '../../job-presentation.js';
+import {
+  active,
+  states,
+  kinds,
+  liveMarkup,
+  liveSegments,
+  liveShape,
+  liveStageText,
+  livePreviewURL,
+  phaseBarMarkup,
+  timingMarkup,
+} from '../../job-presentation.js';
 
 /** Observes the server queue independently of the current editor; never owns execution. */
 export class WorkspaceTasks {
@@ -16,6 +27,9 @@ export class WorkspaceTasks {
     this.openTiming = new Set();
     this.traces = new Map();
     this.loadingTiming = new Set();
+    // The preview video of each running task stays in place while the panel redraws.
+    this.liveVideos = new Map();
+    this.liveLoading = new Map();
     trigger.addEventListener('click', () => this.toggle(), { signal: this.controller.signal });
     window.addEventListener(
       'keydown',
@@ -38,6 +52,7 @@ export class WorkspaceTasks {
       const { jobs, activeCount } = await API.sidebarJobs({ signal: this.controller.signal });
       if (this.controller.signal.aborted || epoch !== this.epoch) return;
       this.jobs = jobs.slice(0, 10);
+      this.fetchedAt = Date.now();
       this.activeCount = activeCount;
       for (const job of jobs) if (this.panel && this.openTiming.has(job.id)) void this.loadTiming(job.id);
       this.error = '';
@@ -97,6 +112,7 @@ export class WorkspaceTasks {
       true,
     );
     this.root.append(this.panel);
+    this.ticker = setInterval(() => this.tick(), 1000);
     this.trigger.setAttribute('aria-expanded', 'true');
     this.signature = '';
     this.render();
@@ -108,7 +124,14 @@ export class WorkspaceTasks {
   render() {
     if (!this.panel) return;
     this.panel.querySelector('.workspace-tasks__status').textContent = this.error || '';
-    const signature = JSON.stringify([this.jobs, [...this.pending], [...this.traces]]);
+    // What moves every second (times, stage, step, the bar) is updated in place and is not part of the structure.
+    const shape = (job) => ({
+      ...job,
+      updatedAt: undefined,
+      timing: this.openTiming.has(job.id) ? job.timing : job.timing && { revision: job.timing.revision },
+      live: liveShape(job),
+    });
+    const signature = JSON.stringify([this.jobs.map(shape), [...this.pending], [...this.traces]]);
     if (this.signature !== signature) {
       const focusedId = this.panel.contains(document.activeElement)
         ? document.activeElement.dataset.cancelJob
@@ -123,7 +146,7 @@ export class WorkspaceTasks {
         [
           `<article class="workspace-task" data-status="${escapeHTML(job.status)}"><div class="workspace-task__top"><span>${escapeHTML(states[job.status] || job.status)}</span>`,
           `<time data-job-time="${escapeHTML(job.id)}"></time><button type="button" data-dismiss-job="${escapeHTML(job.id)}" ${this.pending.has(job.id) ? 'disabled' : ''} aria-label="Quitar tarea de ${escapeHTML(job.projectName)} del panel" title="Quitar del panel">${renderIcon('close', 14)}</button>`,
-          `</div><a href="#/workspace/${encodeURIComponent(job.projectId)}">${escapeHTML(job.projectName)}</a><strong>${escapeHTML(kinds[job.kind] || 'Trabajo de personaje')}</strong>${job.error || active(job) ? `<p>${escapeHTML(job.error || job.message || '')}</p>` : ''}${active(job) ? `<div class="workspace-task__bottom"><small>${job.status === 'queued' ? `Posición ${Number(job.position) || 1}` : ''}</small><button type="button" data-cancel-job="${escapeHTML(job.id)}" ${this.pending.has(job.id) ? 'disabled' : ''} aria-label="Cancelar tarea de ${escapeHTML(job.projectName)}">${renderIcon('stop')} ${this.pending.has(job.id) ? 'Cancelando…' : 'Cancelar'}</button></div>` : ''}</article>`,
+          `</div><a href="#/workspace/${encodeURIComponent(job.projectId)}">${escapeHTML(job.projectName)}</a><strong>${escapeHTML(kinds[job.kind] || 'Trabajo de personaje')}</strong>${job.error || active(job) ? `<p>${escapeHTML(job.error || job.message || '')}</p>` : ''}${active(job) ? liveMarkup(job) : ''}${active(job) ? `<div class="workspace-task__bottom"><small>${job.status === 'queued' ? `Posición ${Number(job.position) || 1}` : ''}</small><button type="button" data-cancel-job="${escapeHTML(job.id)}" ${this.pending.has(job.id) ? 'disabled' : ''} aria-label="Cancelar tarea de ${escapeHTML(job.projectName)}">${renderIcon('stop')} ${this.pending.has(job.id) ? 'Cancelando…' : 'Cancelar'}</button></div>` : ''}</article>`,
         ].join('');
       const timingRow = (job) =>
         `<details class="workspace-task__timing" data-timing-job="${escapeHTML(job.id)}" ${this.openTiming.has(job.id) ? 'open' : ''}><summary>${renderIcon('chevron-right')} Tiempos</summary>${this.openTiming.has(job.id) ? timingMarkup(job, this.traces.get(job.id)?.timing, this.traces.get(job.id)?.error) : ''}</details>`;
@@ -143,6 +166,22 @@ export class WorkspaceTasks {
           ?.querySelector('summary')
           .focus({ preventScroll: true });
     }
+    this.tick();
+  }
+  /** The elapsed time of every task, the stage, step and bar of the running video tasks and their preview. */
+  tick() {
+    if (!this.panel) return;
+    this.syncLiveMedia();
+    const extra = Date.now() - (this.fetchedAt || Date.now());
+    for (const box of this.panel.querySelectorAll('[data-live-job]')) {
+      const job = this.jobs.find((item) => item.id === box.dataset.liveJob);
+      if (!job?.live) continue;
+      const elapsed = job.live.elapsedMs + (job.live.finished ? 0 : extra);
+      box.querySelector('[data-live-stage]').textContent = liveStageText(job.live, elapsed);
+      box.querySelector('[data-live-bar]').innerHTML = safeHTML(
+        phaseBarMarkup(liveSegments(job.live, extra), elapsed),
+      );
+    }
     for (const time of this.panel.querySelectorAll('[data-job-time]')) {
       const job = this.jobs.find((job) => job.id === time.dataset.jobTime);
       const seconds = Math.max(
@@ -156,6 +195,50 @@ export class WorkspaceTasks {
       time.textContent = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
       time.title = 'Tiempo transcurrido';
     }
+  }
+  /**
+   * The preview of the sampling plays in its own element, which survives redraws of the list. A newer preview is
+   * loaded off screen and replaces the old one only when its first frame is ready, so nothing flashes.
+   */
+  syncLiveMedia() {
+    const seen = new Set();
+    for (const box of this.panel.querySelectorAll('[data-live-media]')) {
+      const id = box.dataset.liveMedia;
+      const src = box.dataset.src;
+      const job = this.jobs.find((item) => item.id === id);
+      const wanted = job ? livePreviewURL(job) : '';
+      seen.add(id);
+      const shown = this.liveVideos.get(id);
+      if (shown && box.firstElementChild !== shown.video) {
+        box.replaceChildren(shown.video);
+        void shown.video.play?.()?.catch?.(() => {});
+      }
+      if (!wanted || shown?.src === wanted || this.liveLoading.get(id) === wanted) continue;
+      this.liveLoading.set(id, wanted);
+      const video = document.createElement('video');
+      video.className = 'workspace-task__live-preview';
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.setAttribute('aria-label', 'Previsualización en vivo (TAEH3)');
+      video.addEventListener(
+        'loadeddata',
+        () => {
+          if (this.liveLoading.get(id) !== wanted) return;
+          this.liveLoading.delete(id);
+          const target = this.panel?.querySelector(`[data-live-media="${CSS.escape(id)}"]`);
+          if (!target) return;
+          target.replaceChildren(video);
+          this.liveVideos.set(id, { video, src: wanted });
+          void video.play?.()?.catch?.(() => {});
+        },
+        { once: true },
+      );
+      video.addEventListener('error', () => this.liveLoading.delete(id), { once: true });
+      video.src = wanted || src;
+    }
+    for (const id of [...this.liveVideos.keys()]) if (!seen.has(id)) this.liveVideos.delete(id);
   }
   async loadTiming(id, force = false) {
     const job = this.jobs.find((j) => j.id === id);
@@ -221,8 +304,11 @@ export class WorkspaceTasks {
     }
   }
   close() {
+    clearInterval(this.ticker);
     this.panel?.remove();
     this.panel = null;
+    this.liveVideos.clear();
+    this.liveLoading.clear();
     this.trigger.setAttribute('aria-expanded', 'false');
   }
   destroy() {

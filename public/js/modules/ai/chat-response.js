@@ -1,9 +1,15 @@
+// The same list as ASSISTANT_COMMAND_NAMES in contracts/assistant-commands.js (a test keeps them equal).
 const commandNames = [
   'LEER_PROYECTO',
   'CREAR_PROYECTO',
-  'EDITAR_DOCUMENTO',
   'PERSONAJE',
-  'ESCRIBIR_LIBRO',
+  'ESCENARIO',
+  'VERSION',
+  'INGREDIENTE',
+  'PORTADA',
+  'CONTINUIDAD',
+  'PROYECTO',
+  'PELICULA',
   'EDITAR_PROYECTO',
 ];
 
@@ -141,6 +147,13 @@ export function storyBookIntent(source) {
     return 'chat';
   if (
     /\b(?:nuevo|otro)\s+(?:proyecto|libro|guion|escenario|metraje)|\b(?:proyecto|libro|guion|escenario|metraje)\s+(?:nuevo|aparte)|\b(?:crea|genera|agrega|anade)\s+(?:un[oa]?\s+)?personaje\b/.test(
+      text,
+    )
+  )
+    return 'chat';
+  // Pictures, covers, ingredients, versions and continuity are the assistant's own tools, not the text editing agent's.
+  if (
+    /\b(?:imagen(?:es)?|fotos?|fotografias?|portadas?|panoramas?|angulos?|ingredientes?|continuidad)\b|\b(?:guard\w+|list\w+|muestr\w+)\s+(?:una\s+|las\s+)?versi(?:on|ones)\b/.test(
       text,
     )
   )

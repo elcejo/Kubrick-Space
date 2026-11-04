@@ -24,11 +24,11 @@ export function createAIContextClient(request) {
       }
     };
   }
-  async function send(payload, transport = {}) {
+  async function send(payload, { route = '/ai/text', ...transport } = {}) {
     transport.signal?.throwIfAborted();
     const originProvider = provider;
     const source = originProvider?.();
-    if (!source?.projectId) return request('/ai/text', payload, transport);
+    if (!source?.projectId) return request(route, payload, transport);
     const ctx = source.context;
     const snapshot = JSON.parse(JSON.stringify(snapshotOf(ctx)));
     const projectId = source.projectId;
@@ -82,7 +82,7 @@ export function createAIContextClient(request) {
       transport.signal?.throwIfAborted();
       try {
         const result = await request(
-          '/ai/text',
+          route,
           { ...compact, contextSessionId: session.sessionId, contextVersion: session.contextVersion },
           transport,
         );

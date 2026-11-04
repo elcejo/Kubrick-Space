@@ -4,24 +4,36 @@ const {
   FILM_MAX_REFERENCES,
   FILM_MAX_SCENES,
   FILM_FRAME_OPTIONS,
+  FILM_MAX_SECONDS,
+  filmContinuityMode,
   filmHash,
+  filmLookKey,
+  filmNoteKey,
+  filmPrevious,
   filmReferenceTag,
   filmSceneNeedsPrompt,
+  filmSeconds,
   parseFilmDocument,
   reconcileFilmScenes,
+  snapFilmFrames,
   validateFilmDocument,
 } = require('../../../public/js/contracts/film.js');
 const {
   FILM_PROMPT_INSTRUCTION,
+  filmComposePrompt,
+  filmRecomposePrompt,
   filmSceneRequest,
   parseFilmPrompt,
+  parseFilmShotNote,
 } = require('../../../public/js/contracts/film-prompt.js');
+const { filmDialogueCapacity, filmDialogueWords } = require('../../../public/js/contracts/film-split.js');
 const {
   parseCharacterDocument,
   characterContextText,
 } = require('../../../public/js/contracts/character-model.js');
 const { parseScenarioDocument, scenarioContextText } = require('../../../public/js/contracts/scenario.js');
 const { screenplayShots } = require('../../../public/js/contracts/screenplay.js');
+const { createFilmContinuity } = require('./continuity.cjs');
 
 const REQUEST_KEYS = ['projectId', 'token', 'expectedContent', 'scope', 'sceneId', 'scriptProjectId'];
 const fold = (value) =>
@@ -47,10 +59,11 @@ const mentions = (haystack, name) => {
  * @param deps shared server capabilities
  * @param ports `infer` (structured JSON text) injected by the queue owner
  */
-function createFilmJobs(deps, { infer }) {
+function createFilmJobs(deps, { infer, readImage, videoFrames, makeOperations }) {
   const { security, assertProject, readCurrentProject, writeProject, documentStore, inference, aiContexts } =
     deps;
   const fail = (message, status = 422) => security.fail(message, status);
+  const continuity = createFilmContinuity(deps, { infer, readImage, videoFrames, makeOperations });
 
   /** Active linked projects of the film, resolved to the version the author selected. */
   function linked(project) {
@@ -93,8 +106,20 @@ function createFilmJobs(deps, { infer }) {
     const clean = security.validateScreenplayContent(content);
     return clean ? JSON.parse(clean) : null;
   };
+  /**
+   * The screenplays linked to the film. A screenplay linked as a draft is read as it is now: updating the film from
+   * the screenplay means taking its latest shots, durations and text. One linked as a saved version stays as that version.
+   */
   const screenplayCandidates = (project) =>
-    linked(project).filter(({ project: item }) => screenplayOf(item.content));
+    linked(project)
+      .map((entry) => {
+        if (!['draft', 'legacy'].includes(entry.ingredient.importedSource)) return entry;
+        const current = liveProject(entry.ingredient.importedProjectId);
+        return screenplayOf(current?.content)
+          ? { ...entry, project: { ...entry.project, content: current.content } }
+          : entry;
+      })
+      .filter(({ project: item }) => screenplayOf(item.content));
   function parseScreenplay(content) {
     const screenplay = screenplayOf(content);
     if (!screenplay)
@@ -118,7 +143,8 @@ function createFilmJobs(deps, { infer }) {
           !security.UUID.test(body.projectId || '') ||
           !security.UUID.test(body.token || '') ||
           typeof body.expectedContent !== 'string' ||
-          (body.scope !== undefined && !['all', 'scene'].includes(body.scope)) ||
+          (body.scope !== undefined &&
+            !['all', 'scene', 'failed', 'continuity', 'keyframe'].includes(body.scope)) ||
           (body.scriptProjectId !== undefined && !security.UUID.test(body.scriptProjectId))
         )
           throw security.fail('Trabajo de película inválido.');
@@ -135,6 +161,7 @@ function createFilmJobs(deps, { infer }) {
         const film = parseFilmDocument(project.content);
         if (!film) throw security.fail('La película aún no está en el formato actual.', 409);
         const scope = body.scope || 'all';
+        deps.saveSafetyVersion?.(project.id, 'Antes de generar la película con IA');
         const scripts = screenplayCandidates(project);
         const script = body.scriptProjectId
           ? scripts.find(({ ingredient }) => ingredient.importedProjectId === body.scriptProjectId)
@@ -148,10 +175,15 @@ function createFilmJobs(deps, { infer }) {
             'Elige qué guión usar: hay varios activos o el indicado no está vinculado.',
             428,
           );
-        if (scope === 'scene') {
+        if (['scene', 'continuity', 'keyframe'].includes(scope)) {
           if (!film.scenes.some((scene) => scene.id === body.sceneId && !scene.sourceRemoved))
             throw security.fail('La escena indicada no existe.');
         } else if (body.sceneId !== undefined) throw security.fail('La escena solo aplica a regenerar una.');
+        else if (
+          scope === 'failed' &&
+          !film.scenes.some((scene) => scene.status === 'failed' && !scene.sourceRemoved)
+        )
+          throw security.fail('No hay planos fallidos que reintentar.', 409);
         return {
           status: 202,
           body: snapshot(
@@ -214,6 +246,7 @@ function createFilmJobs(deps, { infer }) {
         const screenplay = parseScreenplay(script.project.content);
         const incoming = screenplay.scenes.flatMap((scene, sceneIndex) =>
           screenplayShots(scene).map((shot, shotIndex) => {
+            // One clip per shot, whatever its dialogue: the shot is one take and lasts what the shot says.
             const lines = [
               scene.heading.text,
               ...(shot.explicit ? [shot.title] : []),
@@ -224,24 +257,29 @@ function createFilmJobs(deps, { infer }) {
               throw fail(
                 `El plano ${shotIndex + 1} de la escena ${sceneIndex + 1} es demasiado extenso; divídelo en varios planos.`,
               );
+            const base = shot.explicit
+              ? `Escena ${sceneIndex + 1} · Plano ${shotIndex + 1} — ${scene.heading.location || scene.heading.text}`
+              : scene.heading.text || 'Escena';
+            const { seconds } = parseFilmShotNote(shot.explicit ? shot.title : '');
             return {
               id: randomUUID(),
               sourceSceneId: scene.id,
               sourceShotId: shot.id,
-              title: (shot.explicit
-                ? `Escena ${sceneIndex + 1} · Plano ${shotIndex + 1} — ${scene.heading.location || scene.heading.text}`
-                : scene.heading.text || 'Escena'
-              ).slice(0, 300),
+              sourcePart: 1,
+              sourceParts: 1,
+              title: base.slice(0, 300),
               script: text,
               scriptHash: filmHash(text),
               status: 'pending',
               prompt: '',
               promptSource: '',
               promptHash: '',
-              frames: FILM_FRAME_OPTIONS[0],
+              // The duration of the shot, when the screenplay states one; otherwise the model proposes it.
+              frames: seconds ? snapFilmFrames(Math.min(seconds, FILM_MAX_SECONDS)) : null,
               shot: (shot.explicit ? shot.title : scene.heading.shot || '').slice(0, 400),
               seed: randomInt(0, 2 ** 31),
               references: [],
+              referenceNotes: [],
               sourceRemoved: false,
               error: '',
               video: null,
@@ -269,13 +307,30 @@ function createFilmJobs(deps, { infer }) {
     const sceneById = new Map(screenplay.scenes.map((scene) => [scene.id, scene]));
     const everything = referenceCandidates(project(), script);
     const noPhoto = new Set();
-    const characters = everything.filter(({ project: item }) => parseCharacterDocument(item.content || ''));
+    // A character linked from a draft arrives as the wrapper the ingredient keeps ({name, role, traits, content}),
+    // not as its sheet: the sheet is inside.
+    const sheetOf = (item) => {
+      const direct = parseCharacterDocument(item.content || '');
+      if (direct) return direct;
+      try {
+        const wrapped = JSON.parse(item.content || '');
+        return typeof wrapped?.content === 'string' ? parseCharacterDocument(wrapped.content) : null;
+      } catch {
+        return null;
+      }
+    };
+    const characters = everything.filter(({ project: item }) => sheetOf(item));
     const places = everything.filter(({ project: item }) => parseScenarioDocument(item.content || ''));
     const document = parseFilmDocument(readCurrentProject(projectId).content);
     const targets = document.scenes.filter((scene) =>
-      p.scope === 'scene' ? scene.id === p.sceneId : filmSceneNeedsPrompt(scene),
+      ['scene', 'continuity', 'keyframe'].includes(p.scope)
+        ? scene.id === p.sceneId
+        : p.scope === 'failed'
+          ? scene.status === 'failed' && !scene.sourceRemoved
+          : filmSceneNeedsPrompt(scene),
     );
 
+    /** The references of a shot, and what the author should know about them (who has no photograph, who is not linked). */
     function referencesFor(source, shot) {
       const speakerIds = new Set(shot.blocks.map((block) => block.speakerId).filter(Boolean));
       const blocks = [...shot.blocks, ...source.blocks.filter((block) => speakerIds.has(block.id))];
@@ -294,11 +349,27 @@ function createFilmJobs(deps, { infer }) {
         places.find(
           ({ project: item }) => mentions(source.heading.location || source.heading.text, item.name) >= 0,
         );
-      // Only references with a photo can go to H3; the others are left out and reported once.
+      // Only references with a photo can go to H3; the others are left out and reported.
       const described = found.map(({ entry }) => describe('character', entry));
       const placeReference = place ? describe('stage', place) : null;
+      const notes = [];
       for (const reference of [...described, ...(placeReference ? [placeReference] : [])])
-        if (!reference.image) noPhoto.add(reference.name || 'sin nombre');
+        if (!reference.image) {
+          noPhoto.add(reference.name || 'sin nombre');
+          notes.push(`${reference.name || 'Sin nombre'}: sin foto principal, no se usa como referencia.`);
+        }
+      // A speaker of the shot that is not one of the linked characters cannot be a reference at all.
+      const named = new Set(found.map(({ entry }) => entry.ingredient.importedProjectId));
+      for (const block of shot.blocks.filter((item) => item.type === 'character' && item.text.trim())) {
+        const speaker = block.text.replace(/\([^)]*\)/g, '').trim();
+        const linked = characters.some(
+          ({ ingredient, project: item }) =>
+            named.has(ingredient.importedProjectId) && mentions(speaker, item.name) >= 0,
+        );
+        const known = characters.some(({ project: item }) => mentions(speaker, item.name) >= 0);
+        if (speaker && !linked && !known && !notes.some((note) => note.startsWith(speaker + ':')))
+          notes.push(`${speaker}: no es un personaje vinculado a la película, no se usa como referencia.`);
+      }
       const stage = placeReference?.image ? placeReference : null;
       const result = described
         .filter((reference) => reference.image)
@@ -306,18 +377,21 @@ function createFilmJobs(deps, { infer }) {
       if (stage) result.push(stage);
       // Tags identify a reference in the prompt, so they are unique inside the scene.
       const used = new Set();
-      return result.map((reference, index) => {
-        let tag = reference.tag || (reference.kind === 'stage' ? 'Place' : 'Character');
-        for (let n = 2; used.has(tag); n++) tag = `${reference.tag} ${n}`;
-        used.add(tag);
-        return { ...reference, tag, picture: index + 1 };
-      });
+      return {
+        references: result.map((reference, index) => {
+          let tag = reference.tag || (reference.kind === 'stage' ? 'Place' : 'Character');
+          for (let n = 2; used.has(tag); n++) tag = `${reference.tag} ${n}`;
+          used.add(tag);
+          return { ...reference, tag, picture: index + 1 };
+        }),
+        notes,
+      };
     }
     function describe(kind, { ingredient, project: item }) {
       let description = '';
       let image = '';
       if (kind === 'character') {
-        const sheet = parseCharacterDocument(item.content || '');
+        const sheet = sheetOf(item);
         description = sheet
           ? [sheet.description, characterContextText(sheet, { visualOnly: true })].filter(Boolean).join('\n')
           : '';
@@ -325,12 +399,21 @@ function createFilmJobs(deps, { infer }) {
         image =
           item.covers?.[item.currentCoverIndex] ||
           item.covers?.[0] ||
+          ingredient.covers?.[ingredient.currentCoverIndex] ||
+          ingredient.covers?.[0] ||
           live?.covers?.[live.currentCoverIndex] ||
           live?.covers?.[0] ||
           '';
       } else {
         const sheet = parseScenarioDocument(item.content || '');
-        description = sheet ? scenarioContextText(sheet) : '';
+        // Only what the place IS: its time of day, light, atmosphere and period belong to the photograph, and the
+        // screenplay decides them for the scene.
+        description = sheet
+          ? scenarioContextText({
+              ...sheet,
+              fields: { ...sheet.fields, period: '', timeOfDay: '', atmosphere: '', lighting: '' },
+            })
+          : '';
         const establishing = sheet?.views.find((view) => view.id === 'establishing')?.url;
         image = establishing || sheet?.views[0]?.url || sheet?.panorama?.url || item.covers?.[0] || '';
       }
@@ -344,12 +427,15 @@ function createFilmJobs(deps, { infer }) {
         description,
       };
     }
-    function blocksOf(source, shot) {
+    function blocksOf(source, blocks) {
+      // The speakers of a divided speech are copies of the original: look them up among the blocks of the part too.
       const speakers = new Map(
-        source.blocks.filter((block) => block.type === 'character').map((block) => [block.id, block]),
+        [...source.blocks, ...blocks]
+          .filter((block) => block.type === 'character')
+          .map((block) => [block.id, block]),
       );
       // A silent presence has no line: only its character and its acotación reach the prompt.
-      return shot.blocks
+      return blocks
         .filter((block) => block.type !== 'dialogue' || block.text.trim())
         .map((block) => ({
           type: block.type,
@@ -359,25 +445,85 @@ function createFilmJobs(deps, { infer }) {
         }));
     }
 
+    /** The characters of a scene, with their descriptions, for what the model writes about its look and continuity. */
+    const peopleOf = (references) =>
+      references
+        .filter((reference) => reference.kind === 'character')
+        .map((reference) => ({ name: reference.name, description: reference.description || '' }));
+    /** The look of a script scene, written once for all its clips and written again when the scene's shots change. */
+    const lookJobs = new Map();
+    const ensureLook = (source, references) => {
+      if (!lookJobs.has(source.id))
+        lookJobs.set(
+          source.id,
+          (async () => {
+            const film = parseFilmDocument(project().content);
+            const key = filmLookKey(film, source.id);
+            const known = film.looks[source.id];
+            if (known && known.key === key) return known.text;
+            const heading = source.heading.text;
+            const shots = film.scenes
+              .filter((item) => item.sourceSceneId === source.id && !item.sourceRemoved)
+              .map((item) => item.script);
+            const written = await ctx.step(`film-look-${source.id}-${key}`, () =>
+              continuity.look({
+                ctx,
+                p,
+                film: film.identity.name,
+                heading,
+                shots,
+                characters: peopleOf(references),
+              }),
+            );
+            await commit((draft) => {
+              draft.looks[source.id] = { text: written.text, key };
+              return draft;
+            });
+            return written.text;
+          })(),
+        );
+      return lookJobs.get(source.id);
+    };
+    /** The continuity note of a clip, from the end of the previous one (its last frame too when the model sees images). */
+    const writeNote = async (film, scene, source, references) => {
+      const previous = filmPrevious(film, scene);
+      if (!previous) return '';
+      const key = filmNoteKey(film, scene);
+      return ctx.step(`film-note-${scene.id}-${key}`, async () => {
+        let frame = null;
+        if (previous.preview && continuity.seesImages(p.textConfig.functions.chat.model)) {
+          const tail = await continuity.lastFrame(projectId, previous);
+          frame = continuity.dataUrl(tail.url);
+        }
+        return continuity.note({
+          ctx,
+          p,
+          film: film.identity.name,
+          heading: source.heading.text,
+          previous,
+          next: scene,
+          characters: peopleOf(references),
+          frame,
+        });
+      });
+    };
+
     const writeScene = async (scene) => {
       const source = sceneById.get(scene.sourceSceneId);
       if (!source) throw fail('La escena ya no existe en el guión.', 409);
       const shots = screenplayShots(source);
       const shot = shots.find((item) => item.id === (scene.sourceShotId || scene.sourceSceneId));
       if (!shot) throw fail('El plano ya no existe en el guión. Actualiza desde el guión.', 409);
-      if (shot.blocks.length > 120 || shot.blocks.some((block) => block.text.length > 1200))
+      // One shot, one clip: nothing is divided and no dialogue is moved or cut, however long it is.
+      const blocks = shot.blocks;
+      if (blocks.length > 120 || blocks.some((block) => block.text.length > 1200))
         throw fail(
           'Este plano supera el contenido admitido por clip; divídelo en varios planos sin eliminar texto.',
           422,
         );
-      const dialogueWords = shot.blocks
-        .filter((block) => block.type === 'dialogue')
-        .reduce((sum, block) => sum + block.text.trim().split(/\s+/).filter(Boolean).length, 0);
-      if (dialogueWords > 23)
-        throw fail(
-          'El diálogo de este plano no cabe en un clip. Divide el plano en el guión; no se recortará su texto.',
-          422,
-        );
+      // What the shot states about itself: its framing and its duration. They are data, not the model's choice.
+      const stated = parseFilmShotNote(shot.explicit ? shot.title : source.heading.shot);
+      const statedSeconds = parseFilmShotNote(shot.explicit ? shot.title : '').seconds;
 
       await commit((film) => {
         const node = film.scenes.find((item) => item.id === scene.id);
@@ -385,7 +531,7 @@ function createFilmJobs(deps, { infer }) {
         node.error = '';
         return film;
       });
-      const references = referencesFor(source, shot);
+      const { references, notes } = referencesFor(source, shot);
       const index = screenplay.scenes.indexOf(source);
       const shotIndex = shots.indexOf(shot);
       const previous =
@@ -405,10 +551,11 @@ function createFilmJobs(deps, { infer }) {
             shot: shot.explicit ? shot.title : source.heading.shot,
             location: source.heading.location,
             time: source.heading.time,
-            blocks: blocksOf(source, shot),
+            blocks: blocksOf(source, blocks),
           },
           references,
           previous,
+          duration: statedSeconds,
         });
         const tags = references.map((reference) => reference.tag);
         const ask = (extra = '') =>
@@ -428,24 +575,99 @@ function createFilmJobs(deps, { infer }) {
         try {
           parsed = parseFilmPrompt(await ask(), { tags });
         } catch (error) {
-          // One correction with the same model; no other retry and no model change.
-          parsed = parseFilmPrompt(
-            await ask(
-              `\n\nYour previous answer was rejected: ${error.message} Return only the corrected JSON.`,
-            ),
-            { tags },
+          // One correction with the same model, telling it exactly which tags exist; no model change.
+          const allowed = tags.length
+            ? `The only tags allowed are: ${tags.map((tag) => `<${tag}>`).join(', ')}.`
+            : 'This clip has no references: write every character and place by name in plain text, never in angle brackets.';
+          const corrected = await ask(
+            `\n\nYour previous answer was rejected: ${error.message} ${allowed} Return only the corrected JSON.`,
           );
+          try {
+            parsed = parseFilmPrompt(corrected, { tags });
+          } catch (again) {
+            // A name still in angle brackets is a presentation slip, not a lost reference: the name stays, the tag goes.
+            if (!/esa referencia no existe/.test(again.message)) throw again;
+            parsed = parseFilmPrompt(corrected, { tags, plainUnknownTags: true });
+          }
         }
-        return { ...parsed, references };
+        // How this clip follows the one before it: the look of its scene, and a note on how that one ends.
+        const now = parseFilmDocument(project().content);
+        const mode = filmContinuityMode(now, scene);
+        // The look and the note make the clips cut together; a clip is still written when they cannot be.
+        const lost = [];
+        const attempt = async (what, task) => {
+          try {
+            return await task();
+          } catch (error) {
+            ctx.throwIfAborted();
+            lost.push(`${what}: ${String(error.message || 'no se pudo escribir').split('\n')[0]}`);
+            return null;
+          }
+        };
+        const look = (await attempt('Aspecto de la escena', () => ensureLook(source, references))) || '';
+        let note = '';
+        let noteMeta = null;
+        if (['cut', 'keyframe', 'take'].includes(mode)) {
+          const key = filmNoteKey(now, scene);
+          note = scene.continuity.note;
+          noteMeta = { noteSource: scene.continuity.noteSource, noteKey: scene.continuity.noteKey };
+          if (scene.continuity.noteSource !== 'manual' && (!note || scene.continuity.noteKey !== key)) {
+            const written = await attempt('Nota de continuidad', () =>
+              writeNote(now, scene, source, references),
+            );
+            if (written !== null) {
+              note = written;
+              noteMeta = { noteSource: 'llm', noteKey: key };
+            }
+          }
+        }
+        // The prompt has three parts. The reference list and the technical line (shot size, lens, aperture, depth of
+        // field, duration) come from data; the model only wrote the creative description between them and the sound.
+        // The duration is the one the shot states; only when it states none does the model's proposal stand.
+        const frames = statedSeconds ? scene.frames : (parsed.frames ?? scene.frames);
+        const seconds = filmSeconds(frames);
+        const advice = [...notes];
+        const longest = filmSeconds(FILM_FRAME_OPTIONS.at(-1));
+        if (statedSeconds > longest)
+          advice.push(
+            `El plano dura ${statedSeconds} s y un clip admite como máximo ${longest} s; se genera con ese máximo.`,
+          );
+        const words = filmDialogueWords(blocks);
+        const capacity = filmDialogueCapacity(seconds);
+        if (words > capacity)
+          advice.push(
+            `El diálogo tiene ${words} palabras y en ${seconds} s caben unas ${capacity}: sube la duración del plano o acórtalo.`,
+          );
+        advice.push(...lost);
+        for (const name of parsed.repaired)
+          advice.push(`${name}: el modelo la citó sin tener referencia; se dejó su nombre en texto.`);
+        parsed = {
+          ...parsed,
+          frames,
+          creative: parsed.prompt,
+          prompt: filmComposePrompt({
+            references,
+            framing: stated.framing,
+            seconds,
+            look,
+            continuity: note,
+            creative: parsed.prompt,
+          }),
+        };
+        const noted = advice.map((text) => text.slice(0, 200)).slice(0, 8);
+        return { ...parsed, references, notes: noted, note, noteMeta };
       });
       await commit((film) => {
         const node = film.scenes.find((item) => item.id === scene.id);
         node.prompt = result.prompt;
+        node.creative = result.creative;
+        node.continuity.note = result.note;
+        if (result.noteMeta) Object.assign(node.continuity, result.noteMeta);
         node.promptSource = 'llm';
         node.promptHash = node.scriptHash;
         node.frames = result.frames;
-        node.shot = result.shot || node.shot;
         node.references = result.references.map(({ description, ...reference }) => reference);
+        node.referenceNotes = result.notes;
         node.status = 'ready';
         node.error = '';
         // The clip shown so far came from the previous prompt.
@@ -472,6 +694,54 @@ function createFilmJobs(deps, { infer }) {
         }).catch(() => {});
       }
     };
+    /** Writes the continuity note of a clip again (always) and puts the prompt together with it. */
+    const runContinuity = async (scene) => {
+      const source = sceneById.get(scene.sourceSceneId);
+      const shot =
+        source &&
+        screenplayShots(source).find((item) => item.id === (scene.sourceShotId || scene.sourceSceneId));
+      if (!shot) throw fail('El plano ya no existe en el guión. Actualiza desde el guión.', 409);
+      const film = parseFilmDocument(project().content);
+      const mode = filmContinuityMode(film, scene);
+      if (!['cut', 'keyframe', 'take'].includes(mode))
+        throw fail('Este clip no sigue a otro de su escena: no necesita nota de continuidad.', 409);
+      const { references } = referencesFor(source, shot);
+      ctx.progress(`Escribiendo la nota de continuidad: ${scene.title.slice(0, 60)}`);
+      await ensureLook(source, references);
+      const key = filmNoteKey(film, scene);
+      const text = await writeNote(film, scene, source, references);
+      await commit((draft) => {
+        const node = draft.scenes.find((item) => item.id === scene.id);
+        Object.assign(node.continuity, { note: text, noteSource: 'llm', noteKey: key });
+        node.prompt = filmRecomposePrompt(draft, node);
+        return draft;
+      });
+    };
+    /** The start frame of a shot, made by the image model from its references and the end of the previous clip. */
+    const runKeyframe = async (scene) => {
+      const film = parseFilmDocument(project().content);
+      const previous = filmPrevious(film, scene);
+      ctx.progress(`Generando el fotograma inicial: ${scene.title.slice(0, 60)}`);
+      const made = await ctx.step(`film-keyframe-${scene.id}-${Date.now()}`, async () => {
+        const tail = previous?.preview ? await continuity.lastFrame(projectId, previous) : null;
+        return continuity.keyframe({ ctx, p, projectId, film, clip: scene, previousFrame: tail });
+      });
+      await commit((draft) => {
+        const node = draft.scenes.find((item) => item.id === scene.id);
+        node.continuity.start = { url: made.url, key: filmHash(made.url) };
+        node.approved = false;
+        return draft;
+      });
+    };
+    if (p.scope === 'continuity' || p.scope === 'keyframe') {
+      const [scene] = targets;
+      if (!scene) throw fail('El plano indicado no existe.', 409);
+      await (p.scope === 'continuity' ? runContinuity : runKeyframe)(scene);
+      return {
+        message: p.scope === 'continuity' ? 'Nota de continuidad lista.' : 'Fotograma inicial listo.',
+        scenes: 1,
+      };
+    }
     if (local) for (const scene of targets) await work(scene);
     else {
       // API providers take a few scenes at once; writes stay serialized.

@@ -419,6 +419,18 @@ export function createModelPicker(
   rankingLabel.textContent = 'Ranking';
   rankingFilter.append(rankingCheckbox, rankingLabel);
   sort.append(rankingFilter);
+  // Optional filter: only the models that accept images (vision). A toggle button of the application, not a native
+  // checkbox; it is offered for text models only and needs the catalogue to say what each model accepts.
+  let visionOnly = false;
+  const visionFilter = document.createElement('button');
+  visionFilter.type = 'button';
+  visionFilter.className = 'settings-model-sort-button settings-model-vision-filter';
+  visionFilter.dataset.modelVisionFilter = 'true';
+  visionFilter.textContent = 'Visión';
+  visionFilter.setAttribute('aria-pressed', 'false');
+  visionFilter.hidden = image;
+  const sees = (model) => Array.isArray(model.inputModalities) && model.inputModalities.includes('image');
+  sort.append(visionFilter);
   let reloading = false,
     disposed = false;
   const reload = document.createElement('button');
@@ -554,6 +566,7 @@ export function createModelPicker(
     // description can mention unrelated capabilities and must not match.
     const filtered = catalogModels.filter((model) => {
       if (!matchesSearch(search.value, model)) return false;
+      if (visionOnly && !sees(model)) return false;
       if (!rankingCheckbox.checked) return true;
       const score = model.artificialAnalysis;
       return Boolean(
@@ -585,9 +598,11 @@ export function createModelPicker(
     if (!filtered.length) {
       const empty = document.createElement('p');
       empty.className = 'settings-model-empty';
-      empty.textContent = rankingCheckbox.checked
-        ? 'No hay modelos con datos en el ranking.'
-        : 'No hay modelos que coincidan con la búsqueda.';
+      empty.textContent = visionOnly
+        ? 'No hay modelos con visión que coincidan.'
+        : rankingCheckbox.checked
+          ? 'No hay modelos con datos en el ranking.'
+          : 'No hay modelos que coincidan con la búsqueda.';
       list.append(empty);
     }
     let previousGroup;
@@ -813,6 +828,22 @@ export function createModelPicker(
     renderOptions();
   });
   rankingCheckbox.addEventListener('change', renderOptions);
+  const syncVision = () => {
+    const known = catalogModels.some((model) => Array.isArray(model.inputModalities));
+    visionFilter.disabled = !known;
+    if (!known) visionOnly = false;
+    visionFilter.setAttribute('aria-pressed', String(visionOnly));
+    visionFilter.classList.toggle('is-active', visionOnly);
+    visionFilter.title = known
+      ? 'Mostrar solo modelos que aceptan imágenes'
+      : 'El catálogo no indica qué modelos aceptan imágenes.';
+  };
+  visionFilter.addEventListener('click', () => {
+    visionOnly = !visionOnly;
+    syncVision();
+    renderOptions();
+  });
+  syncVision();
   sortButtons.get('ranking').disabled = !benchmarkAvailable;
   sortButtons.get('ranking').title = benchmarkAvailable
     ? 'Ordenar por puesto en Artificial Analysis'
@@ -844,6 +875,7 @@ export function createModelPicker(
     updateModels(items) {
       if (disposed) return;
       replaceCatalog(items);
+      syncVision();
       benchmarkAvailable = items.some((model) => model.artificialAnalysis);
       rankingCheckbox.disabled = !benchmarkAvailable;
       if (!benchmarkAvailable) {

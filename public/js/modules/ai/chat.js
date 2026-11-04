@@ -1,3 +1,8 @@
+import {
+  checkAssistantCommand,
+  assistantCommandCorrection,
+  SCENARIO_IMAGE_ACTIONS,
+} from '../../contracts/assistant-commands.js';
 import { renderIcon } from '../../icons.js';
 import { safeHTML, safeContent } from '../../safe-html.js';
 import { markdownToHTML } from './chat-markdown.js';
@@ -18,6 +23,17 @@ import { ingredientContent, ingredientVersionLabel } from '../ingredients/ingred
 import { Modal, Toast } from '../../ui-components.js';
 import { chooseResourceImageModel } from './resource-model-dialog.js';
 import { prepareCharacterCreation } from '../characters/character-creation.js';
+import {
+  versionAction,
+  ingredientAction,
+  continuityDigest,
+  continuityReportForAssistant,
+  projectAction,
+  filmAction,
+} from './assistant-actions.js';
+import { createJobCard } from './job-card.js';
+import { createTaskProgress, jobProgress } from './task-progress.js';
+import { createThinkingControls, runThinking, thinkingApplies } from './thinking.js';
 
 /**
  * Returns a short HH:MM timestamp string.
@@ -55,6 +71,21 @@ function createBubble(role, text, time) {
   return wrap;
 }
 
+/** A card of the conversation: the task the assistant started or the result it finished, kept in the history. */
+function createCardMessage(card) {
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-msg chat-msg--ai chat-msg--card';
+  wrap.append(createJobCard(card));
+  return wrap;
+}
+
+/** The element of a message of the history: its card when it has one, its bubble otherwise. */
+function createMessageElement(message) {
+  return message.card
+    ? createCardMessage(message.card)
+    : createBubble(message.role, message.text, message.time || '');
+}
+
 /**
  * Right-side project assistant panel.
  *
@@ -86,13 +117,15 @@ export class Chat {
   /** Bound handler refs */
   #bound = {};
   #requestController = null;
-  #applyDocumentChange = null;
   #prepareProjectContent = null;
   #conversationProjectId = null;
   #contextProjectId = null;
   #executeCharacterAction = null;
+  #executeScenarioAction = null;
+  #executeCoverAction = null;
   #attachCharacterPhoto = null;
   #photoButton = null;
+  #thinking = null;
   #photoPreview = null;
   #uploadingPhoto = false;
   #externalPhoto = '';
@@ -111,18 +144,20 @@ export class Chat {
     container,
     {
       executeCharacterAction = null,
+      executeScenarioAction = null,
+      executeCoverAction = null,
       attachCharacterPhoto = null,
-      applyDocumentChange = null,
       prepareProjectContent = null,
       acceptBookJob = null,
       setEditingBusy = null,
     } = {},
   ) {
-    this.#applyDocumentChange = applyDocumentChange;
     this.#acceptBookJob = acceptBookJob;
     this.#setEditingBusy = setEditingBusy;
     this.#prepareProjectContent = prepareProjectContent;
     this.#executeCharacterAction = executeCharacterAction;
+    this.#executeScenarioAction = executeScenarioAction;
+    this.#executeCoverAction = executeCoverAction;
     this.#attachCharacterPhoto = attachCharacterPhoto;
     this.#root = document.createElement('div');
     this.#root.className = 'chat-panel is-collapsed';
@@ -181,6 +216,9 @@ export class Chat {
     this.#sendBtn.textContent = 'Enviar';
 
     inputRow.append(this.#input, this.#sendBtn);
+    // Only a local model gets simulated thinking: the selector appears and disappears with the model.
+    this.#thinking = createThinkingControls();
+    inputRow.insertBefore(this.#thinking.element, this.#sendBtn);
     if (attachCharacterPhoto) {
       const file = document.createElement('input');
       file.type = 'file';
@@ -304,9 +342,7 @@ export class Chat {
       void API.characterJobs(id)
         .then(({ jobs }) => {
           const job = jobs.find(
-            (j) =>
-              ['book', 'edit'].includes(j.kind) &&
-              ['queued', 'running', 'awaiting_choice'].includes(j.status),
+            (j) => j.kind === 'edit' && ['queued', 'running', 'awaiting_choice'].includes(j.status),
           );
           if (job && this.#root && AppState.currentProject?.id === id && !this.#loading)
             return this.#runBookJob('', job.id);
@@ -336,6 +372,8 @@ export class Chat {
     this.#libraryDialog?.remove();
     this.#libraryDialog = null;
     EventBus.off('workspace:context:ready', this.#bound.contextReady);
+    this.#thinking?.destroy();
+    this.#thinking = null;
     this.#root?.remove();
     this.#root = null;
     this.#bound = {};
@@ -567,7 +605,7 @@ export class Chat {
           message.visible !== false &&
           (message.role !== 'ai' || parseAgentResponse(message.text, true).text.trim())
         )
-          this.#messageList.append(createBubble(message.role, message.text, message.time || ''));
+          this.#messageList.append(createMessageElement(message));
     }
     if (!this.#history.length) this.#renderEmptyState();
   }
@@ -735,7 +773,7 @@ export class Chat {
       this.#emptyState = null;
       for (const message of this.#history) {
         if (message.visible && (message.role !== 'ai' || parseAgentResponse(message.text, true).text.trim()))
-          this.#messageList.appendChild(createBubble(message.role, message.text, message.time || ''));
+          this.#messageList.appendChild(createMessageElement(message));
       }
       this.#libraryDialog.close();
       this.#scrollToBottom();
@@ -765,6 +803,18 @@ export class Chat {
     const originatingProjectId = AppState.currentProject?.id;
     const approvedReads = new Set([originatingProjectId]);
     if (!originalText) return;
+    // Every AI function runs on the model chosen in the workspace's top bar, and nothing is sent without one.
+    const settings = AppState.currentProject?.inferenceSettings;
+    if (
+      AppState.currentProject &&
+      !(settings?.mode === 'local' ? settings.localModel : settings?.textModel)
+    ) {
+      this.#notify(
+        'Selecciona un modelo LLM en la barra superior del workspace antes de usar el asistente.',
+        'warning',
+      );
+      return;
+    }
     if (
       ((AppState.currentProject?.type === 'book' &&
         ['story-book', 'screenplay'].includes(AppState.currentProject?.category)) ||
@@ -781,7 +831,6 @@ export class Chat {
       return;
     }
 
-    const expectedDocument = this.#getEditorContext().document;
     if (this.#contextProjectId && this.#contextProjectId !== originatingProjectId)
       this.#addInvisibleMessage(
         'user',
@@ -808,6 +857,8 @@ export class Chat {
     const maxTurns = 3;
     let turns = 0;
     let characterActionExecuted = false;
+    let scenarioActionExecuted = false;
+    let toolActionExecuted = false;
 
     while (
       turns < maxTurns &&
@@ -840,6 +891,26 @@ export class Chat {
             : ''),
         history: historyToSend,
       };
+
+      // A local model thinks a few short steps about what the person wrote before its first answer; the steps that
+      // follow a result of the system are not new questions and are not thought about again.
+      const steps = turns === 1 ? this.#thinking?.steps() || 0 : 0;
+      if (thinkingApplies(steps, originalText)) {
+        try {
+          const notes = await runThinking({
+            payload,
+            steps,
+            signal: controller.signal,
+            list: this.#messageList,
+            before: loader,
+          });
+          if (notes.length) payload.thinkingNotes = notes;
+        } catch (error) {
+          if (controller.signal.aborted) break;
+          throw error;
+        }
+        this.#scrollToBottom();
+      }
 
       const reply = this.#createLiveReply(controller, loader, originatingProjectId);
       try {
@@ -907,15 +978,28 @@ export class Chat {
         await reply.finish(aiText);
         if (controller.signal.aborted || !this.#root || AppState.currentProject?.id !== originatingProjectId)
           break;
+        // Every command is read against its schema before anything runs; what does not fit goes back with its paths.
+        const invalid = parsed.commands
+          .map((command) => {
+            const result = checkAssistantCommand(command.name, command.argument);
+            command.value = result.value;
+            return result.problems.length ? { command, text: result.text } : null;
+          })
+          .find(Boolean);
+        if (invalid) {
+          reply.discard();
+          if (turns >= maxTurns) throw new Error('El asistente no pudo emitir un comando válido.');
+          currentMessageText = assistantCommandCorrection(invalid.command.name, invalid.text);
+          this.#addInvisibleMessage('user', currentMessageText);
+          continue;
+        }
         const readMatch = parsed.commands.find((command) => command.name === 'LEER_PROYECTO');
-        const editMatch = parsed.commands.find((command) => command.name === 'EDITAR_DOCUMENTO');
         const createMatch = parsed.commands.find((command) => command.name === 'CREAR_PROYECTO');
         const characterMatch = parsed.commands.find((command) => command.name === 'PERSONAJE');
-        const bookMatch = parsed.commands.find((command) =>
-          ['ESCRIBIR_LIBRO', 'EDITAR_PROYECTO'].includes(command.name),
-        );
+        const scenarioMatch = parsed.commands.find((command) => command.name === 'ESCENARIO');
+        const bookMatch = parsed.commands.find((command) => command.name === 'EDITAR_PROYECTO');
         if (bookMatch) {
-          const action = JSON.parse(bookMatch.argument);
+          const action = bookMatch.value;
           if (
             parsed.commands.length !== 1 ||
             action.projectId !== originatingProjectId ||
@@ -931,6 +1015,180 @@ export class Chat {
           break;
         }
 
+        const toolMatch = parsed.commands.find((command) =>
+          ['VERSION', 'INGREDIENTE', 'PORTADA', 'CONTINUIDAD', 'PROYECTO', 'PELICULA'].includes(command.name),
+        );
+        if (toolMatch) {
+          if (toolActionExecuted) throw new Error('La acción ya se ejecutó en esta petición.');
+          if (parsed.commands.length !== 1)
+            throw new Error('Kubrick Space debe ejecutar una sola acción por turno.');
+          toolActionExecuted = true;
+          const action = toolMatch.value;
+          let result;
+          let continuity = '';
+          try {
+            if (toolMatch.name === 'VERSION')
+              result = await versionAction(action, {
+                expectedContent: this.#getEditorContext().document ?? AppState.currentProject?.content,
+                openProjectId: originatingProjectId,
+              });
+            else if (toolMatch.name === 'PELICULA') {
+              result = await filmAction(action, {
+                confirm: (title) =>
+                  Modal.confirm({
+                    title: 'Regenerar prompt',
+                    message: `Escribiste a mano el prompt de «${title}». Al regenerarlo se reemplazará por uno nuevo del modelo.\n\n¿Reemplazarlo?`,
+                    confirmLabel: 'Reemplazar',
+                    type: 'warning',
+                  }),
+              });
+              if (result?.status === 'queued' && result.jobId)
+                this.#addCard(
+                  { projectId: action.projectId, jobId: result.jobId },
+                  'Tarea de la película iniciada.',
+                );
+            } else if (toolMatch.name === 'PROYECTO')
+              result = await projectAction(action, {
+                openProjectId: originatingProjectId,
+                openProject: AppState.currentProject,
+                confirm: (name) =>
+                  Modal.confirm({
+                    title: 'Enviar a la papelera',
+                    message: `El asistente quiere enviar «${name}» a la papelera. Podrás restaurarlo desde Inicio.\n\n¿Enviarlo?`,
+                    confirmLabel: 'Enviar a la papelera',
+                    type: 'warning',
+                  }),
+              });
+            else if (toolMatch.name === 'INGREDIENTE')
+              result = await ingredientAction(action, AppState.currentProject);
+            else if (toolMatch.name === 'PORTADA') {
+              if (!this.#executeCoverAction)
+                throw new Error('Las portadas no están disponibles en esta vista.');
+              // Deleting a cover is for good: the person is asked, as the delete button of the cover asks.
+              if (
+                action.action === 'delete' &&
+                !(await Modal.confirm({
+                  title: 'Eliminar portada',
+                  message: `El asistente quiere eliminar la portada número ${action.number} del historial. No se puede deshacer.\n\n¿Eliminarla?`,
+                  confirmLabel: 'Eliminar portada',
+                  type: 'danger',
+                }))
+              )
+                result = {
+                  status: 'cancelled',
+                  message: 'La persona no confirmó: la portada sigue en el historial.',
+                };
+              else {
+                result = await this.#executeCoverAction(action);
+                if (result?.status === 'completed')
+                  this.#addCard({ projectId: action.projectId, kind: 'cover' }, 'Portada creada.');
+              }
+            } else {
+              if (action.projectId !== originatingProjectId)
+                throw new Error(
+                  'La revisión de continuidad se hace sobre el proyecto abierto; usa LEER_PROYECTO para otros.',
+                );
+              if (AppState.inferenceMode === 'local') {
+                // A local model cannot hold the whole project: the server reads it in parts, with a notebook.
+                result = await this.#runContinuityJob(originatingProjectId, controller);
+              } else {
+                const context = this.#getEditorContext();
+                continuity = continuityDigest({
+                  project: AppState.currentProject,
+                  content: context.document ?? AppState.currentProject.content,
+                  ingredients: context.ingredients || AppState.currentProject.ingredients || [],
+                });
+                result = { status: 'ready' };
+              }
+            }
+          } catch (error) {
+            if (controller.signal.aborted) throw error;
+            result = { status: 'error', message: error.message };
+          }
+          if (controller.signal.aborted || AppState.currentProject?.id !== originatingProjectId) break;
+          const systemContext =
+            continuity && result.status === 'ready'
+              ? continuity
+              : '[Sistema: Resultado real de ' +
+                toolMatch.name +
+                ' (datos): ' +
+                JSON.stringify(result) +
+                '. Confirma solo lo que el resultado dice que se hizo; error significa que NO se hizo. No repitas la acción en esta respuesta.' +
+                (toolMatch.name === 'CONTINUIDAD' && result.status === 'completed'
+                  ? ' Presenta el informe de continuidad: cada hallazgo con su ubicación, los seguros primero y los dudosos aparte; si findings está vacío dilo; di cuántas partes se leyeron (coverage) y, si hay omitted, cuántos hallazgos faltan.'
+                  : '') +
+                ']';
+          this.#addInvisibleMessage('user', systemContext);
+          currentMessageText = systemContext;
+          continue;
+        }
+
+        if (scenarioMatch) {
+          if (scenarioActionExecuted)
+            throw new Error('La acción de escenario ya se ejecutó en esta petición.');
+          if (parsed.commands.length !== 1)
+            throw new Error('Kubrick Space debe ejecutar una sola acción de escenario por turno.');
+          if (!this.#executeScenarioAction)
+            throw new Error('La edición de escenarios no está disponible en esta vista.');
+          scenarioActionExecuted = true;
+          let result;
+          try {
+            const { projectIds, ...rest } = scenarioMatch.value;
+            const targets = [...new Set(projectIds)];
+            if (SCENARIO_IMAGE_ACTIONS.includes(rest.action) && targets.length !== 1)
+              throw new Error('Las acciones sobre imágenes se hacen sobre un solo escenario por comando.');
+            const results = [];
+            // Emptying the trash of a scenario is for good: the person is asked first, as the trash asks.
+            const refused =
+              rest.action === 'purge_images' &&
+              !(await Modal.confirm({
+                title: 'Eliminar imágenes definitivamente',
+                message: `El asistente quiere eliminar ${rest.urls?.length || 0} imagen(es) de la papelera del escenario. No se puede deshacer.\n\n¿Eliminarlas?`,
+                confirmLabel: 'Eliminar definitivamente',
+                type: 'danger',
+              }));
+            if (refused)
+              results.push({
+                projectId: targets[0],
+                status: 'cancelled',
+                message: 'La persona no confirmó: las imágenes siguen en la papelera.',
+              });
+            else
+              for (const target of targets) {
+                try {
+                  results.push({
+                    projectId: target,
+                    ...(await this.#executeScenarioAction(
+                      { ...rest, projectId: target },
+                      { signal: controller.signal },
+                    )),
+                  });
+                } catch (error) {
+                  if (controller.signal.aborted) throw error;
+                  results.push({ projectId: target, status: 'error', message: error.message });
+                }
+              }
+            for (const item of results)
+              if (item.status === 'queued' && item.jobId)
+                this.#addCard(
+                  { projectId: item.projectId, jobId: item.jobId },
+                  'Tarea del escenario iniciada.',
+                );
+            result = targets.length === 1 ? results[0] : { status: 'batch', results };
+          } catch (error) {
+            if (controller.signal.aborted) throw error;
+            result = { status: 'error', message: error.message };
+          }
+          if (controller.signal.aborted || AppState.currentProject?.id !== originatingProjectId) break;
+          const systemContext =
+            '[Sistema: Resultado real de la acción del escenario (datos): ' +
+            JSON.stringify(result) +
+            '. Confirma solo lo completado: queued significa aceptada por el servidor, no terminada; error significa que NO se generó nada. No repitas la acción en esta respuesta.]';
+          this.#addInvisibleMessage('user', systemContext);
+          currentMessageText = systemContext;
+          continue;
+        }
+
         if (characterMatch) {
           if (characterActionExecuted)
             throw new Error('La acción de personaje ya se ejecutó en esta petición.');
@@ -938,7 +1196,7 @@ export class Chat {
             throw new Error('Kubrick Space debe ejecutar una sola acción de personaje por turno.');
           if (!this.#executeCharacterAction)
             throw new Error('La edición de personajes no está disponible en esta vista.');
-          const action = JSON.parse(characterMatch.argument);
+          const action = characterMatch.value;
           if (!/^[a-f0-9-]{36}$/.test(action.projectId || ''))
             throw new Error('Selecciona un personaje con un ID confirmado.');
           characterActionExecuted = true;
@@ -946,6 +1204,11 @@ export class Chat {
           if (result?.status === 'queued') {
             this.#externalPhoto = '';
             this.#syncPhotoPreview();
+            if (result.jobId)
+              this.#addCard(
+                { projectId: action.projectId, jobId: result.jobId },
+                'Tarea del personaje iniciada.',
+              );
           }
           if (controller.signal.aborted || AppState.currentProject?.id !== originatingProjectId) break;
           const systemContext =
@@ -957,40 +1220,10 @@ export class Chat {
           continue;
         }
 
-        if (editMatch) {
-          if (parsed.commands.length !== 1 || characterActionExecuted || !this.#applyDocumentChange)
-            throw new Error('La edición no está disponible o incluye varias acciones.');
-          const proposal = JSON.parse(editMatch.argument);
-          if (proposal.projectId !== originatingProjectId || typeof proposal.content !== 'string') {
-            reply.discard();
-            if (turns < maxTurns) {
-              currentMessageText =
-                '[Sistema: La propuesta usa un ID o formato incorrecto. Proyecto activo autoritativo: ' +
-                JSON.stringify(originatingProjectId) +
-                '. Usa ese ID exacto, nunca el ID del documento interno ni uno del historial. Emite una acción válida; no anuncies comandos.]';
-              this.#addInvisibleMessage('user', currentMessageText);
-              continue;
-            }
-            throw new Error('No se pudo preparar una edición válida para el documento abierto.');
-          }
-          controller.signal.throwIfAborted();
-          if (AppState.currentProject?.id !== originatingProjectId) break;
-          const result = await this.#applyDocumentChange(proposal, expectedDocument);
-          characterActionExecuted = true;
-          const outcome =
-            '[Sistema: Resultado real de EDITAR_DOCUMENTO: ' +
-            JSON.stringify(result) +
-            '. Confirma solo este resultado; no repitas la acción.]';
-          this.#addInvisibleMessage('user', outcome);
-          currentMessageText = outcome;
-          continue;
-        }
-
         if (createMatch) {
-          const jsonStr = createMatch.argument;
-          let payload;
+          const payload = createMatch.value;
           try {
-            payload = JSON.parse(jsonStr);
+            if (!payload) throw new Error('Comando vacío.');
           } catch (err) {
             console.error('Failed to parse CREAR_PROYECTO JSON:', err);
             const systemContext = `[Sistema: Error al procesar el comando CREAR_PROYECTO. El formato JSON es inválido: ${err.message}. Por favor, vuelve a generar el comando con un JSON estrictamente válido.]`;
@@ -1048,16 +1281,15 @@ export class Chat {
             });
             createdProject = newProj;
 
-            let initialContent = payload.content || '';
+            // A new project is created empty and typed; what goes inside is written by the editing agent or the
+            // character assistant, never by HTML in the chat command.
+            let initialContent = '';
             if (newProj.type === 'character') {
               const creation = await prepareCharacterCreation(
                 newProj,
                 payload.characterCreation || {
                   source: 'auto',
-                  request:
-                    [payload.content, payload.traits ? JSON.stringify(payload.traits) : '']
-                      .filter(Boolean)
-                      .join('\n') || `Crear un personaje llamado ${newProj.name}.`,
+                  request: `Crear un personaje llamado ${newProj.name}.`,
                 },
                 {
                   signal: controller.signal,
@@ -1074,7 +1306,7 @@ export class Chat {
               initialContent = this.#prepareProjectContent(newProj, initialContent);
             const updatedProj = await API.updateProject(newProj.id, {
               content: initialContent,
-              traits: newProj.type === 'character' ? {} : payload.traits || {},
+              traits: {},
             });
             createdProject = updatedProj;
 
@@ -1133,7 +1365,7 @@ export class Chat {
           currentMessageText = systemContext;
           continue; // Loop again
         } else if (readMatch) {
-          const projectIdToRead = readMatch.argument;
+          const projectIdToRead = readMatch.value;
           if (!this.#root || AppState.currentProject?.id !== originatingProjectId) break;
           if (!approvedReads.has(projectIdToRead)) {
             const name = AppState.projects?.find((p) => p.id === projectIdToRead)?.name || projectIdToRead;
@@ -1255,12 +1487,9 @@ export class Chat {
         : [];
     this.#contextProjectId = projectId;
     this.#rememberConversation();
-    const label = document.createElement('span');
-    const progress = document.createElement('progress');
-    progress.max = 100;
-    progress.value = 0;
-    progress.setAttribute('aria-label', 'Avance estimado del proyecto');
-    loader.append(label, progress);
+    const bar = createTaskProgress();
+    bar.update({ label: 'Leyendo el proyecto completo…' });
+    loader.append(bar.element);
     let expected, response, planShown;
     const questions = new Set();
     try {
@@ -1278,8 +1507,7 @@ export class Chat {
       while (!controller.signal.aborted && this.#root && AppState.currentProject?.id === projectId) {
         response = await API.characterJob(this.#bookJobId, { signal: controller.signal }, projectId);
         expected = await this.#acceptBookJob(response, expected);
-        progress.value = response.job.progress || 0;
-        label.textContent = `${response.job.message} · ${progress.value}% estimado`;
+        bar.update(jobProgress(response.job));
         if (response.job.adaptPlan && !planShown) {
           planShown = true;
           this.#addMessage('ai', adaptationPlanMessage(response.job.adaptPlan));
@@ -1344,6 +1572,34 @@ export class Chat {
       this.#requestController = null;
       if (this.#sendBtn) this.#sendBtn.textContent = 'Enviar';
       if (this.#input) this.#input.placeholder = 'Pide una idea, una revisión o el siguiente paso…';
+    }
+  }
+
+  /**
+   * The continuity review of a local model: a task of the server that reads the whole project in parts. The chat shows
+   * its card and waits for the report; stopping the answer stops the task.
+   */
+  async #runContinuityJob(projectId, controller) {
+    await EventBus.emitAsync('autosave:flush');
+    const { job: accepted } = await API.enqueueContinuityJob({
+      projectId,
+      token: globalThis.crypto.randomUUID(),
+    });
+    this.#addCard({ projectId, jobId: accepted.id }, 'Revisión de continuidad por partes iniciada.');
+    for (;;) {
+      if (controller.signal.aborted) {
+        void API.cancelBackgroundJob(accepted.id).catch(() => {});
+        throw controller.signal.reason ?? new Error('Revisión detenida.');
+      }
+      const { job } = await API.characterJob(accepted.id, { signal: controller.signal }, projectId);
+      if (!['queued', 'running', 'awaiting_choice'].includes(job.status)) {
+        if (job.status === 'completed' && job.result?.report)
+          return continuityReportForAssistant(job.result.report);
+        return { status: 'error', message: job.error || 'La revisión de continuidad no terminó.' };
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1500);
+      });
     }
   }
 
@@ -1437,6 +1693,16 @@ export class Chat {
     this.#emptyState = null;
     const bubble = createBubble(role, text, time);
     this.#messageList?.appendChild(bubble);
+    this.#scrollToBottom();
+  }
+
+  /** Shows a card for a task or result and keeps it (with a line of text for the model) in the conversation. */
+  #addCard(card, text) {
+    this.#history.push({ role: 'ai', text, time: timestamp(), visible: true, card });
+    this.#rememberConversation();
+    this.#emptyState?.remove();
+    this.#emptyState = null;
+    this.#messageList?.appendChild(createCardMessage(card));
     this.#scrollToBottom();
   }
 

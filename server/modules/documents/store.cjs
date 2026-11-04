@@ -106,7 +106,7 @@ function createDocumentStore(projectsDir, { preparePayload = (id, payload) => pa
     return versions;
   };
 
-  const createVersion = (projectId, payload) => {
+  const createVersion = (projectId, payload, note = '') => {
     const versions = getVersions(projectId);
     const nextNumber = versions.reduce((latest, item) => Math.max(latest, Number(item.number) || 0), 0) + 1;
     const snapshot = validatePayload(payload, projectId);
@@ -115,21 +115,36 @@ function createDocumentStore(projectsDir, { preparePayload = (id, payload) => pa
       number: nextNumber,
       name: snapshot.name || 'Sin título',
       savedAt: new Date().toISOString(),
+      ...(note ? { note: String(note).slice(0, 300), auto: true } : {}),
       snapshot,
     };
     return { versions: [...versions, version], version };
+  };
+
+  /**
+   * Keeps the state a project had before something changes it, without touching the project or its draft. The same
+   * state twice in a row is not stored twice.
+   */
+  const appendVersion = (projectId, payload, note) => {
+    const { versions, version } = createVersion(projectId, payload, note);
+    const last = versions.at(-2);
+    if (last && JSON.stringify(last.snapshot) === JSON.stringify(version.snapshot))
+      return { version: last, created: false };
+    atomicWrite(fileFor(projectId, 'document-versions.json'), versions);
+    return { version, created: true };
   };
 
   const listVersions = (projectId) =>
     getVersions(projectId)
       .slice()
       .sort((a, b) => b.number - a.number)
+
       .map(({ snapshot, ...version }) => ({ ...version, contentLength: snapshot?.content?.length || 0 }));
 
   const getVersion = (projectId, versionId) =>
     getVersions(projectId).find((version) => version.id === versionId) || null;
 
-  return { getDraft, saveDraft, getVersions, listVersions, getVersion, createVersion };
+  return { getDraft, saveDraft, getVersions, listVersions, getVersion, createVersion, appendVersion };
 }
 
 module.exports = { createDocumentStore };

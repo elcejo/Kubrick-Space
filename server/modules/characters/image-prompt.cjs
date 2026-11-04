@@ -4,6 +4,7 @@ const {
   validateCharacterImageDirection,
 } = require('../../../public/js/contracts/character-image-prompt.js');
 const { validateCharacterDocument } = require('../../../public/js/contracts/character-model.js');
+const { checkToolArguments } = require('../../../public/js/contracts/tool-call.js');
 const {
   planCharacterComposition,
   CHARACTER_COMPOSITION_PROMPT,
@@ -143,6 +144,7 @@ function createCharacterImagePromptOperation({
           },
         },
       };
+      let lastProblem = '';
       for (let attempt = 0; attempt < 2; attempt++) {
         const result = await proxyRequest(
           'https://openrouter.ai/api/v1/chat/completions',
@@ -191,7 +193,8 @@ function createCharacterImagePromptOperation({
                           JSON.stringify(brief.subject.nature) +
                           ' y changeKeys EXACTAMENTE estos identificadores (ningún otro): ' +
                           JSON.stringify(brief.changed.map((field) => field.key)) +
-                          '. No traduzcas la naturaleza ni los identificadores. No incluyas una plantilla, narrativa ni campos adicionales.',
+                          '. No traduzcas la naturaleza ni los identificadores. No incluyas una plantilla, narrativa ni campos adicionales.' +
+                          (lastProblem ? ' Errores exactos de la respuesta anterior:\n' + lastProblem : ''),
                       },
                     ]
                   : []),
@@ -234,8 +237,14 @@ function createCharacterImagePromptOperation({
             throw Error('Incomplete visual direction');
           // This tool only proposes text. Validate every proposal; use the final
           // validated refinement once, never execute multiple image generations.
-          for (const call of calls)
-            prompt = validateCharacterImageDirection(JSON.parse(call.function.arguments), brief);
+          for (const call of calls) {
+            const checked = checkToolArguments(tool.function.parameters, call.function.arguments);
+            if (checked.problems.length && !llmConfig.isLocalModel(model)) {
+              lastProblem = checked.text;
+              throw Error('Schema violation');
+            }
+            prompt = validateCharacterImageDirection(checked.value, brief);
+          }
         } catch (error) {
           console.warn('[Character direction] Propuesta rechazada:', {
             attempt: attempt + 1,
@@ -244,7 +253,9 @@ function createCharacterImagePromptOperation({
                 ? 'invalid_json'
                 : error.message === 'Incomplete visual direction'
                   ? 'missing_tool'
-                  : 'invalid_contract',
+                  : error.message === 'Schema violation'
+                    ? 'invalid_schema'
+                    : 'invalid_contract',
           });
           if (attempt === 0) continue;
           return {

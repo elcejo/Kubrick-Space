@@ -1,18 +1,279 @@
 # Presentación y seguimiento del roadmap
 
-## Versión 0.1.3: guiones largos, formato único de plano y vínculos automáticos — 2 de noviembre de 2026
 
-Nuevo: el asistente adapta un Story Book vinculado a guión por unidades (plan, memoria de continuidad, guardado por ronda, reanudación, Stop y «Deshacer adaptación»), actualiza solo las escenas cuyos párrafos cambiaron y edita guiones muy largos por ventanas. Se retira la entrada de menú «Generar a partir del contexto»: se le pide al asistente.
+## Versión previa a cada edición con IA y más herramientas del asistente (CK-AI-029) — 2 de noviembre de 2026
 
-Nuevo: todo plano tiene siempre su acción y su transición (los guiones anteriores las ganan al abrirse), una escena admite de 1 a 24 planos, los personajes y lugares que escribe el asistente se vinculan por nombre y un personaje que aparece sin hablar queda como presencia silenciosa. Mientras el asistente edita se puede desplazar el documento; vincular un proyecto ofrece incorporar sus ingredientes; la papelera permite restaurar o eliminar varios proyectos a la vez.
+Nuevo: antes de cada trabajo de IA el servidor guarda una versión del proyecto sin modificar; el asistente guarda versiones con nota, vincula y desvincula ingredientes, genera la portada, revisa la continuidad (solo lectura) y completa escenarios en lote. Pendiente de verificar con modelos reales; restaurar una versión sigue siendo desde el historial de Versiones.
 
-## Versión 0.1.2: Local como proveedor, edición por elementos y más piezas — 1 de noviembre de 2026
+## El asistente completa escenarios y crea variantes de personajes — 2 de noviembre de 2026
 
-Nuevo: se retira el selector API/Local; Local es un proveedor más y siempre aparece primero. Cada proyecto guarda un modo para texto y otro para imágenes. La edición del proyecto abierto por elementos trabaja por rondas, crea los personajes y lugares complementarios con foto y props, vincula los ingredientes y pregunta qué modelo usar para cada imagen; los trabajos son durables y se pueden detener, reanudar y reintentar.
+Nuevo: comando ESCENARIO (esquema 1) para completar la fotografía de cualquier escenario, cambiarlo o rehacer imágenes sin abrirlo; el asistente recibe la foto principal de cada personaje y el estado de cada escenario, y crea variantes (mismo personaje con otra edad) con CREAR_PROYECTO y PERSONAJE con attachmentImage. Pendiente de verificar con modelos reales.
 
-Corregido: al reanudar una edición, el trabajo trataba como ajeno al personaje que él mismo había creado y podía asignarle la descripción o la foto de otro recurso. Los props de un personaje nuevo se reintentan una vez si el modelo falla.
+## Largometraje por escenas y video final con LUp — 3 de noviembre de 2026
 
-Nuevo: la biblioteca visual añade siete grupos de Ropa (Brasieres, Baby dolls, Túnicas, Batas, Capas, Turbantes, Leggings) y catorce de Props (Cámaras, Libretas, Libros, Lápices, Varitas, Juguetes, Pelotas, Cangureras, Raquetas, Bates, Pancartas, Linternas, Toallas, Mascotas). Nombres únicos de ingredientes, comprobación de nombre en el asistente de creación, Story Book en prosa, botón de recarga de modelos de OpenRouter y modelos locales opcionales Qwen 3.8 27B y Gemma 4 E4B.
+Continuidad entre clips: modos automático, continuación, corte, fotograma inicial y escena nueva; aspecto de cada escena y nota de continuidad escritos por el modelo (con el último fotograma del clip anterior si el modelo ve imágenes); fotograma inicial generado con el modelo de imagen; continuación guiada por los últimos fotogramas del clip anterior con las guías nativas de H3; y filtro opcional de visión en el selector de modelos. Sin verificar en vivo con la GPU: las guías (`KubrickH3Tail`, `MiniMaxH3AddGuide`) y el fotograma inicial dependen de reiniciar el motor local para cargar el nodo nuevo.
+
+Un plano es un clip y dura lo que el plano dice: se acabó la división en partes. El prompt de cada clip se compone de tres partes: referencias y línea técnica (plano, lente, apertura, duración) programáticas, y la descripción creativa del modelo. El panel de tareas actualiza la barra, el paso y el reloj cada segundo y el video de previsualización ya no parpadea.
+
+Panel de tareas: los videos locales se miden por etapas (barra de colores y leyenda como en Skalibur), muestran el paso en curso con su tiempo y una previsualización en vivo con TAEH3 mientras el modelo muestrea. El modelo TAEH3 vive ahora en `models/video/h3/preview`. Requiere reiniciar el motor local para cargar el nodo nuevo; sin verificar en vivo con la GPU hasta entonces.
+
+El tablero muestra una escena del guión a la vez, con flechas a la anterior y la siguiente; cada clip es una fila de tres nodos (previsualización, prompt y parámetros, video final). Las previsualizaciones y los videos finales se generan solo para la escena abierta. El video final repite la pasada base aprobada y la escala con H3 LUp (optimizador sin atención dispersa) a la resolución final elegida; película versión 5. Los clips antiguos que quedaron fuera del guión se descartan uno a uno o todos a la vez. El encabezado pasa a «Control de escena» con selectores propios (relación de aspecto con las 25 proporciones de Skalibur, resolución de previsualización y final) y encima hay un nodo con la escena completa, en previsualización o en resolución final cuando todos sus clips están listos. Sin verificar en vivo: la generación del video final con el motor local (la gráfica y los contratos están probados con un motor simulado). Pendiente: editar a mano las referencias de cada clip, la semilla y una vista general del metraje.
+
+## Largometraje más profesional: planos largos, referencias y fallos — 3 de noviembre de 2026
+
+Corregido: un plano con más diálogo del que cabe en un clip ya no detiene la película; se divide solo en partes consecutivas sin recortar texto. Los personajes vinculados desde un borrador (el caso habitual) ahora cuentan como referencia; antes solo se reconocían los de una versión guardada, y por eso solo aparecía el escenario. Nuevo: avisos por clip sobre sus referencias (sin foto, no vinculado, citado sin referencia), lista de fallos en el tablero con «Reintentar los fallidos», clips «Parte 2/3», «Descartar este clip» para los que salieron del guión, y esquema de película versión 4. El agente suma `remove_scene` y el asistente `PELICULA retry_failed`. Pendiente: editar a mano las referencias de cada clip, la semilla y una vista general del metraje (ver el plan en la respuesta de esta sesión).
+
+## Paridad de edición, lote 4: largometraje y exportar — 3 de noviembre de 2026
+
+Nuevo: el agente escribe el prompt de un plano y cambia su duración (`set_scene_prompt`, `set_scene_frames`); el comando `PELICULA` lista los planos, genera la película, hace que el modelo escriba un prompt, previsualiza, aprueba, retira la aprobación, rehace, detiene y reintenta; `PROYECTO` exporta el proyecto abierto. Los trabajos aparecen como tarjeta en el chat. El tablero de producción de planos del guión no es una función del guión (es del tablero de las categorías de video no creables) y sale del registro como excluida, igual que abrir un proyecto. El registro queda sin filas pendientes: 42 cubiertas y 6 excluidas con su motivo. Pendiente de verificar con modelos reales, y de ampliar el registro con lo que una auditoría futura encuentre.
+
+## Paridad de edición, lote 3: formato, portadas, ingredientes, versiones e imágenes — 3 de noviembre de 2026
+
+Nuevo: el agente da formato a fragmentos, crea términos con definición y protege texto (libro y guión, 5 operaciones con esquema); el asistente elige y elimina portadas, activa o desactiva ingredientes y fija su versión, recupera una versión de un guión abierto y gestiona las imágenes de un escenario (ver, traer de la papelera, referencias, vaciar la papelera). Las acciones irreversibles piden confirmación a la persona. Se retira del registro «restaurar versión» del libro porque a mano solo existe en guiones. Quedan el lote 4 (largometraje y producción de planos) y las filas excluidas, que necesitan un archivo o una dirección de la persona.
+
+## Paridad de edición, lote 2: mover y gestionar proyectos — 3 de noviembre de 2026
+
+Nuevo: el asistente mueve capítulos, temas y párrafos del Story Book (`move_element`), escenas y planos del guión (`move_scene`, `move_shot`) y gestiona proyectos con el comando `PROYECTO`: renombrar, enviar a la papelera con confirmación, restaurar y ver la papelera. Se retiran del registro el cambio de categoría de proyecto y de tipo de escenario, porque a mano no se pueden cambiar (el tipo del escenario es de solo lectura). Pendientes: lotes 3 (formato, etiquetas, bloqueos, portadas, ingredientes, versiones, imágenes de escenarios) y 4 (largometraje y producción de planos).
+
+## Paridad de edición del asistente y línea de tiempo — 3 de noviembre de 2026
+
+Nuevo: registro de paridad (`assistant-parity.js`, tabla `ASSISTANT-PARITY.md`) con lo que una persona puede hacer a mano en cada tipo de proyecto y cómo lo hace el asistente, y primer lote: el agente de edición del Story Book crea, edita, vincula y borra fechas y rangos de la línea de tiempo (10 operaciones con esquema). Siguientes lotes: 2 mover y reordenar, y nombre, categoría, eliminar y restaurar proyectos; 3 formato, etiquetas, bloqueos, portadas, ingredientes, versiones e imágenes de escenarios; 4 largometraje y producción de planos. Las filas del registro se confirman en la interfaz al implementarlas.
+
+## Continuidad por partes y pensamiento simulado para modelos locales — 3 de noviembre de 2026
+
+Nuevo: con un modelo local, la revisión de continuidad es un trabajo del servidor que lee todo el material por partes con un cuaderno de hechos (CK-AI-033), con avance «parte i de N» y tarjeta en el chat; y el chat ofrece pensamiento simulado (CK-AI-034) con selector Sin pensamiento / Bajo 5 / Medio 10 / Alto 20 / Personalizado, solo para modelos locales. Los esquemas `continuity-review` y `thinking-step` están publicados. Pendiente de verificar con un modelo local real: la calidad de los hallazgos, los tiempos de una lectura larga y si el nivel Bajo es el predeterminado adecuado.
+
+## Revisión de continuidad sin recortes — 3 de noviembre de 2026
+
+Corregido: la revisión de continuidad del chat fallaba con «texto inválido o demasiado largo (máximo 100000)». Ahora envía todo el proyecto y todos sus ingredientes sin recortar y el servidor acepta mensajes de hasta 2.000.000 de caracteres. La lectura por partes para modelos locales de contexto pequeño está en la entrada siguiente.
+
+## Chat profesional: barra medida, tarjetas de resultado y lectura sin saltos — 3 de noviembre de 2026
+
+Nuevo: la barra de progreso de las tareas muestra datos medidos (palabras frente al objetivo, ronda x de ~total, piezas) o una barra en movimiento sin número; las tareas de personaje y escenario y las portadas aparecen en el chat como tarjetas de color con la imagen del proyecto de fondo, avance, detener y abrir, y se conservan en la conversación. Corregido: el editor ya no vuelve arriba en cada cambio del agente. Pendiente de verificar con modelos reales; siguiente: pensamiento simulado para modelos locales (propuesto, sin implementar).
+
+## Ronda x de total y continuidad en cada ronda — 3 de noviembre de 2026
+
+Nuevo: el agente de edición muestra «ronda x de ~total» y en cada ronda revisa continuidad (cronología, personajes, lugares, hechos) con `continuity` en el esquema de ronda; no completa con revisión ausente ni contradicciones abiertas. Pendiente de verificar con modelos reales; ideas siguientes: avisar tras N rondas sin cambios nuevos y revisión determinista complementaria de IDs de personajes en guiones.
+
+## Modelo del workspace obligatorio y rondas largas del agente — 2 de noviembre de 2026
+
+Corregido: una ronda del agente con más de 8 operaciones fallaba entera («admite hasta 8 elementos y tiene 12») y ahora aplica las 8 primeras y continúa. Toda función de IA dentro de un proyecto exige el modelo elegido en la barra superior; el modelo de configuración ya no cuenta y el asistente no envía sin él.
+
+## Todo dato de un modelo pasa por un esquema (CK-SCHEMA-002) — 2 de noviembre de 2026
+
+Nuevo: las herramientas de personaje (gestión, consultas, inventario, dirección de piezas, retrato, revisión, maquillaje y lore), el sobre de cada ronda del agente y los comandos del asistente general se comprueban contra su esquema; un desvío vuelve al modelo una vez con la ruta exacta. Se retiraron los comandos ESCRIBIR_LIBRO y EDITAR_DOCUMENTO (HTML completo), la ruta /api/jobs/book y el agente heredado de HTML; CREAR_PROYECTO ya no escribe contenido: crea el proyecto vacío y tipado. Un tipo de proyecto nuevo no puede añadirse sin su esquema (prueba de cobertura). Sin pendientes de esquema.
+
+## Un esquema cerrado por tipo de proyecto (CK-SCHEMA-001) — 2 de noviembre de 2026
+
+Nuevo: Story Book, escenario y metraje cambian solo mediante operaciones con su JSON Schema publicado, igual que el guión; los campos que el formato no tiene se descartan y se avisa, y lo demás se valida con la ruta exacta del error. En personaje, la propuesta de la ficha se valida contra el esquema que recibió el proveedor y, ante cualquier desvío o razón de la ficha, se devuelve al modelo una vez con su motivo antes de mostrar un error al autor. Regla fija: todo cambio en un tipo de proyecto mantiene su esquema compatible. Pendiente: herramientas de gestión de personajes, inventario de piezas y lore.
+
+## Esquema cerrado de operaciones del guión (CK-SCRIPT-021) — 2 de noviembre de 2026
+
+Nuevo: la IA solo puede cambiar un guión mediante nueve operaciones con un JSON Schema publicado (docs/development/schemas); lo que no cabe en él no se aplica y vuelve al modelo con la ruta exacta del error. Se valida cada ronda de la adaptación y cada operación del agente de edición, y se pide al proveedor que escriba dentro del esquema cuando el modelo lo admite (con respaldo a JSON simple). Una implementación independiente de JSON Schema coincide con la nuestra en las pruebas. Pendiente: Story Book, escenario, metraje y personaje, y cerrar el camino heredado de HTML del Story Book.
+
+## Guiones anteriores al formato actual (CK-SCRIPT-020) — 2 de noviembre de 2026
+
+Cambio: todo plano lleva su acción y su transición (vacías si no hay texto). Al abrir un guión anterior se completan sin tocar lo escrito, y un guión existente se actualizó (planos con transición; copia previa guardada). La transición ya era parte del formato; los guiones antiguos simplemente no la tenían.
+
+## Lectura mientras edita, personajes vinculados, presencia silenciosa y revisión al vincular — 2 de noviembre de 2026
+
+Nuevo: (1) durante una edición del asistente se puede desplazar el documento para leerlo (CK-ED-001); (2) los personajes y lugares que el asistente escribe por nombre quedan vinculados a su ingrediente en el servidor, también en el guión (CK-SCRIPT-019); (3) un personaje que aparece sin hablar se registra como presencia silenciosa —acotación y diálogo vacío—, que lo vincula al plano y lo hace referencia del largometraje; (4) al vincular un proyecto como ingrediente se ofrece incorporar los ingredientes que él tiene y el receptor no (CK-ING-032), con todos marcados y la posibilidad de elegir. Verificado con pruebas, en la app con un libro de cuatro ingredientes y con una orden de confirmación real; la presencia silenciosa aún no se ha probado produciendo un plano del largometraje.
+
+## Fallo de «la escena necesita al menos un plano» (CK-SCRIPT-018) — 2 de noviembre de 2026
+
+Corregido: la generación del guión fallaba al azar (2 de cada 6 pruebas reales) con «La escena necesita al menos un plano». Era un mensaje engañoso: el código rechazaba también las escenas con más de 6 planos y los lotes de más de 8 operaciones o 24 000 caracteres, y el modelo, sin saber qué corregir, repetía el error. Ahora una escena admite 1 a 24 planos, el prompt del sistema dice que toda escena necesita al menos un plano, cada escena propuesta se revisa antes de aplicarla con un mensaje preciso y el adaptador usa lotes mayores. Seis generaciones reales seguidas terminaron bien.
+
+## Adaptación por capítulos para guiones muy largos (CK-SCRIPT-018) — 2 de noviembre de 2026
+
+E1 (servidor), E2 (plan visible en el chat y botón «Deshacer adaptación») y E3 (actualización por diferencias con huella por escena y edición por ventanas de guiones largos) implementadas y probadas con proveedor simulado, incluido un libro de 60 000 palabras con contexto por ronda constante; E4 (evaluación con modelo real y prueba de escala de 12 000 palabras) hecha; falta juzgar la calidad dramática con un libro largo y original y con modelos más potentes. Trabajo durable que planifica el libro en unidades de unas 2 500 palabras y adapta cada una con memoria de continuidad, guardando un punto de control por ronda, con progreso real, cancelación, reanudación y deshacer; después, actualización por diferencias y edición por ventanas. Etapas E1 servidor, E2 interfaz, E3 actualizaciones, E4 calidad con modelos reales. Detalle y decisiones abiertas en la especificación.
+
+## Generar el guión se pide al asistente (CK-SCRIPT-015) — 2 de noviembre de 2026
+
+Cambio: se retiró «Generar a partir del contexto» del menú del guión y su función de modelo. Generar o adaptar el guión desde el libro vinculado es ahora una orden al asistente general, que la reconoce, inicia la edición del proyecto abierto y adapta el libro por tramos con las reglas de formato del guión (planos de 5,5 a 9 s, nueve encuadres exactos, acotación por intervención). Motivo: la respuesta única con Haiku 5.5 tardó más de cinco minutos y terminó en 502 por razonamiento «max» sobre 128 000 tokens, y no sirve para guiones largos. «Actualizar esta escena con IA» exige elegir modelo antes de enviar. Límite real: el agente aún envía el libro y el guión completos en cada ronda, así que un guión de horas no cabe; la solución diseñada está en la adaptación por capítulos (CK-SCRIPT-018). Pendiente: probar con un modelo real un libro de varios capítulos.
+
+## Papelera de proyectos por lotes (CK-HOME-001) — 1 de noviembre de 2026
+
+Nuevo: la papelera tiene casillas, «Seleccionar todos» y acciones por lote (restaurar o eliminar definitivamente con una sola confirmación). Se rediseñaron la lista y los botones del diálogo, que carecían de relleno. Verificado en navegador con proyectos desechables; la papelera real no se tocó.
+
+## Más grupos de ropa y props (CK-CHAR-106) — 1 de noviembre de 2026
+
+Añadidos a la biblioteca visual: Brasieres, Baby dolls, Túnicas, Batas, Capas, Turbantes y Leggings (Ropa); Cámaras, Libretas, Libros, Lápices, Varitas, Juguetes, Pelotas, Cangureras, Raquetas, Bates, Pancartas, Linternas, Toallas y Mascotas (Props). Lo que ya existía (bikini, bóxer, anillo, diadema, pants) se dejó igual. Las piezas de los personajes guardados se reagrupan al leerlas, sin reescribir sus datos. Pendiente: comprobar en un personaje real que la extracción de cada grupo nuevo produce una imagen aislada correcta.
+
+## Reanudación de la edición agéntica (CK-AI-028) — 1 de noviembre de 2026
+
+Corregido (hallado en una edición real): al reanudar tras elegir modelo o reiniciar, el trabajo trataba como ajeno al personaje que él mismo había creado, pedía otro nombre al modelo y la propuesta nueva reutilizaba el resultado guardado de otro recurso, de modo que la descripción de un lugar terminó en la ficha de un personaje, otro personaje quedó sin foto y los props de un tercero no se generaron. Ahora los recursos propios no cuentan como ajenos, el resultado guardado se identifica por tipo y nombre, elegir el modelo de imagen ya no pasa el texto del personaje a Local, y los props se reintentan una vez si el modelo falla.
+
+## Local como proveedor de modelos y modos por función — 1 de noviembre de 2026
+
+Se retiró el selector API/Local: LLM, imagen y video listan Local como un proveedor más, siempre primero. El proyecto guarda ahora un modo para texto (mode) y otro para imágenes (imageMode), de modo que un LLM de OpenRouter convive con FLUX Klein local y al revés. El video del largometraje depende solo de su modelo local. Sin pendientes de arquitectura; el flujo de recursos del asistente conserva su decisión por personaje.
+
+## 1 de noviembre de 2026 — Ciclo editorial y recursos (CK-AI-023)
+
+- Implementado: edición del proyecto abierto por elementos con contexto completo
+  actualizado en cada ronda; guión conserva escenas, planos, voces y acotaciones.
+- Implementado: progreso estimado, indicaciones durante el ciclo, Stop, bloqueo de
+  edición manual, validación por lote, CAS y recuperación de checkpoints.
+- Implementado: personajes complementarios con descripción, narrativa e imagen;
+  elección explícita de Local/API y modelo antes de generar; vínculo al proyecto y
+  sincronización de la narrativa tras cambios respaldados por la historia.
+- Verificación: pruebas incrementales de 60000 palabras con proveedor simulado,
+  flujos HTTP, formatos, conflictos, cancelación y selección pendiente de modelo.
+- Limitación real: el manuscrito completo debe caber en el contexto del modelo. La
+  longitud mecánica comprobada no garantiza calidad literaria de una obra larga.
+
+
+## Muse Image y recarga de modelos API — 1 de noviembre de 2026
+
+Identificada una discrepancia de OpenRouter: Images devolvía Muse sin parámetros
+y sin endpoints, aunque el endpoint general mostraba Meta activo. El catálogo
+comprueba ese proveedor para conservar la compatibilidad conocida de Muse, sin
+atribuir capacidades a modelos desconocidos ni inventar precios por imagen.
+Añadida recarga compacta junto a los filtros de LLM/imagen: fuerza consulta de
+catálogo y ranking, conserva filtros/selección y permite elegir entradas nuevas.
+Verificado con datos reales de catálogo, pruebas de caché y navegador aislado.
+No se efectuaron generaciones de pago para esta comprobación.
+
+## Qwen 3.8 27B y Gemma 4 E4B — 31 de octubre de 2026
+
+Corregidos nombre y ruta del 27B con alias para selecciones antiguas. Añadido Gemma
+tras confirmar descarga completa, hash y formato INT8 ConvRot. Registro de modelos
+compartido y protocolo nativo Gemma separado de Qwen, conservando validación de
+herramientas. Verificados carga, texto, visión y ciclo herramienta/resultado con
+pesos reales; navegador comprueba cuatro opciones, recarga y aislamiento por
+proyecto. Pendiente: evaluación de calidad en tareas creativas largas con estos
+modelos; la prueba corta no sustituye esa auditoría.
+
+## Qwen 27B local — 31 de octubre de 2026
+
+Añadido el tercer perfil local desde los pesos ya instalados. Catálogo y selector
+superior distinguen 4B/9B/27B; la preferencia se conserva por proyecto, sin alterar
+los existentes. Mantiene texto, visión, herramientas, cola y carga/descarga.
+Validadas rutas conocidas y rechazo de modelos desconocidos. Prueba real en el
+motor: carga, texto, herramienta válida con una reparación y visión sintética.
+Documentados hash, metadata del archivo y tiempos medidos con offload GPU/CPU.
+
+## Instrucciones en inglés y Diseño limpio — 31 de octubre de 2026
+
+La traza mostró que el desglose de Carlos fallaba porque la ficha ya decía "barba" y el modelo no la listó, y porque leyó el cabello rizado como calvo. Ahora el desglose se completa desde la ficha. Los prompts del ayudante pasan a inglés y el nodo Diseño solo muestra edad, estatura y las piezas. Quedan en español los textos de escritura de libros y el prompt de gestión de personajes, que no intervienen en la creación desde fotografía.
+
+## Auditoría del ayudante de personaje con modelos locales — 31 de octubre de 2026
+
+Se recreó el flujo completo con tres fotografías (mujer, hombre y perro) y los modelos locales. Causas halladas y corregidas: etiquetas de cierre repetidas en las llamadas del 4B, correcciones insuficientes, validación demasiado estricta de la ficha y del desglose, tiempo de arranque del motor contado como espera del modelo, un panel de lore inútil en Local y un error propio: el sondeo de la traza agotaba el límite de generaciones (429). Pendiente real: la composición de Outfit eligiendo variantes con modelo local no se auditó a fondo, el pelaje y el cabello sobre maniquí varían entre generaciones y no hay prueba automática con el motor real.
+
+## Piezas aisladas y campos sin duplicar en Local — 31 de octubre de 2026
+
+Diagnóstico con experimentos directos sobre FLUX: la causa de que las prendas salieran como el personaje completo no era el LLM de 4B ni las referencias, sino el paso que reescribía en Local cada prompt de pieza (describía la imagen entera). Corregido junto con la resolución de las referencias (cabello), los prompts con maniquí en ropa y props, los campos duplicados de Diseño y el vínculo de cada pieza con sus campos. El cabello sobre maniquí sigue variando entre generaciones; se regenera por pieza.
+
+## Creación de personajes desde fotografía con modelos locales — 31 de octubre de 2026
+
+Reproducido de principio a fin con Qwen 3.5 4B y FLUX 3 Klein. Causas corregidas: el motor frío tardaba más de los 45 s de espera; el reintento del desglose enviaba la imagen en un turno anterior y el modelo local lo rechazaba; la validación estricta descartaba inventarios correctos por claves de campo inventadas o piezas omitidas; y la búsqueda de lore, inexistente en Local, hacía fallar el trabajo al final, tras generar todas las piezas. Pendiente real: la extracción de 10 piezas es secuencial (~55 s cada una) y el retrato de props sigue sin barra de progreso por pieza en la tarjeta.
+
+## Líneas de personajes y escenarios en el guión — 31 de octubre de 2026
+
+Dos líneas a los lados del editor reutilizan los puertos y cables de la línea de
+tiempo de Story Book: personajes a la izquierda (recorte de rostro) conectan con
+los diálogos y escenarios a la derecha con los planos, que heredan el de su escena.
+Solo muestran ingredientes vinculados y los selectores siguen siendo la fuente de
+verdad, sin cambiar el formato guardado. Pendiente real: acceso por teclado a los
+puertos (hoy se usan los selectores) y varias escenas con escenario distinto por plano.
+
+## Inserción intermedia y controles discretos del guión — 31 de octubre de 2026
+
+Las X solo aparecen al recorrer su marco o descendientes, conservando foco de
+teclado accesible. Un overlay con el mismo SVG de fusión y estilos de Story Book
+permite insertar escenas, planos e intervenciones entre dos elementos contiguos
+del mismo nivel. Revalida el destino vivo, comparte creación con los botones
+existentes y conserva IDs/contenido/selección. La numeración se recalcula por
+posición: insertar entre 1 y 2 produce 1, 2 nueva, 3 anterior; persiste al recargar.
+No añade controles al JSON/IA/exportaciones. Verificación de ambos temas,
+hover/scroll, geometría con zoom, inserciones de los tres niveles y guardado.
+
+## Eliminación de escenas, planos y diálogos — 31 de octubre de 2026
+
+X circular negra/roja en la esquina superior derecha de cada marco. Mantiene una
+escena por guión y un plano por escena como mínimo, con recuentos vivos y controles
+que aparecen/desaparecen al añadir o eliminar. Diálogos opcionales: retirar toda la
+intervención sin tocar acción/transición u otras intervenciones; permite añadirlos
+nuevamente. La migración respeta planos modernos sin diálogo para evitar que se
+recreen tras recargar. Pruebas de clicks repetidos, persistencia, serialización,
+selectores y geometría circular en ambos temas; no modifica versiones históricas.
+
+## Cajas completas de plano e intervención — 31 de octubre de 2026
+
+El borde continuo del plano engloba encabezado, acción, diálogos y transición.
+Cada intervención reúne personaje/voz, acotación y texto dentro de una caja dotted
+magenta. Se conserva la caja dotted de escena y los botones de cada nivel.
+Agrupación visual por IDs, sin recrear campos ni disparar renders repetidos;
+conserva foco/selección y no introduce contenedores en JSON, IA o exportaciones.
+Verificado con inserciones, guardado/recarga, colapso y ambos temas en navegador.
+
+## Acciones rotuladas y acotaciones de guiones anteriores — 31 de octubre de 2026
+
+Añadir diálogo es ancho, centrado y con borde magenta como el campo de personaje.
+Los siguientes niveles dicen Añadir plano y Añadir escena; este último permanece
+al final del manuscrito fuera de las cajas y comparte operación con el índice.
+La migración completa los diálogos antiguos con una acotación vacía vinculada al
+hablante, sin inventar indicaciones de actuación ni reescribir contenido o versiones.
+Guarda identidades y es idempotente. Se comprueban inserciones repetidas, exclusión
+de controles del JSON y posición/anchura/color en navegador.
+
+## Edición sin resplandor y varios personajes por plano — 31 de octubre de 2026
+
+Los campos del guión eliminan el resplandor azul al editar. Placeholders itálicos
+sobre una capa absoluta, con cursor al inicio al hacer clic en un campo vacío,
+sin convertirse en texto ni alterar la selección normal. Cada plano tiene un +
+compacto para añadir personaje/voz, acotación y diálogo propios antes de la
+transición. Se conservan escena, plano, IDs e intervenciones anteriores; la UI de
+inserción se excluye de persistencia, IA y exportación. Verificación con selectores
+reales, clic/escritura, guardado/recarga y ambos temas en navegador.
+
+## Controles de plano y campos de diálogo — 31 de octubre de 2026
+
+Numeración Escena/Plano estática por posición; el encuadre vuelve a una lista
+propia con las nueve opciones y sus ayudas. Duración con flechas nativas, de 1 a 10 s
+en pasos de 0,5; valida sin perder el valor previo. Ángulo/movimiento se conservan.
+Diálogo usa borde dotted en edición; acción y diálogo vacíos muestran placeholders
+que no se guardan como contenido. Serialización, contexto IA y exportaciones
+conservan el texto técnico sin controles. Probado con selectores reales, valores
+límite, guardado/recarga y temas claro/oscuro en navegador.
+
+## Formato único de guión nuevo y antiguo — 31 de octubre de 2026
+
+Los guiones anteriores abren con un plano explícito dentro de cada caja de escena,
+igual que los nuevos. El marcador recupera el encuadre anterior sin inventar cámara
+o tiempos. La preparación es idempotente y conserva texto, IDs, vínculos, procedencia,
+versiones guardadas e identidad del plano para largometraje. No fusiona escenas.
+La plantilla, Añadir escena y el botón + de plano ofrecen los mismos seis campos;
+las plantillas iniciales vacías incompletas se actualizan sin perder sus IDs.
+Verificado con ambos formatos en navegador aislado, guardado, recarga y regresiones.
+
+## Separación visual de escenas y añadir plano al pie — 31 de octubre de 2026
+
+Cada escena del guión tiene su caja con borde dotted y un botón «+» de ancho
+completo al final. Añade un plano con dirección, acción, personaje/voz, acotación,
+diálogo y transición, sin afectar las otras escenas. El índice comparte la misma
+operación. Los controles no pasan a JSON, IA, preview ni exportaciones; al colapsar
+la escena también se oculta su botón. Verificación de inserción repetida, IDs,
+guardado/recarga y visualización en navegador.
+
+## Escenas con varios planos y largometraje por plano — 30 de octubre de 2026
+
+Implementado: guión técnico con planos shot/h6 dentro de cada escena h2; cada plano
+conserva ID, dirección de cámara y sus bloques, sin duplicar diálogo. Menú flotante,
+índice con saltos/añadir plano, plantilla, Enter, vista previa, contexto y exportación
+usan la misma estructura. La adaptación desde ingredientes exige varios planos
+por escena y preserva la versión seleccionada y las decisiones compatibles.
+Largometraje v3 prepara y renderiza un clip por plano, con identidad escena/plano,
+referencias y estados independientes. Lee v1/v2 conservando medios; planos retirados
+se retienen marcados. Un plano demasiado largo pide dividirlo y no recorta diálogo.
+Verificado mediante contratos, editor, HTTP y motor simulado; navegador real con
+adaptación, guardado, recarga y preview sin errores ni llamadas a proveedores reales.
+Los guiones antiguos se leen como planos implícitos; una nueva adaptación desglosa
+sus escenas sin migraciones destructivas ni cambios en versiones históricas.
+
+## Selectores del guión: Personalizado y voz normal — 30 de octubre de 2026
+
+Corregido: elegir Personaje → Personalizado deja visible el campo en escenas nuevas y al borrar un nombre; el selector de voz permite regresar a Normal desde V.O. u otra extensión. Verificación con los selectores reales, sus menús, observadores del editor, serialización validada y exportación sin controles de UI. Sin cambios de esquema ni migración de proyectos.
 
 ## Versión 0.1.1: escaneo de malware y editor de guión — 30 de octubre de 2026
 

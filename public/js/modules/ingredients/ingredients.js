@@ -47,9 +47,13 @@ export class EditorIngredients {
       if (projectId === this.context.projectId) this.addIngredient(ingredient, true);
     };
     EventBus.on('editor:addIngredient', this.addIngredientHandler);
+    // A photograph made later (by the assistant, in another workspace) shows up on its card without reopening.
+    this.liveTimer = setInterval(() => void this.refreshLiveSources({ onlyMissing: true }), 10000);
+    this.liveTimer.unref?.();
   }
 
   destroy() {
+    clearInterval(this.liveTimer);
     EventBus.off('editor:addIngredient', this.addIngredientHandler);
     this.addIngredientHandler = null;
     for (const close of [...this.dialogCleanups]) close();
@@ -581,6 +585,7 @@ export class EditorIngredients {
     if (!this.isCurrent()) return;
     this.renderDrawers();
     if (changed) this.context.emitChange();
+    void this.refreshLiveSources();
     const stale = originals
       .filter(
         (ingredient) =>
@@ -694,6 +699,116 @@ export class EditorIngredients {
       this.renderDrawers();
       this.context.emitChange();
     }
+  }
+
+  /**
+   * Ingredients that follow a project's current draft (no saved version) take its photographs as they appear.
+   * With `onlyMissing` it looks only at the ones still without a photograph, which keeps the polling cheap.
+   */
+  async refreshLiveSources({ onlyMissing = false } = {}) {
+    if (!this.isCurrent() || this.refreshingLive) return false;
+    const live = this.context.ingredients.filter(
+      (ingredient) =>
+        ingredient.importedProjectId &&
+        ingredient.importedSource === 'draft' &&
+        ['stage', 'character'].includes(ingredient.type) &&
+        (!onlyMissing || !ingredient.covers?.length),
+    );
+    if (!live.length) return false;
+    this.refreshingLive = true;
+    let changed = false;
+    try {
+      for (const ingredient of live) {
+        try {
+          const id = ingredient.importedProjectId;
+          const [project, draft] = await Promise.all([API.getProject(id), API.getProjectDraft(id)]);
+          if (!this.isCurrent() || !this.context.ingredients.includes(ingredient)) continue;
+          const merged = { ...project, ...(draft?.payload || {}) };
+          const covers = merged.covers || [];
+          const index = merged.currentCoverIndex ?? -1;
+          if (
+            JSON.stringify([ingredient.covers || [], ingredient.currentCoverIndex ?? -1]) ===
+            JSON.stringify([covers, index])
+          )
+            continue;
+          ingredient.covers = covers;
+          ingredient.currentCoverIndex = index;
+          if (ingredient.type === 'stage') ingredient.value = merged.content || '';
+          else {
+            try {
+              ingredient.value = JSON.stringify({
+                ...JSON.parse(ingredient.value || '{}'),
+                covers,
+                currentCoverIndex: index,
+              });
+            } catch {
+              /* An unreadable snapshot keeps its own covers. */
+            }
+          }
+          changed = true;
+        } catch {
+          /* A source that cannot be read now keeps what the ingredient has. */
+        }
+      }
+    } finally {
+      this.refreshingLive = false;
+    }
+    if (changed && this.isCurrent()) {
+      this.renderDrawers();
+      this.context.emitChange();
+    }
+    return changed;
+  }
+
+  /** Switches linked projects on or off as the switch of each card does; the ids of the ingredients it found. */
+  setIngredientActive(ids, active) {
+    if (this.context.canEdit?.() === false || !this.isCurrent()) return [];
+    const found = [];
+    for (const ingredient of this.context.ingredients)
+      if (ids.includes(ingredient.importedProjectId)) {
+        ingredient.active = Boolean(active);
+        found.push(ingredient.importedProjectId);
+      }
+    if (found.length) this.commitIngredients();
+    return found;
+  }
+
+  /**
+   * Pins a linked project at one of its saved versions (by number) or at the latest (null), as the version dialog does.
+   * Resolves to what happened, never to a guess: a project that is not linked, a version that does not exist.
+   */
+  async pinIngredientVersion(projectId, number) {
+    const ingredient = this.context.ingredients.find((item) => item.importedProjectId === projectId);
+    if (!ingredient) return { status: 'not_linked' };
+    const catalogue = await loadIngredientVersions(API, projectId);
+    let versionId = null;
+    if (number !== null) {
+      const entry = catalogue.versions.find((version) => version.number === number);
+      if (!entry)
+        return { status: 'no_version', available: catalogue.versions.map((version) => version.number) };
+      versionId = entry.id;
+    }
+    const pinned = await this.bindVersion(ingredient, projectId, versionId, false);
+    return pinned
+      ? {
+          status: 'pinned',
+          number: ingredient.importedVersionNumber ?? null,
+          source: ingredient.importedSource,
+        }
+      : { status: 'not_pinned' };
+  }
+
+  /** Takes a linked project out of the ingredients, with its tags, as the card's remove button does. */
+  unlinkIngredient(id) {
+    if (this.context.canEdit?.() === false || !this.isCurrent()) return false;
+    const index = this.context.ingredients.findIndex((ingredient) => ingredient.importedProjectId === id);
+    if (index < 0) return false;
+    this.context.removeTagsForIngredient(this.context.ingredients[index]);
+    this.context.ingredients.splice(index, 1);
+    AppState.currentProject.ingredients = this.context.ingredients;
+    this.renderDrawers();
+    this.context.emitChange();
+    return true;
   }
 
   async importIngredient({ id, name, type, deferToast = false }) {

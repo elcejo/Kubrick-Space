@@ -7,4 +7,6 @@ module.exports = function registerDocumentRoutes(app, dependencies) {
   app.get('/api/projects/:id/versions', endpoint(operations.listVersions));
   app.get('/api/projects/:id/versions/:versionId', endpoint(operations.getVersion));
   app.post('/api/projects/:id/versions', endpoint(operations.saveVersion));
+  app.post('/api/projects/:id/snapshots', endpoint(operations.saveSnapshot));
+  app.post('/api/projects/:id/rename', endpoint(operations.renameProject));
 };

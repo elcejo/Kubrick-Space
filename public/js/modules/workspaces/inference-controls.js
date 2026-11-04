@@ -6,8 +6,6 @@ import { renderIcon } from '../../icons.js';
 import { safeHTML } from '../../safe-html.js';
 import { Modal } from '../../ui-components.js';
 
-const LOCAL_TEXT_FALLBACK = 'local:qwen3.5-4b-int8-convrot';
-
 /**
  * Model selection for the project. Local is one more provider of each catalogue and always comes first;
  * choosing a model also sets the project's inference mode, so there is no separate API/Local switch.
@@ -122,6 +120,7 @@ export class InferenceControls {
         id: model.id,
         name: model.name.replace(' · Local · INT8 ConvRot', ''),
         provider: 'local',
+        inputModalities: model.inputModalities,
       }));
       const image = (state.imageModels || [])
         .filter((model) => !character || !model.imageTypes || model.imageTypes.includes('character'))
@@ -158,7 +157,7 @@ export class InferenceControls {
     const settings = project?.inferenceSettings || {};
     const image = settings.imageModel || project?.characterImageGeneration;
     const values = {
-      textModel: mode === 'local' ? AppState.localModel || LOCAL_TEXT_FALLBACK : settings.textModel || '',
+      textModel: mode === 'local' ? settings.localModel || '' : settings.textModel || '',
       imageModel:
         AppState.imageMode === 'local'
           ? this.localImage[0]

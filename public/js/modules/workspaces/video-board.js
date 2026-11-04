@@ -297,7 +297,7 @@ export class VideoBoard {
           API.getProjectDraft(select.value),
         ]);
         if (this.#picker !== overlay || current !== sourceRequest) return;
-        catalog = entries.sort((a, b) => b.number - a.number);
+        catalog = entries.filter((entry) => !entry.auto).sort((a, b) => b.number - a.number);
         sourceDraft = draft;
         state.replaceChildren();
         for (const choice of [

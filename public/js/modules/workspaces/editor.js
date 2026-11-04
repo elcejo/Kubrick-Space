@@ -34,7 +34,6 @@ import {
   serializeStoryBookDocument,
   storyBookDocumentFromHTML,
   storyBookDocumentToHTML,
-  prepareAssistantStoryBook,
 } from '../story-book/story-book-document.js';
 /**
  * @module editor
@@ -54,8 +53,11 @@ import {
 import { AppState } from '../../app-state.js';
 import { API } from '../../api-service.js';
 import { enqueueRemoteCharacterAction, attachCharacterTaskPhoto } from './character-task-client.js';
+import { enqueueRemoteScenarioAction, manageScenarioImages } from './scenario-task-client.js';
+import { SCENARIO_IMAGE_ACTIONS } from '../../contracts/assistant-commands.js';
 import { Loader, Toast, Alert } from '../../ui-components.js';
 import { Convert } from '../ui/convert.js';
+import { captureScroll, restoreScroll } from './reader-scroll.js';
 
 /**
  * WYSIWYG / Markdown / Preview editor.
@@ -472,6 +474,10 @@ export class Editor {
   #node = null;
   /** @type {HTMLElement|null} the active editing surface (div or textarea) */
   #surface = null;
+  /** The last draft of the server drawn while the assistant worked. */
+  #lastBackgroundContent = null;
+  /** The draft of the server whose terms were last added to the ingredients, once the assistant had finished. */
+  #termsSyncedFor = null;
   /** @type {Mode} */
   #mode = Mode.WYSIWYG;
   /** @type {string} last-known HTML content (source of truth) */
@@ -663,6 +669,14 @@ export class Editor {
       return this.importIngredient({ id, name, type, category, deferToast });
     };
     EventBus.on('editor:importIngredient', this.#handlers['editor:importIngredient']);
+    this.#handlers['editor:unlinkIngredient'] = ({ id }) => this.#ingredientsPanel.unlinkIngredient(id);
+    EventBus.on('editor:unlinkIngredient', this.#handlers['editor:unlinkIngredient']);
+    this.#handlers['editor:setIngredientActive'] = ({ ids, active }) =>
+      this.#ingredientsPanel.setIngredientActive(ids, active);
+    EventBus.on('editor:setIngredientActive', this.#handlers['editor:setIngredientActive']);
+    this.#handlers['editor:pinIngredientVersion'] = ({ id, number }) =>
+      this.#ingredientsPanel.pinIngredientVersion(id, number);
+    EventBus.on('editor:pinIngredientVersion', this.#handlers['editor:pinIngredientVersion']);
 
     // Prevent focus when clicking outside the editable area but inside the editor card padding
     this.#node.addEventListener('mousedown', (e) => {
@@ -968,33 +982,6 @@ export class Editor {
     return Convert.htmlToMarkdown(this.#htmlContent);
   }
 
-  applyAssistantDocument(proposal, expectedContent) {
-    if (this.#destroyed || proposal.projectId !== this.#projectId || !this.#isStoryBook())
-      throw new Error('La edición solo puede aplicarse al Story Book abierto.');
-    if (this.getContent() !== expectedContent)
-      throw new Error('El documento cambió durante la respuesta. Solicita la edición nuevamente.');
-    const before = this.getContext();
-    const content = prepareAssistantStoryBook(safeContent(proposal.content), this.#storyBookDocument);
-    const next = parseStoryBookContent(content);
-    const html = storyBookDocumentToHTML(next);
-    const holder = document.createElement('div');
-    holder.innerHTML = safeContent(html);
-    if (
-      before.blocks.some(
-        (text) =>
-          ![...holder.querySelectorAll('.kai-block')].some(
-            (block) => block.textContent.trim() === text.trim(),
-          ),
-      )
-    )
-      throw new Error('La propuesta modifica un fragmento protegido. No se aplicó.');
-    this.#storyBookDocument = next;
-    this.#htmlContent = html;
-    this.#renderMode(this.#mode);
-    this.#emitChange();
-    return { status: 'applied', projectId: this.#projectId };
-  }
-
   async acceptBackgroundProject(response) {
     const workspace = this.#views.scenarioWorkspace || this.#views.filmWorkspace;
     if (!workspace) throw new Error('El proyecto ya no está abierto.');
@@ -1033,14 +1020,22 @@ export class Editor {
       throw new Error('El documento ya no está abierto.');
     if (this.getContent() !== expectedContent)
       throw new Error('Hay cambios locales. Recarga el libro para ver el trabajo del servidor.');
-    if (this.#isScreenplay()) {
-      this.#screenplayDocument = parseScreenplayContent(content);
-      this.#htmlContent = screenplayToHTML(this.#screenplayDocument);
-    } else {
-      this.#storyBookDocument = parseStoryBookContent(content);
-      this.#htmlContent = storyBookDocumentToHTML(this.#storyBookDocument);
+    // The server is polled every second: a draft already on screen is not drawn again, which would only
+    // throw the reader back to the top for nothing.
+    const unchanged = content === this.#lastBackgroundContent;
+    this.#lastBackgroundContent = content;
+    const reader = unchanged ? null : captureScroll(this.#node);
+    if (!unchanged) {
+      if (this.#isScreenplay()) {
+        this.#screenplayDocument = parseScreenplayContent(content);
+        this.#htmlContent = screenplayToHTML(this.#screenplayDocument);
+      } else {
+        this.#storyBookDocument = parseStoryBookContent(content);
+        this.#htmlContent = storyBookDocumentToHTML(this.#storyBookDocument);
+      }
+      this.#renderMode(this.#mode);
+      restoreScroll(reader);
     }
-    this.#renderMode(this.#mode);
     // Characters and scenarios the server linked while it worked appear as soon as they exist.
     if (Array.isArray(ingredients) && JSON.stringify(ingredients) !== JSON.stringify(this.#ingredients)) {
       this.#ingredients = structuredClone(ingredients);
@@ -1048,6 +1043,11 @@ export class Editor {
       this.#renderDrawers();
     }
     this.setAgentBusy(busy);
+    // The terms the assistant tagged become ingredients as those a person tags do, once it has finished.
+    if (!busy && this.#isStoryBook() && this.#termsSyncedFor !== content) {
+      this.#termsSyncedFor = content;
+      this.syncIngredientsFromTags();
+    }
     return this.getContent();
   }
 
@@ -1351,6 +1351,11 @@ export class Editor {
     if (this.#handlers['editor:aiResult']) {
       EventBus.off('editor:aiResult', this.#handlers['editor:aiResult']);
     }
+    if (this.#handlers['editor:unlinkIngredient']) {
+      EventBus.off('editor:unlinkIngredient', this.#handlers['editor:unlinkIngredient']);
+    }
+    for (const name of ['editor:setIngredientActive', 'editor:pinIngredientVersion'])
+      if (this.#handlers[name]) EventBus.off(name, this.#handlers[name]);
     if (this.#handlers['editor:nodeKeydown']) {
       this.#node?.removeEventListener('keydown', this.#handlers['editor:nodeKeydown']);
     }
@@ -3344,6 +3349,57 @@ export class Editor {
     if (this.#views.characterWorkspace && action?.projectId === this.#projectId)
       return this.#views.characterWorkspace.executeAction(action, transport);
     return enqueueRemoteCharacterAction(action, transport);
+  }
+  /** The cover of the open book, made by the same job and with the same feedback as the cover menu. */
+  /** Covers of the open Story Book for the assistant: what there is, which one is shown, which one goes, or a new one. */
+  async executeCoverAction({ projectId, action = 'generate', mode, request, number }) {
+    const open = AppState.currentProject;
+    if (projectId !== this.#projectId || open?.id !== projectId)
+      throw new Error('Las portadas se gestionan en el libro abierto.');
+    if (open.type !== 'book' || open.category !== 'story-book')
+      throw new Error('La portada requiere un Story Book (los guiones crean la suya solos).');
+    const covers = open.covers || [];
+    const current = covers.length ? (open.currentCoverIndex ?? 0) + 1 : 0;
+    if (action === 'list') return { status: 'listed', total: covers.length, current };
+    if (action === 'select') {
+      await this.#images.selectCover(number);
+      return { status: 'selected', number, total: covers.length };
+    }
+    if (action === 'delete') {
+      if (!Number.isInteger(number) || number < 1 || number > covers.length)
+        throw new Error(`No hay una portada número ${number}: el historial tiene ${covers.length}.`);
+      await this.#images.removeCover(projectId, covers[number - 1], false);
+      const left = AppState.currentProject?.covers?.length ?? covers.length;
+      return left < covers.length
+        ? { status: 'deleted', number, total: left }
+        : { status: 'not_completed', message: 'La portada no se eliminó; el usuario ve el aviso del error.' };
+    }
+    return this.#generateCover({ projectId, mode, request });
+  }
+  async #generateCover({ projectId, mode = 'proyecto', request }) {
+    const project = AppState.currentProject;
+    if (projectId !== this.#projectId || project?.id !== projectId)
+      throw new Error('Las portadas se generan en el libro abierto.');
+    if (project.type !== 'book' || project.category !== 'story-book')
+      throw new Error('La portada requiere un Story Book (los guiones crean la suya solos).');
+    if (mode === 'personalizado' && !request?.trim()) throw new Error('Falta la descripción de la portada.');
+    const before = JSON.stringify(project.covers || []);
+    await this.#images.submitCoverJob(mode, {}, mode === 'personalizado' ? request.trim() : '');
+    return JSON.stringify(AppState.currentProject?.covers || []) === before
+      ? {
+          status: 'not_completed',
+          message: 'No se guardó ninguna portada; el usuario ve el aviso del error.',
+        }
+      : { status: 'completed', message: 'Portada guardada.' };
+  }
+  async executeScenarioAction(action, transport) {
+    if (SCENARIO_IMAGE_ACTIONS.includes(action.action)) {
+      const workspace = this.#views.scenarioWorkspace;
+      return manageScenarioImages(action, {
+        workspace: workspace?.current() && workspace.projectId === action.projectId ? workspace : null,
+      });
+    }
+    return enqueueRemoteScenarioAction(action, transport);
   }
   async attachCharacterPhoto(file) {
     return this.#views.characterWorkspace
