@@ -145,7 +145,7 @@ function createCharacterCompositionReviewer({
     if (info?.inputModalities?.length && !info.inputModalities.includes('image'))
       throw security.fail('El modelo de texto debe admitir visión para comprobar Outfit.', 428);
     const key = getApiKeys().openrouter || '';
-    if (!key && !llmConfig.isLocalModel(limits.model))
+    if (!key && llmConfig.needsOpenRouterKey(limits.model))
       throw security.fail('Configura OpenRouter para comprobar la composición.', 428);
     if (body.preflight === true) return { status: 200, body: { ready: true } };
     if (

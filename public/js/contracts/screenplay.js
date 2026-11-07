@@ -2,6 +2,31 @@ import { escapeHTML } from './common.js';
 export { identifier, reference };
 export const SCREENPLAY_SCHEMA = 'code-kai.screenplay';
 
+/**
+ * The clip lengths MiniMax H3 can generate: 17k + 5 frames at 24 fps, from five to fifteen seconds (the longest one
+ * that fits in fifteen is 345 frames, 14.38 s). The film offers these very lengths, and so does a shot of the
+ * screenplay, so one shot is exactly one clip.
+ */
+export const H3_CLIP_FRAMES = Object.freeze([
+  124, 141, 158, 175, 192, 209, 226, 243, 260, 277, 294, 311, 328, 345,
+]);
+export const H3_FPS = 24;
+/** The same lengths in seconds: 5.17, 5.88, 6.58, 7.29, 8, 8.71, 9.42, 10.13, 10.83, 11.54, 12.25, 12.96, 13.67 and 14.38. */
+export const SCREENPLAY_SHOT_SECONDS = Object.freeze(
+  H3_CLIP_FRAMES.map((frames) => Math.round((frames / H3_FPS) * 100) / 100),
+);
+/** The H3 duration (in seconds) nearest to any number of seconds, for shots written before this rule. */
+export const snapShotSeconds = (value) => {
+  const wanted = Number(value);
+  if (!Number.isFinite(wanted)) return SCREENPLAY_SHOT_SECONDS[0];
+  return SCREENPLAY_SHOT_SECONDS.reduce((best, seconds) =>
+    Math.abs(seconds - wanted) < Math.abs(best - wanted) ? seconds : best,
+  );
+};
+/** "8 s (192 fotogramas)": a duration as the person reads it. */
+export const shotSecondsLabel = (seconds) =>
+  `${String(seconds).replace('.', ',')} s (${H3_CLIP_FRAMES[SCREENPLAY_SHOT_SECONDS.indexOf(seconds)]} fotogramas)`;
+
 export const SCREENPLAY_TYPES = Object.freeze({
   shot: 'h6',
   action: 'p',
@@ -223,7 +248,28 @@ export function validateScreenplayDocument(input, cleanInline = (html) => html) 
     }
     return result;
   });
-  return { schema: SCREENPLAY_SCHEMA, version: 1, title, preamble, scenes };
+  return { schema: SCREENPLAY_SCHEMA, version: 1, title, preamble, scenes: withoutFirstTransition(scenes) };
+}
+
+/**
+ * A transition says how a shot joins the one before it, so the first shot of the screenplay has none: its transition
+ * is always empty, whoever wrote it (a person, a model, an older document). Anything else is left as it is.
+ */
+function withoutFirstTransition(scenes) {
+  const first = scenes[0];
+  if (!first?.blocks.length) return scenes;
+  let end = first.blocks.findIndex((block, index) => index > 0 && block.type === 'shot');
+  if (end < 0) end = first.blocks.length;
+  if (
+    !first.blocks.some(
+      (block, index) => index < end && block.type === 'transition' && (block.text || block.html),
+    )
+  )
+    return scenes;
+  const blocks = first.blocks.map((block, index) =>
+    index < end && block.type === 'transition' ? { ...block, text: '', html: '' } : block,
+  );
+  return [{ ...first, blocks }, ...scenes.slice(1)];
 }
 
 export function screenplayHeading(text, html = escapeHTML(text)) {

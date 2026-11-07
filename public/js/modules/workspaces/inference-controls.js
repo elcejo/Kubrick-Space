@@ -34,6 +34,7 @@ export class InferenceControls {
       this.pickers.push(
         enhanceModelSelect(select, {
           image: key === 'imageModel',
+          placement: 'top',
           onReload: () => this.load({ force: true }),
         }),
       );
@@ -53,7 +54,7 @@ export class InferenceControls {
       this.videoSelect.setAttribute('aria-label', 'Modelo de video');
       this.videoSelect.append(new Option('Video · Elegir modelo', ''));
       this.element.append(this.videoSelect);
-      this.videoPicker = enhanceSelect(this.videoSelect, { searchable: false });
+      this.videoPicker = enhanceSelect(this.videoSelect, { searchable: false, placement: 'top' });
       this.videoSelect.addEventListener('change', () => void this.saveVideo());
     }
     this.button.addEventListener('click', () => void this.control());
@@ -94,13 +95,16 @@ export class InferenceControls {
     const catalogue = results[0].status === 'fulfilled' ? results[0].value?.models || [] : this.apiText || [];
     const keys = results[1].value?.keys;
     const character = AppState.currentProject?.type === 'character';
-    this.apiText = (keys && !keys.openrouter?.configured ? [] : catalogue).filter(
-      (model) =>
-        !model.id.startsWith('local:') &&
-        (!model.outputModalities || model.outputModalities.includes('text')) &&
-        model.supportedParameters?.includes('tools') &&
-        (!character || model.inputModalities?.includes('image')),
-    );
+    // OpenRouter models need its key; the models of the other connected providers (OpenAI, Gemini, Replicate) carry
+    // their own. A model without tools (Replicate) stays listed: the functions that need tools say so when it is used.
+    this.apiText = catalogue.filter((model) => {
+      const provider = model.provider || 'openrouter';
+      if (model.id.startsWith('local:') || provider === 'local') return false;
+      if (provider === 'openrouter' && keys && !keys.openrouter?.configured) return false;
+      if (model.outputModalities && !model.outputModalities.includes('text')) return false;
+      if (provider === 'openrouter' && !model.supportedParameters?.includes('tools')) return false;
+      return !character || model.inputModalities?.includes('image');
+    });
     this.apiImage = results[1].status === 'fulfilled' ? results[1].value?.api || [] : this.apiImage || [];
     if (character)
       this.apiImage = this.apiImage.filter(

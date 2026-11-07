@@ -6,6 +6,7 @@ import {
   validateScreenplayDocument,
 } from './screenplay-document.js';
 import { escapeHTML } from '../../safe-html.js';
+import { shotBlockProblem } from '../../contracts/screenplay-shot-format.js';
 
 /** A scene proposal is data. It cannot contain HTML or mutate another scene. */
 export function screenplaySceneProposal(text, document, targetId) {
@@ -48,6 +49,13 @@ export function screenplaySceneProposal(text, document, targetId) {
         (old) => !used.has(old.id) && old.type === block.type && old.text === block.text,
       );
       if (same) used.add(same.id);
+      else {
+        const problem = shotBlockProblem(block.type, block.text);
+        if (problem)
+          throw new Error(
+            'La propuesta no respeta el formato del plano. ' + problem + ' Se conservó el guión.',
+          );
+      }
       const result = same
         ? { ...same }
         : { id: screenplayId(), type: block.type, text: block.text, html: escapeHTML(block.text) };
@@ -92,6 +100,11 @@ export function parseScreenplayEdit(text, targetId) {
       block.text.length > 100000
     )
       throw new Error('La IA devolvió un tipo o texto de bloque inválido.');
+  for (const block of value.blocks) {
+    const problem = shotBlockProblem(block.type, block.text);
+    if (problem)
+      throw new Error('La propuesta no respeta el formato del plano. ' + problem + ' No se aplicó.');
+  }
   return value.blocks;
 }
 

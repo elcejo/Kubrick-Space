@@ -366,12 +366,20 @@ function createTextContext({
       if (body.history && body.history.length > 0) {
         body.history.forEach((msg) => {
           const role = msg.role === 'user' ? 'user' : 'assistant';
-          messages.push({ role, content: msg.text || msg.content || '' });
+          messages.push({
+            role,
+            content: msg.text || msg.content || '',
+            ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
+          });
         });
       }
 
       // Add user's latest message
-      messages.push({ role: 'user', content: body.message });
+      messages.push({
+        role: 'user',
+        content: body.message,
+        ...(body.attachments?.length ? { attachments: body.attachments } : {}),
+      });
     }
     // 3. Fallback standard prompt / message format
     else if (body.messages) {
@@ -415,9 +423,14 @@ function createTextContext({
           ? (body.history || []).map((m) => ({
               role: m.role === 'user' ? 'user' : 'assistant',
               content: m.text || m.content || '',
+              ...(m.attachments?.length ? { attachments: m.attachments } : {}),
             }))
           : []),
-        { role: 'user', content: prepared.task },
+        {
+          role: 'user',
+          content: prepared.task,
+          ...(body.attachments?.length ? { attachments: body.attachments } : {}),
+        },
       ];
     }
 

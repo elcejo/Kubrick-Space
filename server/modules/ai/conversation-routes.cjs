@@ -6,5 +6,6 @@ module.exports = function registerConversationRoutes(app, dependencies) {
   app.post('/api/projects/:id/chats', endpoint(operations.saveConversation));
   app.get('/api/projects/:id/chats/:chatId', endpoint(operations.getConversation));
   app.put('/api/projects/:id/chats/:chatId', endpoint(operations.updateConversation));
+  app.patch('/api/projects/:id/chats/:chatId/sharing', endpoint(operations.shareConversation));
   app.delete('/api/projects/:id/chats/:chatId', endpoint(operations.deleteConversation));
 };

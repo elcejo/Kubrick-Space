@@ -56,7 +56,7 @@ export class Wizard {
    * @param {HTMLElement} container
    * @returns {void}
    */
-  async mount(container, isCurrent = () => true) {
+  async mount(container, isCurrent = () => true, preset = {}) {
     this._isCurrent = isCurrent;
     this._container = container;
     this._root = container.querySelector('.wizard-overlay');
@@ -82,7 +82,14 @@ export class Wizard {
       this._modules = await getAllModules();
       if (!this._isCurrent()) return;
       this._buildBubblesDOM();
-      this._renderStep(1);
+      const module = this._modules.find((m) => m.type === preset.type);
+      const category = module?.subcategories.find((c) => c.id === preset.category && isAvailable(c));
+      if (category) {
+        this._selectedModule = module;
+        this._selectedCategory = category;
+        this._step = 3;
+        this._renderStep(3);
+      } else this._renderStep(1);
     } catch (err) {
       console.error('[Wizard] Failed to load modules:', err);
     }
@@ -186,7 +193,7 @@ export class Wizard {
       const defaultName = mod.type === 'character' ? '' : `${mod?.label ?? ''} — ${cat?.label ?? ''}`;
 
       textStage.innerHTML = safeHTML(`
-        <h2 class="wizard-step-title animate-fadeIn">Nombra tu proyecto</h2>
+        <h2 class="wizard-step-title animate-fadeIn">Nombra tu asset</h2>
         <p class="wizard-step-description animate-fadeIn">Asigna un título identificador a tu espacio de trabajo creativo</p>
       `);
 
@@ -204,14 +211,14 @@ export class Wizard {
         formStage.innerHTML = safeHTML(`
           <div class="wizard-form animate-scaleIn">
             <label class="input-label" for="wizard-name">
-              ${mod.type === 'character' ? 'Nombre del personaje' : 'Nombre del proyecto'}
+              ${mod.type === 'character' ? 'Nombre del personaje' : 'Nombre del asset'}
               <span class="wizard-name-field">
                 <input
                   type="text"
                   id="wizard-name"
                   class="input"
                   value="${defaultName}"
-                  placeholder="${mod.type === 'character' ? 'Escribe su nombre' : 'Nombre del proyecto'}"
+                  placeholder="${mod.type === 'character' ? 'Escribe su nombre' : 'Nombre del asset'}"
                   maxlength="120"
                   autocomplete="off"
                   autofocus
@@ -220,7 +227,7 @@ export class Wizard {
               </span>
             </label>
             <button class="wizard-create-btn btn btn-primary btn-lg" id="wizard-create">
-              Crear Proyecto
+              Crear asset
             </button>
           </div>
         `);
@@ -272,14 +279,14 @@ export class Wizard {
           if (createBtn.disabled) return;
           const name = nameInput.value.trim();
           if (!name) {
-            Toast.show('El nombre del proyecto es obligatorio', 'warning');
+            Toast.show('El nombre del asset es obligatorio', 'warning');
             nameInput.focus();
             return;
           }
           // Re-read the projects so a name taken a moment ago in another tab is refused too.
           await loadNames();
           if (!showAvailability()) {
-            Toast.show('Ya existe un proyecto con ese nombre', 'warning');
+            Toast.show('Ya existe un asset con ese nombre', 'warning');
             nameInput.focus();
             return;
           }
@@ -295,13 +302,13 @@ export class Wizard {
               category: cat.id,
             });
 
-            Toast.show('¡Proyecto creado!', 'success');
+            Toast.show('¡Asset creado!', 'success');
             if (this._isCurrent()) Router.navigate(`#/workspace/${project.id}`);
           } catch (err) {
             console.error('[Wizard] Project creation failed:', err);
-            Toast.show('Error al crear el proyecto: ' + err.message, 'error');
+            Toast.show('Error al crear el asset: ' + err.message, 'error');
             createBtn.disabled = false;
-            createBtn.textContent = 'Crear Proyecto';
+            createBtn.textContent = 'Crear asset';
           } finally {
             Loader.hide();
           }

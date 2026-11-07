@@ -1,5 +1,6 @@
 const { endpoint } = require('../transport/index.cjs');
 const { createTextContext } = require('./text-context.cjs');
+const { withoutAttachments } = require('./chat-images.cjs');
 const {
   checkThinkingStep,
   thinkingStepSchema,
@@ -22,7 +23,7 @@ function createThinking(deps, { infer, prepareText = createTextContext(deps) }) 
 
   async function think({ body }) {
     const { thinking, ...chat } = body;
-    const { messages } = prepareText(chat);
+    const messages = withoutAttachments(prepareText(chat).messages);
     const config = llmConfig.functionConfig(deps.getLLMConfig(), 'chat');
     const model = config.model;
     if (!llmConfig.isLocalModel(model))

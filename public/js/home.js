@@ -2,17 +2,19 @@ import { renderIcon } from './icons.js';
 import { HomeSettings } from './home-settings.js';
 import { enhanceSelect } from './custom-select.js';
 import { safeHTML, escapeHTML as esc } from './safe-html.js';
-import { AppState, replaceProjects, removeProjectSummary } from './app-state.js';
+import { AppState, replaceProjects, removeProjectSummary, setTheme } from './app-state.js';
 import { EventBus } from './event-bus.js';
 import { getAllModules } from './modules/workspaces/project-module-registry.js';
 import { API } from './api-service.js';
 import { Router } from './router.js';
 import { Alert, Loader, Toast, Modal } from './ui-components.js';
+import { SpaceControls } from './modules/library/space-controls.js';
+import { renderDiscovery, DEMO_FILMS } from './modules/library/home-discovery.js';
 import { BubbleMap } from './bubble-map.js';
 
 const types = {
   all: {
-    label: 'Todos los proyectos',
+    label: 'Todos los assets',
     short: 'Todos',
     color: '#a69bff',
   },
@@ -81,9 +83,13 @@ const dateLabel = (project) =>
     : 'Sin fecha registrada';
 
 export class Home {
-  async mount(container, isCurrent = () => true) {
+  async mount(container, isCurrent = () => true, options = {}) {
     this.root = container.querySelector('.studio-home');
     this.type = 'all';
+    this.page = options.page || 'home';
+    this.folderId = options.folderId || '';
+    this.profileTab = options.tab || 'assets';
+    this.space = null;
     this.query = '';
     this.sort = 'recent';
     this.selected = null;
@@ -91,6 +97,29 @@ export class Home {
     this.categories = {};
     this.abort = new AbortController();
     this.settings = new HomeSettings(this.root);
+    this.controls = new SpaceControls({
+      getSpace: () => this.space,
+      onSpace: (value) => {
+        this.space = value;
+        if (this.folderId && !this.currentFolder()) {
+          Router.navigate('#/profile/projects');
+          return;
+        }
+        this.render();
+      },
+      artwork: (asset) => this.artwork(asset),
+    });
+    this.root.querySelectorAll('[data-home-icon]').forEach((el) => {
+      el.innerHTML = safeHTML(renderIcon(el.dataset.homeIcon, 22));
+    });
+    this.root.querySelectorAll('[data-nav]').forEach((el) => {
+      if (
+        el.dataset.nav ===
+        (this.page === 'home' ? 'explore' : this.profileTab === 'projects' ? 'projects' : 'profile')
+      )
+        el.setAttribute('aria-current', 'page');
+    });
+    if (this.page === 'home') this.disconnectDiscovery = renderDiscovery(this.root);
     const modules = await getAllModules();
     if (!isCurrent()) return this;
     for (const module of modules)
@@ -127,23 +156,71 @@ export class Home {
   }
 
   async refresh() {
-    try {
-      const result = await API.getProjects();
-      if (this.abort.signal.aborted) return;
-      this.root.querySelector('#home-load-error').hidden = true;
+    const results = await Promise.allSettled([API.getProjects(), API.getLibrarySpace()]);
+    if (this.abort.signal.aborted) return;
+    if (results[1].status === 'fulfilled') this.space = results[1].value;
+    if (results[0].status === 'fulfilled') {
+      const result = results[0].value;
       replaceProjects(Array.isArray(result) ? result : result.projects || []);
-    } catch {
-      if (this.abort.signal.aborted) return;
-      const error = this.root.querySelector('#home-load-error');
-      error.hidden = false;
-      error.innerHTML = safeHTML(
-        'No se pudo actualizar la biblioteca. <button data-action="retry">Reintentar</button>',
-      );
     }
+    const error = this.root.querySelector('#home-load-error');
+    error.hidden = results.every((result) => result.status === 'fulfilled');
+    if (!error.hidden)
+      error.innerHTML = safeHTML(
+        'No se pudo actualizar Mi espacio. <button data-action="retry">Reintentar</button>',
+      );
+    this.render();
+  }
+  currentFolder() {
+    return this.space?.folders.find((folder) => folder.id === this.folderId);
+  }
+  renderProfile() {
+    if (this.page !== 'profile') return;
+    const profile = this.space?.profile || { displayName: 'Mi espacio', handle: 'creador', bio: '' };
+    this.root.querySelector('#space-profile-name').textContent = profile.displayName;
+    this.root.querySelector('#space-profile-handle').textContent = '@' + profile.handle;
+    this.root.querySelector('#space-profile-bio').textContent = profile.bio;
+    this.root.querySelector('#space-asset-total').textContent = AppState.projects.length;
+    const totalFolders = this.space?.folders.length || 0;
+    this.root.querySelector('#space-folder-total').textContent = totalFolders;
+    this.root.querySelector('#space-folder-total').nextSibling.textContent =
+      totalFolders === 1 ? ' proyecto' : ' proyectos';
+    const folders = this.root.querySelector('#space-folders');
+    folders.hidden = this.profileTab !== 'projects';
+    this.root.querySelector('.studio-library').hidden = this.profileTab === 'projects';
+    this.root.querySelector('.space-asset-toolbar').hidden = this.profileTab === 'projects';
+    this.root.querySelectorAll('[data-profile-tab]').forEach((el) => {
+      if (el.dataset.profileTab === this.profileTab) el.setAttribute('aria-current', 'page');
+      else el.removeAttribute('aria-current');
+    });
+    const heading = this.root.querySelector('#space-folder-heading'),
+      folder = this.currentFolder();
+    heading.hidden = !this.folderId;
+    if (this.folderId)
+      heading.innerHTML = safeHTML(
+        folder
+          ? `<div><a href="#/profile/projects">${renderIcon('chevron-left', 18)} Proyectos</a><h2>${esc(folder.name)}</h2><p>${folder.assetIds.length} ${folder.assetIds.length === 1 ? 'asset' : 'assets'}</p></div><div class="space-folder-actions"><button class="studio-button k-create-button" data-action="pick-assets">${renderIcon('plus', 18)} Añadir assets</button><button class="k-icon-button" data-edit-folder="${esc(folder.id)}" aria-label="Renombrar proyecto">${renderIcon('edit', 18)}</button><button class="k-icon-button" data-remove-folder="${esc(folder.id)}" aria-label="Eliminar carpeta">${renderIcon('trash', 18)}</button></div>`
+          : '<p>Este proyecto ya no está disponible. <a href="#/profile/projects">Volver a proyectos</a></p>',
+      );
+    const grid = this.root.querySelector('#space-folder-grid');
+    grid.innerHTML = safeHTML(
+      (this.space?.folders || [])
+        .map((item) => {
+          const assets = AppState.projects.filter((p) => item.assetIds.includes(p.id)).slice(0, 4);
+          return `<article class="space-folder-card"><a href="#/profile/folders/${encodeURIComponent(item.id)}"><span class="space-folder-collage">${assets.length ? assets.map((p) => `<span>${this.artwork(p)}</span>`).join('') : renderIcon('folder', 56)}</span><span class="space-folder-copy"><strong>${esc(item.name)}</strong><small>${item.assetIds.length} ${item.assetIds.length === 1 ? 'asset' : 'assets'}</small></span></a><details class="studio-card-menu"><summary aria-label="Opciones de ${esc(item.name)}">${renderIcon('more', 20)}</summary><button data-edit-folder="${esc(item.id)}">Renombrar</button><button data-remove-folder="${esc(item.id)}">Eliminar carpeta</button></details></article>`;
+        })
+        .join('') ||
+        '<div class="space-folder-empty"><h3>Una historia. Todas sus piezas.</h3><p>Reúne libros, guiones, personajes y escenarios en un proyecto.</p><button class="studio-button k-create-button" data-action="new-folder">Crear mi primer proyecto</button></div>',
+    );
+    this.root
+      .querySelectorAll('[data-action="new-folder"],[data-action="edit-profile"],[data-action="pick-assets"]')
+      .forEach((button) => {
+        button.disabled = !this.space;
+      });
   }
 
   category(project) {
-    return this.categories[project.category] || types[project.type]?.short || 'Proyecto';
+    return this.categories[project.category] || types[project.type]?.short || 'Asset';
   }
   artwork(project) {
     const url = cover(project);
@@ -164,7 +241,11 @@ export class Home {
     this.root.querySelector('#home-type-nav').innerHTML = safeHTML(
       Object.entries(types)
         .map(([type, config]) => {
-          const count = AppState.projects.filter((p) => type === 'all' || p.type === type).length;
+          const count = AppState.projects.filter(
+            (p) =>
+              (!this.folderId || this.currentFolder()?.assetIds.includes(p.id)) &&
+              (type === 'all' || p.type === type),
+          ).length;
           return `<button data-type="${type}" aria-pressed="${this.type === type}" style="--type-color:${config.color}">${icon(type)}<span>${config.label}</span><small>${count}</small></button>`;
         })
         .join(''),
@@ -174,16 +255,18 @@ export class Home {
       AppState.projects.find((p) => p.id === last) ||
       [...AppState.projects].sort((a, b) => timestamp(b) - timestamp(a))[0];
     const resume = this.root.querySelector('#home-resume');
-    resume.hidden = !recent;
+    resume.hidden = !recent || this.page !== 'home';
     if (recent)
       resume.innerHTML = safeHTML(
-        `<div class="studio-resume-copy"><p class="studio-eyebrow">CONTINUAR TRABAJANDO</p><h2>${esc(recent.name || 'Sin título')}</h2><p>${esc(this.category(recent))}<span>·</span> Modificado el ${esc(dateLabel(recent))}</p><button class="studio-button studio-resume-button" data-open="${esc(recent.id)}">Retomar proyecto <span aria-hidden="true">${renderIcon('arrow-up-right')}</span></button></div><div class="studio-resume-art" data-kind="${esc(recent.type)}" style="--type-color:${(types[recent.type] || types.all).color}">${this.artwork(recent)}<span class="studio-resume-art-label">${esc(this.category(recent))}</span></div>`,
+        `<div class="studio-resume-art" data-kind="${esc(recent.type)}">${this.artwork(recent)}</div><div class="studio-resume-copy"><p class="studio-eyebrow">CONTINÚA DONDE LO DEJASTE</p><h2>${esc(recent.name || 'Sin título')}</h2><p>${esc(this.category(recent))} · ${esc(dateLabel(recent))}</p></div><button class="studio-button" data-open="${esc(recent.id)}">Continuar ${renderIcon('arrow-up-right', 20)}</button>`,
       );
-    this.renderResults();
+    this.renderProfile();
+    if (this.page !== 'home') this.renderResults();
   }
   renderResults() {
     const projects = AppState.projects.filter(
       (project) =>
+        (!this.folderId || this.currentFolder()?.assetIds.includes(project.id)) &&
         (this.type === 'all' || project.type === this.type) &&
         normalize(`${project.name} ${this.category(project)} ${types[project.type]?.label}`).includes(
           normalize(this.query),
@@ -221,7 +304,7 @@ export class Home {
     this.map.destroy();
     if (!projects.length) {
       empty.innerHTML = safeHTML(
-        `${icon(this.type)}<h3>${AppState.projects.length ? 'No hay proyectos en esta selección' : 'Tu próxima historia empieza aquí'}</h3><p>${AppState.projects.length ? 'Prueba otro nombre o explora todos tus proyectos.' : 'Crea una historia, un personaje o el primer escenario de tu mundo.'}</p><button class="studio-button studio-primary" data-action="${AppState.projects.length ? 'reset' : 'new'}">${AppState.projects.length ? 'Ver todos los proyectos' : 'Crear mi primer proyecto'}</button>`,
+        `${icon(this.type)}<h3>${AppState.projects.length ? 'No hay assets en esta selección' : 'Tu próxima historia empieza aquí'}</h3><p>${AppState.projects.length ? 'Prueba otro nombre o explora todos tus assets.' : 'Crea una historia, un personaje o el primer escenario de tu mundo.'}</p><button class="studio-button studio-primary" data-action="${AppState.projects.length ? 'reset' : 'new'}">${AppState.projects.length ? 'Ver todos los assets' : 'Crear mi primer asset'}</button>`,
       );
       return;
     }
@@ -230,7 +313,7 @@ export class Home {
         projects
           .map(
             (project) =>
-              `<article class="studio-card" style="--type-color:${(types[project.type] || types.all).color}"><a class="studio-card-link" href="#/workspace/${encodeURIComponent(project.id)}" aria-label="Abrir ${esc(project.name)}"><div class="studio-card-art" data-kind="${esc(project.type)}">${this.artwork(project)}<span class="studio-category">${icon(project.type)}${esc(this.category(project))}</span></div><div class="studio-card-copy"><h3>${esc(project.name || 'Sin título')}</h3><p>${esc(dateLabel(project))}<span aria-hidden="true">${renderIcon('arrow-up-right')}</span></p></div></a><div class="studio-card-bottom"><span class="studio-status"><i></i>${esc(project.status || 'Borrador')}</span><details class="studio-card-menu"><summary aria-label="Opciones de ${esc(project.name)}">${renderIcon('more')}</summary><button data-delete="${esc(project.id)}">Eliminar proyecto…</button></details></div></article>`,
+              `<article class="studio-card" style="--type-color:${(types[project.type] || types.all).color}"><a class="studio-card-link" href="#/workspace/${encodeURIComponent(project.id)}" aria-label="Abrir ${esc(project.name)}"><div class="studio-card-art" data-kind="${esc(project.type)}">${this.artwork(project)}<span class="studio-category">${icon(project.type)}${esc(this.category(project))}</span></div><div class="studio-card-copy"><h3>${esc(project.name || 'Sin título')}</h3><p>${esc(dateLabel(project))}<span aria-hidden="true">${renderIcon('arrow-up-right')}</span></p></div></a><div class="studio-card-bottom"><span class="studio-status"><i></i>${esc(project.status || 'Borrador')}</span><details class="studio-card-menu"><summary aria-label="Opciones de ${esc(project.name)}">${renderIcon('more')}</summary><button data-folder-asset="${esc(project.id)}">Añadir a proyecto…</button>${this.folderId ? `<button data-unlink-asset="${esc(project.id)}">Quitar de este proyecto</button>` : ''}<button data-delete="${esc(project.id)}">Eliminar asset…</button></details></div></article>`,
           )
           .join(''),
       );
@@ -258,12 +341,70 @@ export class Home {
       .querySelectorAll('.bubble-node')
       .forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.projectId === id)));
     this.root.querySelector('#home-map-detail').innerHTML = safeHTML(
-      `<p class="studio-eyebrow">PROYECTO SELECCIONADO</p><span class="studio-detail-category" style="--type-color:${(types[project.type] || types.all).color}">${icon(project.type)}${esc(this.category(project))}</span><h3>${esc(project.name || 'Sin título')}</h3><p class="studio-detail-date">Modificado el ${esc(dateLabel(project))}</p><button class="studio-button studio-primary" data-open="${esc(project.id)}">Abrir proyecto <span aria-hidden="true">${renderIcon('arrow-up-right')}</span></button><h4>Proyectos relacionados <span>${related.length}</span></h4>${related.length ? `<ul>${related.map((other) => `<li><button data-select="${esc(other.id)}">${icon(other.type)}<span>${esc(other.name)}</span><span aria-hidden="true">${renderIcon('arrow-right')}</span></button></li>`).join('')}</ul>` : '<p class="studio-detail-empty">Sin conexiones todavía. Los proyectos que vincules como ingredientes aparecerán aquí.</p>'}`,
+      `<p class="studio-eyebrow">ASSET SELECCIONADO</p><span class="studio-detail-category" style="--type-color:${(types[project.type] || types.all).color}">${icon(project.type)}${esc(this.category(project))}</span><h3>${esc(project.name || 'Sin título')}</h3><p class="studio-detail-date">Modificado el ${esc(dateLabel(project))}</p><button class="studio-button studio-primary" data-open="${esc(project.id)}">Abrir asset <span aria-hidden="true">${renderIcon('arrow-up-right')}</span></button><h4>Assets relacionados <span>${related.length}</span></h4>${related.length ? `<ul>${related.map((other) => `<li><button data-select="${esc(other.id)}">${icon(other.type)}<span>${esc(other.name)}</span><span aria-hidden="true">${renderIcon('arrow-right')}</span></button></li>`).join('')}</ul>` : '<p class="studio-detail-empty">Sin conexiones todavía. Los assets que vincules como ingredientes aparecerán aquí.</p>'}`,
     );
   }
   onClick(event) {
     const button = event.target.closest('button');
     if (!button) return;
+    const folder = this.currentFolder();
+    if (button.dataset.action === 'theme') {
+      setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
+      return;
+    }
+    if (button.dataset.demoFilm !== undefined) {
+      const film = DEMO_FILMS[Number(button.dataset.demoFilm)];
+      if (film) {
+        const content = document.createElement('div');
+        content.className = 'space-demo';
+        content.innerHTML = safeHTML(
+          `<img src="/assets/home/${film.image}" alt="${esc(film.title)}"><p>Vista previa de la galería de la comunidad. Las películas y publicaciones de otros creadores estarán disponibles próximamente.</p>`,
+        );
+        Modal.show({
+          title: film.title,
+          content,
+          actions: [{ label: 'Cerrar', class: 'btn-primary', onClick: () => Modal.hide() }],
+        });
+      }
+      return;
+    }
+    if (['new-folder', 'edit-profile', 'pick-assets'].includes(button.dataset.action) && !this.space) return;
+    if (button.dataset.action === 'new-folder') {
+      this.controls.createFolder();
+      return;
+    }
+    if (button.dataset.action === 'edit-profile') {
+      this.controls.editProfile();
+      return;
+    }
+    if (button.dataset.action === 'pick-assets' && folder) {
+      this.controls.pickAssets(folder);
+      return;
+    }
+    if (button.dataset.editFolder) {
+      const item = this.space?.folders.find((f) => f.id === button.dataset.editFolder);
+      if (item) this.controls.editFolder(item);
+      return;
+    }
+    if (button.dataset.removeFolder) {
+      const item = this.space?.folders.find((f) => f.id === button.dataset.removeFolder);
+      if (item) void this.controls.removeFolder(item);
+      return;
+    }
+    if (button.dataset.folderAsset) {
+      const asset = AppState.projects.find((p) => p.id === button.dataset.folderAsset);
+      if (asset && this.space) this.controls.assignAsset(asset);
+      return;
+    }
+    if (button.dataset.unlinkAsset && folder) {
+      void this.controls.save(() =>
+        API.updateProjectFolder(folder.id, {
+          revision: this.space.revision,
+          assetIds: folder.assetIds.filter((id) => id !== button.dataset.unlinkAsset),
+        }),
+      );
+      return;
+    }
     if (button.id === 'btn-new-project' || button.dataset.action === 'new') Router.navigate('#/wizard');
     else if (button.dataset.type) {
       this.type = button.dataset.type;
@@ -300,7 +441,7 @@ export class Home {
       const explanation = document.createElement('p');
       explanation.className = 'check-panel__intro';
       explanation.textContent = projects.length
-        ? 'Estos proyectos conservan sus archivos. Restáuralos para volver a trabajar con ellos o elimínalos para siempre.'
+        ? 'Estos assets conservan sus archivos. Restáuralos para volver a trabajar con ellos o elimínalos para siempre.'
         : 'La papelera está vacía.';
       content.append(explanation);
       const countLabel = document.createElement('span');
@@ -396,8 +537,7 @@ export class Home {
         }
         await this.refresh();
         const done = chosen.length - failed;
-        if (done)
-          Toast.show(done === 1 ? 'Proyecto restaurado.' : done + ' proyectos restaurados.', 'success');
+        if (done) Toast.show(done === 1 ? 'Asset restaurado.' : done + ' assets restaurados.', 'success');
         if (failed) Toast.show('No se pudieron restaurar ' + failed + '.', 'error');
         await this.showTrash(selected);
       };
@@ -418,8 +558,7 @@ export class Home {
             }
             Loader.hide();
             const done = chosen.length - failed;
-            if (done)
-              Toast.show(done === 1 ? 'Proyecto eliminado.' : done + ' proyectos eliminados.', 'success');
+            if (done) Toast.show(done === 1 ? 'Asset eliminado.' : done + ' assets eliminados.', 'success');
             if (failed) Toast.show('No se pudieron eliminar ' + failed + '.', 'error');
             await this.showTrash(selected);
           },
@@ -445,11 +584,11 @@ export class Home {
         else await API.deleteProject(id);
         removeProjectSummary(id);
         Toast.show(
-          phrase !== undefined ? 'Proyecto y archivos eliminados' : 'Proyecto movido a la papelera',
+          phrase !== undefined ? 'Asset y archivos eliminados' : 'Asset movido a la papelera',
           'success',
         );
       } catch {
-        Toast.show('No se pudo eliminar el proyecto', 'error');
+        Toast.show('No se pudo eliminar el asset', 'error');
       } finally {
         Loader.hide();
       }
@@ -462,6 +601,8 @@ export class Home {
     );
   }
   unmount() {
+    this.controls?.destroy();
+    this.disconnectDiscovery?.();
     this.sortControl?.destroy({ restore: false });
     this.settings?.destroy();
     this.abort.abort();

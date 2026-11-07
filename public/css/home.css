@@ -2068,6 +2068,17 @@ html[data-theme='light'] .studio-map-detail {
   gap: 4px;
 }
 
+.settings-model-providers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  grid-column: 1 / -1;
+}
+
+.settings-model-providers[hidden] {
+  display: none;
+}
+
 .settings-model-sort-button {
   display: inline-flex;
   align-items: center;

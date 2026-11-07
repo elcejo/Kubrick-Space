@@ -1,6 +1,7 @@
 # Dependencies and local runtimes
 node_modules/
 .system_generated/
+.kilo/
 local-generation/comfyui/engine/
 local-generation/comfyui/.venv/
 local-generation/comfyui/data/
@@ -10,7 +11,13 @@ local-generation/comfyui/requirements-installed.txt
 # Local data, credentials and generations: never published
 projects/
 projects.json
+library-space.json*
+chats.json
+document-draft.json
+document-versions.json
 jobs/
+backups/
+prop-library/
 api_keys.json*
 llm_config.json*
 .env
@@ -19,6 +26,7 @@ llm_config.json*
 *.pem
 *.key
 *.pfx
+*.p12
 *.log
 
 # Model weights are downloaded by the user (see README.md); the folder skeleton is kept with .gitkeep
@@ -35,3 +43,21 @@ __pycache__/
 *.pyc
 .DS_Store
 Thumbs.db
+
+# Private development instructions and reports are never installation assets
+**/AGENTS.md
+**/CLAUDE.md
+.agents/
+.codex/
+.claude/
+.github/
+docs/
+tests/
+reports/
+ROADMAP.md
+.kubrick-export
+public/development/
+public/docs.html
+public/icons.html
+public/roadmap.html
+assets/promo/

@@ -48,7 +48,7 @@ export function createThinkingControls() {
   select.className = 'chat-thinking-select';
   select.setAttribute('aria-label', 'Nivel de pensamiento del modelo local');
   select.title = 'Pensamiento simulado: pasos breves antes de responder';
-  for (const level of THINKING_LEVELS) select.append(new Option(level.label, level.id));
+  for (const level of THINKING_LEVELS) select.append(new Option(level.label.split(' · ')[0], level.id));
   select.append(new Option('Personalizado', 'custom'));
   const custom = document.createElement('input');
   custom.type = 'number';

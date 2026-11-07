@@ -6,6 +6,9 @@ import {
   SCREENPLAY_LABELS,
   SCREENPLAY_SCENE_FIELDS,
   SCREENPLAY_SHOTS,
+  SCREENPLAY_SHOT_SECONDS,
+  snapShotSeconds,
+  shotSecondsLabel,
   SCREENPLAY_VOICES,
   screenplayShots,
   upgradeScreenplayDocument,
@@ -263,7 +266,7 @@ export function prepareScreenplayAdaptation(html, previousContent, scenarios = [
 export function screenplayToHTML(doc) {
   doc = validateScreenplayDocument(doc, safeContent);
   const block = (node) =>
-    `<${node.type === 'title' ? 'h1' : SCREENPLAY_TYPES[node.type]} data-kai-id="${node.id}">${node.html || escapeHTML(node.text) || '<br>'}</${node.type === 'title' ? 'h1' : SCREENPLAY_TYPES[node.type]}>`;
+    `<${node.type === 'title' ? 'h1' : SCREENPLAY_TYPES[node.type]} data-kai-id="${node.id}">${node.html || escapeHTML(node.text) || (node.type === 'transition' ? '' : '<br>')}</${node.type === 'title' ? 'h1' : SCREENPLAY_TYPES[node.type]}>`;
   return (
     block(doc.title) +
     doc.preamble.map(block).join('') +
@@ -283,6 +286,9 @@ export {
   SCREENPLAY_LABELS,
   SCREENPLAY_SCENE_FIELDS,
   SCREENPLAY_SHOTS,
+  SCREENPLAY_SHOT_SECONDS,
+  snapShotSeconds,
+  shotSecondsLabel,
   SCREENPLAY_VOICES,
   screenplayShots,
   upgradeScreenplayDocument,

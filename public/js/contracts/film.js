@@ -1,4 +1,8 @@
 /** Portable feature-film document: scenes as independent video nodes. No DOM, network or storage. */
+import { H3_CLIP_FRAMES, H3_FPS } from './screenplay.js';
+import { FILM_OPTICS_KEYS, isFilmOpticsChoice } from './film-optics.js';
+import { isFilmPaletteChoice, filmPaletteColors } from './film-palettes.js';
+import { isFilmMovement } from './film-movements.js';
 export const FILM_SCHEMA = 'code-kai.feature-film';
 export const FILM_VERSION = 6;
 /** Version 1 documents (prompts only, no render state) are still read and upgraded on parse. */
@@ -6,10 +10,18 @@ const FILM_READABLE_VERSIONS = Object.freeze([1, 2, 3, 4, 5, 6]);
 /** Historical API name: this bounds shot clips, not dramatic scenes. */
 export const FILM_MAX_SCENES = 2000;
 export const FILM_MAX_REFERENCES = 4;
-export const FILM_MAX_SECONDS = 10;
-/** MiniMax H3 frame counts follow 17k + 5 at 24 fps. Every clip is at most 10 seconds, with no exception. */
-export const FILM_FRAME_OPTIONS = Object.freeze([124, 141, 158, 175, 192, 209, 226]);
-export const FILM_FPS = 24;
+export const FILM_MAX_SECONDS = 15;
+/** MiniMax H3 frame counts follow 17k + 5 at 24 fps. Every clip is at most 15 seconds, with no exception. */
+export const FILM_FRAME_OPTIONS = H3_CLIP_FRAMES;
+export const FILM_FPS = H3_FPS;
+/** Choices for new manual and agent edits; historical document values remain readable. */
+export const FILM_PREVIEW_MEGAPIXELS = Object.freeze(
+  Array.from({ length: 6 }, (_, index) => (index + 1) / 10),
+);
+export const FILM_FINAL_MEGAPIXELS = Object.freeze(
+  Array.from({ length: 16 }, (_, index) => (index + 5) / 10),
+);
+
 /**
  * How a clip joins the one before it. auto: a new scene starts fresh (new) and another shot of the same scene is a cut
  * with continuity of action (cut). take: the same take goes on, guided by the last frames of the previous clip.
@@ -91,7 +103,18 @@ const LIMITS = Object.freeze({
   look: 700,
 });
 const KEYS = Object.freeze({
-  document: ['schema', 'version', 'id', 'revision', 'identity', 'source', 'params', 'scenes', 'looks'],
+  document: [
+    'schema',
+    'version',
+    'id',
+    'revision',
+    'identity',
+    'source',
+    'params',
+    'scenes',
+    'looks',
+    'optics',
+  ],
   identity: ['name'],
   source: ['projectId', 'name', 'origin', 'versionId', 'versionNumber'],
   params: ['aspectRatio', 'megapixels', 'steps', 'finalMegapixels'],
@@ -112,6 +135,7 @@ const KEYS = Object.freeze({
     'continuity',
     'frames',
     'shot',
+    'movement',
     'seed',
     'references',
     'referenceNotes',
@@ -158,7 +182,7 @@ export function filmHash(value) {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-/** Nearest supported clip length that never exceeds ten seconds. */
+/** Nearest supported clip length; none exceeds the maximum of the film. */
 export function snapFilmFrames(seconds) {
   const wanted = Number(seconds);
   if (!Number.isFinite(wanted)) return FILM_FRAME_OPTIONS[0];
@@ -193,6 +217,7 @@ export function emptyFilmDocument({ id, name = '' } = {}) {
     params: { ...FILM_DEFAULT_PARAMS },
     scenes: [],
     looks: {},
+    optics: {},
   });
 }
 
@@ -326,6 +351,9 @@ function normalizeScene(value) {
     promptHash: text(value.promptHash, 16, 'Huella del prompt'),
     frames,
     shot: text(value.shot, LIMITS.shot, 'Plano'),
+    movement: isFilmMovement(value.movement ?? 'auto')
+      ? (value.movement ?? 'auto')
+      : fail('Movimiento de cámara inválido.'),
     seed,
     references: references.map(normalizeReference),
     referenceNotes,
@@ -386,6 +414,26 @@ export function validateFilmDocument(value) {
       key: text(look.key, 40, 'Huella de la ficha de aspecto'),
     };
   }
+  const optics = {};
+  for (const [id, choice] of Object.entries(value.optics ?? {})) {
+    if (!ENTRY_ID.test(id)) fail('Escena de la óptica inválida.');
+    record(choice, [...FILM_OPTICS_KEYS, 'palette', 'colors'], 'Óptica de la escena');
+    const clean = {};
+    for (const key of FILM_OPTICS_KEYS) {
+      const picked = choice[key] ?? 'auto';
+      if (!isFilmOpticsChoice(key, picked)) fail('Opción de óptica inválida.');
+      clean[key] = picked;
+    }
+    clean.palette = choice.palette ?? 'auto';
+    if (!isFilmPaletteChoice(clean.palette)) fail('Paleta de la escena inválida.');
+    if (clean.palette === 'custom') {
+      clean.colors = filmPaletteColors(choice.colors);
+      if (!clean.colors) fail('Colores de la paleta personalizada inválidos.');
+    } else if (choice.colors !== undefined && choice.colors.length)
+      fail('Solo una paleta personalizada lleva colores.');
+    // A scene whose choices are all "auto" stores nothing.
+    if ([...FILM_OPTICS_KEYS, 'palette'].some((key) => clean[key] !== 'auto')) optics[id] = clean;
+  }
   if (new Set(scenes.map((scene) => scene.id)).size !== scenes.length) fail('Escenas repetidas.');
   if (new Set(scenes.map(filmSourceKey)).size !== scenes.length) fail('Planos de origen repetidos.');
   for (const scene of scenes)
@@ -406,6 +454,7 @@ export function validateFilmDocument(value) {
     },
     scenes,
     looks,
+    optics,
   };
 }
 
@@ -573,6 +622,9 @@ export function reconcileFilmScenes(existing, incoming, newId) {
       sourceShotId: scene.sourceShotId ?? scene.sourceSceneId,
       sourcePart: scene.sourcePart ?? 1,
       sourceParts: scene.sourceParts ?? 1,
+      // The camera movement and the transition are the screenplay's: the film inherits what the shot chose, even "auto".
+      movement: scene.movement ?? 'auto',
+      continuity: { ...previous.continuity, mode: scene.continuity?.mode ?? 'auto' },
       // The duration of a shot follows the screenplay when it changes; a shot that states none keeps the clip's own.
       frames: changed && scene.frames ? scene.frames : previous.frames,
       title: scene.title,

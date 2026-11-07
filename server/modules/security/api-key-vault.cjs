@@ -4,7 +4,15 @@ const { randomUUID } = require('node:crypto');
 // API keys are deliberately stored as local JSON. The app is a local-only
 // workspace, and the user has chosen filesystem access as the protection
 // boundary instead of a machine/profile-bound encryption provider.
-const PROVIDERS = ['openrouter', 'replicate', 'gemini', 'openai', 'minimax', 'artificial-analysis'];
+const PROVIDERS = [
+  'openrouter',
+  'replicate',
+  'gemini',
+  'openai',
+  'opencode',
+  'minimax',
+  'artificial-analysis',
+];
 const PLAINTEXT_FORMAT = 'code-kai-plaintext-v1';
 const LEGACY_ENCRYPTED_FORMAT = 'code-kai-dpapi-v1';
 

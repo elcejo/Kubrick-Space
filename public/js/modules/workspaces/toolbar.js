@@ -31,6 +31,7 @@ export class Toolbar {
   /** @type {HTMLButtonElement|null} */ #saveBtn = null;
   #closeVersions = null;
   #inference = null;
+  #inferenceBar = null;
   #renameListener = null;
   setBackgroundBusy(busy) {
     const name = this.#root?.querySelector('#toolbar-project-name');
@@ -47,7 +48,7 @@ export class Toolbar {
    * @param {{ id: string, name: string }} projectData
    * @param {{ exportFormats?: Array<{ label: string, key: string }> }} moduleConfig
    */
-  init(container, projectData, moduleConfig) {
+  init(container, projectData, moduleConfig, inferenceContainer = container) {
     this.#root = document.createElement('div');
     this.#root.className = 'workspace-toolbar toolbar';
 
@@ -189,7 +190,13 @@ export class Toolbar {
     exportWrap.append(this.#exportBtn, this.#dropdown);
     container.querySelectorAll('.video-import-button').forEach((button) => right.appendChild(button));
     this.#inference = new InferenceControls(projectData.id);
-    right.append(this.#inference.element, versionsBtn, themeBtn, fxBtn, exportWrap);
+    this.#inferenceBar = document.createElement('div');
+    this.#inferenceBar.className = 'workspace-inference-toolbar';
+    this.#inferenceBar.setAttribute('role', 'toolbar');
+    this.#inferenceBar.setAttribute('aria-label', 'Modelos de generación');
+    this.#inferenceBar.append(this.#inference.element);
+    (inferenceContainer || container).append(this.#inferenceBar);
+    right.append(versionsBtn, themeBtn, fxBtn, exportWrap);
 
     this.#root.append(left, right);
     container.appendChild(this.#root);
@@ -289,6 +296,8 @@ export class Toolbar {
   destroy() {
     this.#inference?.destroy();
     this.#inference = null;
+    this.#inferenceBar?.remove();
+    this.#inferenceBar = null;
     if (this.#renameListener) EventBus.off('workspace:rename', this.#renameListener);
     this.#renameListener = null;
     this.#closeVersions?.();

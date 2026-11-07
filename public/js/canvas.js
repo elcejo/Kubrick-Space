@@ -110,6 +110,11 @@ export class Canvas {
     this.#bound.auxclick = (e) => {
       if (e.button === 1) e.preventDefault();
     };
+    this.#bound.selectstart = (e) => {
+      // Block selection as an event, without toggling user-select on the entire
+      // SVG/video subtree and forcing Chromium to repaint all filtered layers.
+      if (this.#panning) e.preventDefault();
+    };
     this.#bound.dragstart = (e) => {
       // Images and links have native drag behaviour. A canvas gesture owns it;
       // explicitly draggable controls never become a pan candidate.
@@ -129,6 +134,7 @@ export class Canvas {
     this.#wrapper.addEventListener('contextmenu', this.#bound.contextmenu);
     this.#wrapper.addEventListener('auxclick', this.#bound.auxclick);
     this.#wrapper.addEventListener('dragstart', this.#bound.dragstart, true);
+    this.#wrapper.addEventListener('selectstart', this.#bound.selectstart, true);
   }
 
   /** @returns {HTMLElement} the inner transform container for content nodes */
@@ -329,6 +335,7 @@ export class Canvas {
       this.#wrapper.removeEventListener('contextmenu', this.#bound.contextmenu);
       this.#wrapper.removeEventListener('auxclick', this.#bound.auxclick);
       this.#wrapper.removeEventListener('dragstart', this.#bound.dragstart, true);
+      this.#wrapper.removeEventListener('selectstart', this.#bound.selectstart, true);
     }
     window.removeEventListener('pointermove', this.#bound.pointermove, true);
     window.removeEventListener('pointerup', this.#bound.pointerup, true);

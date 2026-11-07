@@ -38,7 +38,15 @@ function createConfigurationOperations(dependencies) {
       const keys = getApiKeys();
       for (const [name, value] of Object.entries(body)) {
         if (
-          !['openrouter', 'replicate', 'gemini', 'openai', 'minimax', 'artificial-analysis'].includes(name) ||
+          ![
+            'openrouter',
+            'replicate',
+            'gemini',
+            'openai',
+            'opencode',
+            'minimax',
+            'artificial-analysis',
+          ].includes(name) ||
           typeof value !== 'string' ||
           value.length > 1024
         )
@@ -90,7 +98,7 @@ function createConfigurationOperations(dependencies) {
         warning:
           'Configura una clave de Artificial Analysis en Claves API para mostrar ranking y puntuación de inteligencia.',
       };
-      let models = catalog.models;
+      let models = catalog.models.map((model) => ({ ...model, provider: 'openrouter' }));
       if (keys['artificial-analysis']) {
         try {
           const scores = await artificialAnalysisModels.getModels({
@@ -115,11 +123,18 @@ function createConfigurationOperations(dependencies) {
           console.warn('GET /api/llm-models benchmark warning:', benchmark.code);
         }
       }
+      // Models of the other providers connected by API key (OpenAI, Gemini, Replicate).
+      const external = dependencies.textModelCatalog
+        ? await dependencies.textModelCatalog
+            .list({ force: query.force === '1' })
+            .catch(() => ({ models: [], warnings: [] }))
+        : { models: [], warnings: [] };
       responseHeaders['Cache-Control'] = 'no-store';
       return reply(
         {
           ...catalog,
-          models: [...models, ...(dependencies.localModels?.() || [])],
+          models: [...models, ...external.models, ...(dependencies.localModels?.() || [])],
+          providerWarnings: external.warnings,
           benchmark,
           attribution: 'Benchmark de inteligencia: Artificial Analysis.',
         },

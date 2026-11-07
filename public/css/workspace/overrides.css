@@ -614,7 +614,8 @@ html[data-theme='light'] .story-book-timeline-calendar__summary:not(.is-invalid)
   width: var(--workspace-chat-expanded-width);
 }
 
-.workspace:has(.workspace__chat.is-open) .workspace__toolbar {
+.workspace:has(.workspace__chat.is-open) .workspace__toolbar,
+.workspace:has(.workspace__chat.is-open) .workspace__inference {
   right: var(--workspace-chat-expanded-width);
 }
 

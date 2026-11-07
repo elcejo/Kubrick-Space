@@ -1,3 +1,4 @@
+const { narrativeSelection } = require('../../../public/js/contracts/narrative-operations.js');
 const { parseCharacterDocument } = require('../../../public/js/contracts/character-model.js');
 const { endpoint } = require('../transport/index.cjs');
 const { createAIOperations } = require('./operations.cjs');
@@ -290,7 +291,7 @@ module.exports = function registerAIRoutes(app, dependencies) {
     endpoint(({ body }) => {
       if (
         !body ||
-        Object.keys(body).some((k) => !['projectId', 'request', 'context', 'token'].includes(k)) ||
+        Object.keys(body).some((k) => !['projectId', 'request', 'context', 'token', 'target'].includes(k)) ||
         !dependencies.security.UUID.test(body.projectId || '') ||
         !dependencies.security.UUID.test(body.token || '') ||
         typeof body.request !== 'string' ||
@@ -303,6 +304,18 @@ module.exports = function registerAIRoutes(app, dependencies) {
       )
         throw dependencies.security.fail('Solicitud de libro inválida.');
       const { project, document, kind } = elementAgent.read(body.projectId);
+      if (
+        body.target !== undefined &&
+        (!body.target ||
+          typeof body.target !== 'object' ||
+          Array.isArray(body.target) ||
+          Object.keys(body.target).some((key) => key !== 'id') ||
+          typeof body.target.id !== 'string' ||
+          body.target.id.length > 140 ||
+          kind !== 'story-book' ||
+          !narrativeSelection(document, body.target.id))
+      )
+        throw dependencies.security.fail('El elemento seleccionado no pertenece al documento abierto.', 422);
       const adapt =
         kind === 'screenplay' &&
         (project.ingredients || []).some(
@@ -322,6 +335,7 @@ module.exports = function registerAIRoutes(app, dependencies) {
               ...(adapt ? { adapt: true } : {}),
               request: body.request,
               context: body.context || [],
+              ...(body.target ? { target: { id: body.target.id } } : {}),
               textConfig: dependencies.getLLMConfig(),
               expectedContent: project.content,
               inferenceMode: dependencies.inference?.currentMode() || 'hybrid',

@@ -1,0 +1,155 @@
+<section
+  class="studio-home space-home space-home--profile"
+  id="home-view-container"
+  aria-label="Mi espacio en Kubrick Space"
+>
+  <header class="k-header">
+    <a class="studio-brand" href="#/" aria-label="Kubrick Space, inicio"
+      ><span class="brand-logo" aria-hidden="true"><span class="brand-logo__initial">K</span>ubrick</span></a
+    >
+    <nav class="k-navigation" aria-label="Navegación principal">
+      <a href="#/" data-nav="explore">Explorar</a><a href="#/profile" data-nav="profile">Mi espacio</a
+      ><a href="#/profile/projects" data-nav="projects">Proyectos</a>
+    </nav>
+    <div class="k-header-actions">
+      <button class="k-icon-button" data-action="theme" aria-label="Cambiar tema" title="Cambiar tema">
+        <span data-home-icon="sun"></span></button
+      ><button class="k-icon-button" data-action="settings" aria-label="Configuración" title="Configuración">
+        <span data-home-icon="settings"></span></button
+      ><button class="studio-button k-create-button" data-action="new">
+        <span data-home-icon="plus"></span><span>Crear asset</span></button
+      ><a class="k-avatar" href="#/profile" aria-label="Mi perfil"><span data-home-icon="kubrick"></span></a>
+    </div>
+  </header>
+  <main class="k-main">
+    <div id="home-load-error" role="alert" hidden></div>
+    <section class="space-profile" aria-label="Perfil del creador">
+      <div class="space-profile-cover">
+        <img src="/assets/home/profile-studio.webp" alt="" loading="lazy" /><span class="space-cover-label"
+          >TU UNIVERSO CREATIVO</span
+        >
+      </div>
+      <div class="space-profile-info">
+        <div class="space-profile-identity">
+          <div class="space-profile-avatar"><span data-home-icon="kubrick"></span></div>
+          <div>
+            <h1 id="space-profile-name">Mi espacio</h1>
+            <p id="space-profile-handle">@creador</p>
+          </div>
+        </div>
+        <div class="space-profile-stats">
+          <span><strong id="space-asset-total">0</strong> assets</span
+          ><span><strong id="space-folder-total">0</strong> proyectos</span
+          ><small>Guardado en esta computadora</small>
+        </div>
+        <button class="studio-button space-edit-profile" data-action="edit-profile">
+          <span data-home-icon="edit"></span>Editar perfil
+        </button>
+      </div>
+      <p id="space-profile-bio" class="space-profile-bio"></p>
+    </section>
+    <div class="space-tabs" role="group" aria-label="Contenido de mi espacio">
+      <a href="#/profile" data-profile-tab="assets">Assets</a
+      ><a href="#/profile/projects" data-profile-tab="projects">Proyectos</a
+      ><button data-action="trash"><span data-home-icon="trash"></span>Papelera</button>
+    </div>
+    <section class="space-folders" id="space-folders" aria-labelledby="space-folders-title">
+      <div class="k-section-heading">
+        <div>
+          <span class="k-kicker">DALE UN LUGAR A CADA IDEA</span>
+          <h2 id="space-folders-title">Tus proyectos.</h2>
+          <p class="k-section-intro">Una carpeta para reunir los assets de cada historia.</p>
+        </div>
+        <button class="studio-button k-create-button" data-action="new-folder">
+          <span data-home-icon="plus"></span>Nuevo proyecto
+        </button>
+      </div>
+      <div id="space-folder-grid" class="space-folder-grid"></div>
+    </section>
+    <div id="space-folder-heading" class="space-folder-heading" hidden></div>
+    <div class="space-asset-toolbar">
+      <nav id="home-type-nav" class="space-type-nav" aria-label="Tipos de asset"></nav>
+      <button class="studio-button" data-action="new-folder" title="Crear una carpeta para reunir assets">
+        <span data-home-icon="folder"></span>Nuevo proyecto
+      </button>
+    </div>
+    <section class="studio-library" aria-labelledby="home-library-title">
+      <div class="studio-library-heading">
+        <div>
+          <h2 id="home-library-title">Todos los assets <span id="project-count"></span></h2>
+          <p id="home-library-description">Cada pieza de tu próximo gran relato.</p>
+        </div>
+        <div class="studio-view-switch" role="group" aria-label="Vista de assets">
+          <button data-view="library" aria-pressed="true">Biblioteca</button
+          ><button data-view="map" aria-pressed="false">Mapa</button>
+        </div>
+      </div>
+      <div class="studio-tools">
+        <label class="studio-search"
+          ><svg
+            class="kai-icon"
+            data-icon="search"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <circle cx="10.5" cy="10.5" r="6" />
+            <path d="m15 15 5 5" /></svg
+          ><input
+            id="home-search"
+            type="search"
+            placeholder="Buscar por nombre o categoría…"
+            aria-label="Buscar assets"
+            autocomplete="off"
+        /></label>
+        <label class="studio-sort"
+          >Ordenar por
+          <select id="home-sort">
+            <option value="recent">Última modificación</option>
+            <option value="name">Nombre: A–Z</option>
+            <option value="oldest">Más antiguos</option>
+          </select></label
+        >
+      </div>
+      <p id="home-result-count" class="studio-result-count" role="status" aria-live="polite"></p>
+      <div id="project-list-container" class="studio-grid"></div>
+      <div id="home-map" class="studio-map-layout" hidden>
+        <div class="studio-map-stage">
+          <div class="studio-map-caption">
+            CONEXIONES DE TU UNIVERSO<span>Selecciona un asset para explorar sus relaciones.</span>
+          </div>
+          <div id="bubble-map-canvas-container">
+            <svg id="bubble-map-svg" aria-hidden="true"></svg>
+            <div id="bubble-map-nodes"></div>
+          </div>
+          <div id="home-map-legend" class="studio-map-legend" aria-label="Leyenda del mapa"></div>
+        </div>
+        <aside
+          id="home-map-detail"
+          class="studio-map-detail"
+          aria-label="Detalle del asset seleccionado"
+        ></aside>
+      </div>
+      <div id="home-empty" class="studio-empty" hidden></div>
+    </section>
+    <section id="home-resume" hidden></section>
+    <footer class="k-footer">
+      <a class="studio-brand" href="#/" aria-label="Kubrick Space"
+        ><span class="brand-logo" aria-hidden="true"
+          ><span class="brand-logo__initial">K</span>ubrick</span
+        ></a
+      >
+      <p>Un espacio para imaginar. Un lugar para crear.</p>
+      <div>
+
+      </div>
+    </footer>
+  </main>
+</section>

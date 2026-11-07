@@ -21,6 +21,20 @@ function array(value, max, label, check) {
   if (!Array.isArray(value) || value.length > max) throw fail(`${label}: lista inválida (máximo ${max})`);
   value.forEach(check);
 }
+/** Images attached to a chat message: addresses of images in the content folder of this same asset. */
+function attachmentList(value, projectId) {
+  const {
+    chatAttachmentList,
+    CHAT_ATTACHMENT_URL,
+  } = require('../../../public/js/contracts/chat-attachments.js');
+  const list = chatAttachmentList(value);
+  if (!list) throw fail('Imágenes adjuntas inválidas (máximo 4, de la carpeta de este elemento)');
+  if (list.length && !UUID.test(projectId || ''))
+    throw fail('Las imágenes adjuntas requieren un elemento abierto');
+  for (const url of list)
+    if (CHAT_ATTACHMENT_URL.exec(url)[1] !== projectId)
+      throw fail('Las imágenes adjuntas deben pertenecer a este elemento');
+}
 function traits(value) {
   object(
     value,
@@ -96,6 +110,7 @@ function validateAI(route, body) {
     'prompt',
     'coverReferenceIds',
     'coverReferenceNames',
+    'attachments',
   ];
   const fields = {
     text: [...textFields, 'thinkingNotes'],
@@ -217,10 +232,12 @@ function validateAI(route, body) {
     for (const [key, val] of Object.entries(body.project)) text(val, 300, key);
     if (!UUID.test(body.project.id)) throw fail('ID de proyecto inválido');
   }
+  if (body.attachments !== undefined) attachmentList(body.attachments, body.projectId);
   for (const key of ['history', 'messages'])
     if (body[key] !== undefined)
       array(body[key], 100, key, (item) => {
-        object(item, ['role', 'content', 'text'], key);
+        object(item, ['role', 'content', 'text', 'attachments'], key);
+        if (item.attachments !== undefined) attachmentList(item.attachments, body.projectId);
         if (!['user', 'assistant', 'system', 'ai'].includes(item.role)) throw fail('Rol inválido');
         if (item.content === undefined && item.text === undefined) throw fail('Mensaje vacío');
         if (item.content !== undefined) text(item.content, 2000000, 'Mensaje');

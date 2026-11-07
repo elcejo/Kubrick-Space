@@ -2,10 +2,10 @@
    preview, prompt and parameters, final video. Rows stack vertically, with arrows to the previous and next scene. It reuses the character node material so every workspace shares one look. */
 .editor-layout-wrapper--film {
   display: grid;
-  /* A canvas of fixed width: 2000 px, a quarter for each video node and half for the prompt and parameters. */
-  grid-template-columns: 2000px auto;
+  /* Camera console, wide production board and ingredients, with room for the external arrows. */
+  grid-template-columns: 480px 2860px auto;
   grid-template-rows: auto;
-  gap: 24px;
+  gap: 24px 72px;
   justify-content: start;
   align-items: start;
 }
@@ -16,20 +16,33 @@
   display: none;
 }
 .editor-layout-wrapper--film > .film-board {
-  grid-column: 1;
-  grid-row: 1;
-}
-.editor-layout-wrapper--film > .editor-drawers-sidebar {
   grid-column: 2;
   grid-row: 1;
-  position: static;
+}
+/* Ingredients use the grid area as their origin, without setting the control row height. */
+.editor-layout-wrapper--film > .editor-drawers-sidebar {
+  grid-column: 3;
+  grid-row: 2;
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: max-content;
 }
 
 .film-board {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  align-items: start;
+  grid-template-rows: subgrid;
   gap: 24px;
   min-width: 0;
+}
+.editor-layout-wrapper--film-empty > .editor-drawers-sidebar {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+}
+.editor-layout-wrapper--film-empty > .film-board {
+  grid-column: 1;
+  grid-template-rows: auto;
 }
 .film-board.is-working .film-row {
   opacity: 0.85;
@@ -37,7 +50,22 @@
 
 .film-header {
   display: grid;
+  align-self: start;
+  align-content: start;
+  height: auto;
+  min-height: 0;
   gap: 16px;
+}
+/* Distribute the three groups over the unchanged camera-matched height. */
+.film-header--console {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+/* Equal-height consoles; their controls stay packed at the top of the shared row. */
+.film-header--console,
+.film-camera {
+  align-self: stretch;
 }
 .film-header__heading {
   margin: 8px 0 0;
@@ -72,7 +100,7 @@
   display: grid;
   /* The prompt and parameters take half the width, the preview and the final video a quarter each. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr);
-  gap: 20px;
+  gap: 20px 26px;
   align-items: stretch;
 }
 .film-row.is-removed {
@@ -218,7 +246,8 @@
 }
 .film-params {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
@@ -402,16 +431,199 @@
   min-width: 0;
 }
 
-/* The whole scene, played clip after clip, above the scene control */
-.film-node--scene .film-scene-nav {
+/* Cinema is the video surface itself. Only the controls carry a dark overlay. */
+.film-node--scene {
+  position: relative;
+  display: block;
   padding: 0;
+  gap: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
-.film-video-frame--scene {
-  align-self: center;
-  max-width: 760px;
+.film-cinema {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 24px;
+  background: #08070c;
+  color: #fff;
+  isolation: isolate;
 }
-.film-node--scene .film-node__state {
+.film-cinema__video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+}
+.film-cinema__heading {
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 32px 55px;
+  background: linear-gradient(#000b, transparent);
+  pointer-events: none;
+}
+.film-cinema__heading .character-eyebrow {
+  margin: 0;
+  color: #fff;
+  font-size: 15px;
+}
+.film-cinema__version {
+  color: #fffc;
+  font-size: 14px;
+}
+.film-cinema__controls {
+  position: absolute;
+  z-index: 2;
+  inset: auto 0 0;
+  display: grid;
+  gap: 12px;
+  padding: 54px 28px 22px;
+  background: linear-gradient(transparent, #000c);
+}
+.film-cinema__buttons {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.film-cinema__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  color: #fff;
+  background: #ffffff12;
+  border: 1px solid #ffffff26;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.film-cinema__button:hover {
+  background: #7819ff;
+  border-color: #a878ff;
+}
+.film-cinema__button:focus-visible,
+.film-cinema__video:focus-visible {
+  outline: 2px solid #c8a3ff;
+  outline-offset: -4px;
+}
+.film-cinema__button[aria-pressed='true'] {
+  color: #bc9aff;
+}
+.film-cinema__clock {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.film-cinema__clip {
+  margin-right: auto;
+  font-size: 13px;
+  color: #fffb;
+}
+.film-cinema input[type='range'] {
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  cursor: pointer;
+  accent-color: #ae78ff;
+}
+.film-cinema__seek {
+  appearance: none;
+  width: 100%;
+  background: transparent;
+}
+.film-cinema__seek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(to right, #ae78ff var(--film-progress, 0%), #ffffff50 var(--film-progress, 0%));
+}
+.film-cinema__seek::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #fff;
+}
+.film-cinema__seek::-moz-range-track {
+  height: 4px;
+  background: #ffffff50;
+}
+.film-cinema__seek::-moz-range-progress {
+  height: 4px;
+  background: #ae78ff;
+}
+.film-cinema__volume {
+  width: 100px;
+}
+.film-cinema__status {
+  position: absolute;
+  z-index: 2;
+  inset: auto 20% 132px;
+  margin: 0;
   text-align: center;
+  font-size: 15px;
+  color: #fff;
+  text-shadow: 0 1px 4px #000;
+  pointer-events: none;
+}
+.film-cinema__status:empty {
+  display: none;
+}
+.film-cinema.is-empty .film-cinema__status {
+  inset: 50% 20% auto;
+  transform: translateY(-50%);
+  color: #bdb7cc;
+}
+.film-cinema__loader {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.film-cinema__loader svg {
+  animation: film-cinema-spin 1.5s linear infinite;
+}
+.film-cinema__loader[hidden] {
+  display: none;
+}
+@keyframes film-cinema-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .film-cinema__loader svg {
+    animation: none;
+  }
+}
+.film-cinema:fullscreen {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+.film-cinema-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 64px;
+  color: var(--text-primary);
+}
+.film-cinema-arrow--previous {
+  left: -56px;
+}
+.film-cinema-arrow--next {
+  right: -56px;
 }
 
 /* Continuity with the previous clip: mode, note, last frame as a reference and the start frame */
@@ -443,6 +655,163 @@
   color: var(--status-success, #30a46c);
   background: color-mix(in srgb, var(--status-success, #30a46c) 16%, transparent);
 }
-.film-header__look {
-  margin-top: 0;
+/* ── Control de escena: a console, not a form ───────────────────────────────────────────────── */
+.film-header {
+  gap: 18px;
+  padding: 26px 32px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 60%),
+    color-mix(in srgb, var(--bg-secondary) 10%, transparent);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
+}
+.film-header .film-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 0;
+}
+.film-header .film-chips .film-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
+  border-radius: 999px;
+}
+.film-header .film-chips .film-chip strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.film-header .film-chips .film-chip--warning {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+}
+.film-header__overview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  min-width: 0;
+}
+.film-header__title {
+  flex: 1;
+  min-width: 0;
+}
+.film-header .film-scene-nav--external {
+  display: contents;
+}
+.film-header .film-scene-nav--external .film-scene-nav__label {
+  flex: 0 1 30%;
+  align-items: flex-end;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.film-header .film-scene-nav__label strong {
+  font-size: 15px;
+  letter-spacing: 0.14em;
+}
+.film-scene-nav--external > .film-icon-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 64px;
+}
+.film-scene-nav--external > [data-scene-nav='previous'] {
+  left: -56px;
+}
+.film-scene-nav--external > [data-scene-nav='next'] {
+  right: -56px;
+}
+.film-header__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.film-header__fields .film-field {
+  min-width: 0;
+}
+.film-camera {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+  height: auto;
+  padding: 32px;
+}
+.film-camera > .character-eyebrow {
+  margin: 0;
+}
+.film-header__controls {
+  padding-top: 4px;
+}
+
+/* The optics: four list selects (camera, lens, aperture, palette) and the editor of a custom palette */
+.film-optics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px 18px;
+  align-content: start;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.film-rich-option .film-action__icon {
+  color: var(--text-secondary);
+}
+.film-palette__strip {
+  display: inline-flex;
+  flex: none;
+  width: 108px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 5px;
+}
+.film-palette__swatch {
+  flex: 1 1 0;
+}
+.film-palettes__editor {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+.film-palettes__field {
+  flex: 1 1 280px;
+}
+.film-palettes__input {
+  font-family: var(--font-mono);
+}
+.film-palettes__preview {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+}
+.film-palettes__preview .film-palette__strip {
+  width: 180px;
+  height: 22px;
+}
+
+/* The camera movement of a shot: one list select */
+.film-movement {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .film-optics {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

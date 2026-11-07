@@ -48,7 +48,7 @@ const OPTIMIZATION = {
   shift_video: 12,
   shift_audio: 3,
 };
-const FRAME_OPTIONS = [124, 141, 158, 175, 192, 209, 226];
+const { H3_CLIP_FRAMES: FRAME_OPTIONS } = require('../../../public/js/contracts/screenplay.js');
 /** The model offered in the top bar for the film's preview flow. */
 const LOCAL_VIDEO_ENGINE = { provider: 'local', model: 'minimax-h3' };
 const CONDITIONING_NAME = /^[A-Za-z0-9_-]{1,100}$/;

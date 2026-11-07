@@ -1,4 +1,6 @@
-import { SCREENPLAY_SHOTS, SCREENPLAY_VOICES } from './screenplay.js';
+import { SCREENPLAY_SHOTS, SCREENPLAY_VOICES, SCREENPLAY_SHOT_SECONDS } from './screenplay.js';
+import { FILM_MOVEMENT_NAMES } from './film-movements.js';
+import { FILM_TRANSITION_NAMES } from './film-transitions.js';
 import { validateSchema, explainSchemaErrors, pruneUndeclared } from './json-schema.js';
 import { inlineDefinitions, INLINE_BRANCHES } from './inline-operations.js';
 
@@ -26,7 +28,30 @@ function definitions() {
     Id: id,
     Reference: reference,
     ShotType: { enum: [...SCREENPLAY_SHOTS] },
-    Seconds: { type: 'number', minimum: 1, maximum: 10, multipleOf: 0.5 },
+    Seconds: {
+      type: 'number',
+      enum: [...SCREENPLAY_SHOT_SECONDS],
+      'x-hint':
+        'La duración de un plano es la de un clip de H3 (17k + 5 fotogramas a 24 por segundo): ' +
+        SCREENPLAY_SHOT_SECONDS.join(', ') +
+        ' segundos.',
+    },
+    Camera: {
+      type: 'string',
+      enum: ['', ...FILM_MOVEMENT_NAMES],
+      'x-hint':
+        'El movimiento de cámara del plano: vacío (lo elige el modelo del metraje) o exactamente uno de: ' +
+        FILM_MOVEMENT_NAMES.join(', ') +
+        '. Es la misma lista que el selector del guión y el metraje la hereda.',
+    },
+    Transition: {
+      type: 'string',
+      enum: ['', ...FILM_TRANSITION_NAMES],
+      'x-hint':
+        'La transición del plano, cómo se une al anterior: vacío (el sistema decide) o exactamente uno de: ' +
+        FILM_TRANSITION_NAMES.join(', ') +
+        '. Es la misma lista que el selector del guión y el metraje la hereda. El primer plano del guión (el primero de la primera escena) no lleva transición: va siempre vacía, escribas lo que escribas.',
+    },
     Voice: { enum: Object.keys(SCREENPLAY_VOICES) },
     Place: { enum: [...PLACES] },
     Intervention: {
@@ -64,10 +89,10 @@ function definitions() {
       properties: {
         type: { $ref: '#/$defs/ShotType' },
         seconds: { $ref: '#/$defs/Seconds' },
-        camera: text(1000),
+        camera: { $ref: '#/$defs/Camera' },
         action: text(4000),
         dialogues: { $ref: '#/$defs/Dialogues' },
-        transition: text(1000),
+        transition: { $ref: '#/$defs/Transition' },
       },
     },
     Shots: {
@@ -107,10 +132,10 @@ function definitions() {
         afterId: { oneOf: [{ $ref: '#/$defs/Id' }, { type: 'null' }] },
         type: { $ref: '#/$defs/ShotType' },
         seconds: { $ref: '#/$defs/Seconds' },
-        camera: text(1000),
+        camera: { $ref: '#/$defs/Camera' },
         action: text(4000),
         dialogues: { $ref: '#/$defs/Dialogues' },
-        transition: text(1000),
+        transition: { $ref: '#/$defs/Transition' },
       },
     },
     InsertDialogue: {
@@ -157,7 +182,7 @@ function definitions() {
         id: { $ref: '#/$defs/Id' },
         type: { $ref: '#/$defs/ShotType' },
         seconds: { $ref: '#/$defs/Seconds' },
-        camera: text(1000),
+        camera: { $ref: '#/$defs/Camera' },
       },
     },
     RemoveElement: {

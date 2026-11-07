@@ -832,6 +832,22 @@
   left: 0;
 }
 
+/* The line is cut around a control that sits on it (the transition button of a shot). */
+.story-book-insertion__segment {
+  display: none;
+  position: absolute;
+  top: 0;
+  height: 2.5px;
+  transform: translateY(-50%);
+  background: var(--story-book-insertion-ink);
+}
+.story-book-insertion.has-cut::after {
+  display: none;
+}
+.story-book-insertion.has-cut > .story-book-insertion__segment {
+  display: block;
+}
+
 .story-book-insertion::after {
   right: 0;
 }
@@ -1018,4 +1034,39 @@ html[data-theme='light'] .story-book-json-code {
   padding-left: 8px !important;
   margin-left: 40px !important;
   /* 2 tabs indentation */
+}
+
+/* Drag the complete paragraph, keeping editable text and persisted HTML untouched. */
+.story-book-tree-drag-handle[data-story-drag-kind] {
+  touch-action: none;
+}
+.story-book-reorder-preview {
+  position: fixed;
+  inset: 0 auto auto 0;
+  z-index: 80;
+  pointer-events: none;
+  transform-origin: 0 0;
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 36px rgb(0 0 0 / 25%);
+  will-change: transform;
+  cursor: grabbing;
+}
+.story-book-reorder-preview * {
+  pointer-events: none !important;
+  user-select: none !important;
+}
+.editor-node.editor-node--story-book
+  .editor-surface
+  :is(.story-book-row, .story-book-tree-chapter, .story-book-tree-theme).is-reordering {
+  opacity: 0.25;
+}
+.editor-surface.is-reordering-paragraph,
+.editor-surface.is-reordering-paragraph * {
+  cursor: grabbing !important;
+}
+.editor-surface.is-reordering-paragraph .story-book-insertion {
+  display: none;
+}
+.editor-surface.is-reordering-paragraph .story-book-tree-drag-handle {
+  color: var(--text-primary);
 }

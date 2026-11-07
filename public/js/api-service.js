@@ -162,6 +162,33 @@ async function _fetch(url, options = {}) {
  * @namespace API
  */
 export const API = Object.freeze({
+  assignAssetFolders(id, body) {
+    return _fetch(`${BASE_URL}/library-space/assets/${encodeURIComponent(id)}/folders`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  getLibrarySpace() {
+    return _fetch(`${BASE_URL}/library-space`);
+  },
+  saveLibraryProfile(body) {
+    return _fetch(`${BASE_URL}/library-space/profile`, { method: 'PATCH', body: JSON.stringify(body) });
+  },
+  createProjectFolder(body) {
+    return _fetch(`${BASE_URL}/library-space/folders`, { method: 'POST', body: JSON.stringify(body) });
+  },
+  updateProjectFolder(id, body) {
+    return _fetch(`${BASE_URL}/library-space/folders/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+  deleteProjectFolder(id, revision) {
+    return _fetch(`${BASE_URL}/library-space/folders/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ revision }),
+    });
+  },
   setProjectProvider(provider) {
     projectProvider = provider;
   },
@@ -536,11 +563,22 @@ export const API = Object.freeze({
     );
   },
 
+  shareChat(projectId, chatId, payload) {
+    return _fetch(
+      `${BASE_URL}/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}/sharing`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
   deleteChat(projectId, chatId) {
     return _fetch(
       `${BASE_URL}/projects/${encodeURIComponent(projectId)}/chats/${encodeURIComponent(chatId)}`,
       {
         method: 'DELETE',
+        body: JSON.stringify({}),
       },
     );
   },

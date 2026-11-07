@@ -113,7 +113,7 @@ export class App {
       Loader.show();
 
       // Fetch and inject HTML template
-      const allowedViews = ['home', 'wizard', 'workspace'];
+      const allowedViews = ['home', 'profile', 'wizard', 'workspace'];
       if (allowedViews.includes(viewName)) {
         const html = await App._fetchView(viewName);
         if (!isCurrent()) return;
@@ -121,15 +121,16 @@ export class App {
       }
 
       switch (viewName) {
-        case 'home': {
-          _currentViewInstance = await App._mountHome(container, isCurrent);
+        case 'home':
+        case 'profile': {
+          _currentViewInstance = await App._mountHome(container, isCurrent, { ...params, page: viewName });
           break;
         }
         case 'wizard': {
           const { Wizard } = await import('./wizard.js');
           if (!isCurrent()) return;
           const wizard = new Wizard();
-          await wizard.mount(container, isCurrent);
+          await wizard.mount(container, isCurrent, params);
           _currentViewInstance = wizard;
           break;
         }
@@ -193,9 +194,9 @@ export class App {
    * @returns {Promise<{unmount: Function}>}
    * @private
    */
-  static async _mountHome(container, isCurrent) {
+  static async _mountHome(container, isCurrent, options) {
     const { Home } = await import('./home.js');
     if (!isCurrent()) return null;
-    return new Home().mount(container, isCurrent);
+    return new Home().mount(container, isCurrent, options);
   }
 }

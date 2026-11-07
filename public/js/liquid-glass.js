@@ -137,14 +137,12 @@ export function createLiquidGlass(doc, selector = LIQUID_GLASS_SURFACES) {
       Math.max(0, parseFloat(rawRadius) || 0) * (rawRadius.includes('%') ? Math.min(width, height) / 100 : 1),
     );
     // Position/z-index are only supplied when absent; fixed, sticky and top-layer surfaces keep theirs.
-    element.classList.toggle(
-      'liquid-glass--positioned',
-      style.position === 'static' || element.classList.contains('liquid-glass--positioned'),
-    );
-    element.classList.toggle(
-      'liquid-glass--stacked',
-      style.zIndex === 'auto' || element.classList.contains('liquid-glass--stacked'),
-    );
+    // Do not rewrite existing classes: even a no-op add/toggle emits mutations
+    // and invalidates optical surfaces when unrelated UI state changes.
+    if (style.position === 'static' && !element.classList.contains('liquid-glass--positioned'))
+      element.classList.add('liquid-glass--positioned');
+    if (style.zIndex === 'auto' && !element.classList.contains('liquid-glass--stacked'))
+      element.classList.add('liquid-glass--stacked');
     const signature = width + ':' + height + ':' + radius;
     if (signature !== record.size) {
       record.size = signature;
@@ -172,7 +170,7 @@ export function createLiquidGlass(doc, selector = LIQUID_GLASS_SURFACES) {
       for (const [key, value] of Object.entries(variables))
         record.layer.style.setProperty('--_liquid-glass-' + key, value);
     }
-    element.classList.add('liquid-glass');
+    if (!element.classList.contains('liquid-glass')) element.classList.add('liquid-glass');
     // Some components replace their UI children. Restore decoration without altering their data.
     if (record.layer.parentElement !== element) element.append(record.layer);
   };
@@ -271,10 +269,12 @@ export function createLiquidGlass(doc, selector = LIQUID_GLASS_SURFACES) {
   const schedule = () => {
     if (!disposed && pending === null) pending = win.requestAnimationFrame(reconcile);
   };
+  // Pan changes only cursor/selection state. Its start/end must not rescan and
+  // invalidate every SVG backdrop in the workspace. Geometry is owned by ResizeObserver.
   const cleanClass = (value) =>
     String(value || '')
       .split(/\s+/)
-      .filter((x) => !x.startsWith('liquid-glass'))
+      .filter((x) => !x.startsWith('liquid-glass') && x !== 'canvas-wrapper--panning')
       .join(' ');
   const mutations = new win.MutationObserver((entries) => {
     if (

@@ -68,6 +68,18 @@ function createConversationOperations(dependencies) {
       throw error;
     }
   }
-  return { listConversations, saveConversation, getConversation, updateConversation, deleteConversation };
+  function shareConversation({ params = {}, body } = {}) {
+    assertProject(params.id);
+    if (!security.UUID.test(params.chatId)) throw security.fail('ID de conversación inválido.');
+    return { body: chatStore.share(params.id, params.chatId, body), status: 200 };
+  }
+  return {
+    listConversations,
+    saveConversation,
+    getConversation,
+    updateConversation,
+    deleteConversation,
+    shareConversation,
+  };
 }
 module.exports = { createConversationOperations };

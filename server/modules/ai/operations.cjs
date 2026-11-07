@@ -1,5 +1,6 @@
 const { createProvider } = require('./provider.cjs');
 const { createTextContext } = require('./text-context.cjs');
+const { withChatImages, canSeeImages } = require('./chat-images.cjs');
 const { thinkingInstruction } = require('../../../public/js/contracts/assistant-reasoning.js');
 const { createImageStorage } = require('../media/index.cjs');
 const {
@@ -131,12 +132,18 @@ function createAIOperations(dependencies) {
       if (
         dependencies.inference?.currentMode() === 'api' &&
         !keys.openrouter &&
-        !COVER_TEXT_ACTIONS.has(inputBody.action)
+        !COVER_TEXT_ACTIONS.has(inputBody.action) &&
+        llmConfig.needsOpenRouterKey(
+          llmConfig.functionConfig(
+            runtimeConfig,
+            inputBody.action || prepared?.action || (inputBody.message ? 'chat' : 'edit'),
+          ).model,
+        )
       )
         throw security.fail('Configura OpenRouter para usar el modo API.', 428);
       if (
         keys.openrouter ||
-        llmConfig.isLocalModel(
+        !llmConfig.needsOpenRouterKey(
           llmConfig.functionConfig(
             runtimeConfig,
             inputBody.action || prepared?.action || (inputBody.message ? 'chat' : 'edit'),
@@ -152,6 +159,17 @@ function createAIOperations(dependencies) {
         const useFastModel = isWorkspaceChat || FAST_TEXT_ACTIONS.has(action);
         const model = functionLimits.model || (useFastModel ? LUNA_FAST_MODEL : LUNA_PRO_MODEL);
         const modelInfo = openrouterModels.findModel(model);
+        // Images the user attached to the conversation become image parts; only a model with vision receives them.
+        messages.splice(
+          0,
+          messages.length,
+          ...withChatImages(messages, {
+            projectId: inputBody.projectId,
+            readImage: referenceImage,
+            vision: canSeeImages(model, modelInfo, llmConfig.isLocalModel(model)),
+            fail: security.fail,
+          }),
+        );
         const selectedReasoningMode = reasoningMode(model, modelInfo);
         const reasoningEffort = selectedReasoningMode ? (useFastModel ? 'none' : 'max') : null;
         const requestOptions = { ...(inputBody.options || {}) };
@@ -451,13 +469,18 @@ function createAIOperations(dependencies) {
       if (
         dependencies.inference?.currentMode() === 'api' &&
         !keys.openrouter &&
-        !COVER_TEXT_ACTIONS.has(inputBody.action)
+        !COVER_TEXT_ACTIONS.has(inputBody.action) &&
+        llmConfig.needsOpenRouterKey(
+          llmConfig.functionConfig(runtimeConfig, inputBody.action || 'chat').model,
+        )
       )
         throw security.fail('Configura OpenRouter para usar el modo API.', 428);
 
       if (
         keys.openrouter ||
-        llmConfig.isLocalModel(llmConfig.functionConfig(runtimeConfig, inputBody.action || 'chat').model)
+        !llmConfig.needsOpenRouterKey(
+          llmConfig.functionConfig(runtimeConfig, inputBody.action || 'chat').model,
+        )
       ) {
         const contents =
           Array.isArray(inputBody.contents) && inputBody.contents.length

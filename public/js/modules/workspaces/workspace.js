@@ -70,6 +70,7 @@ function createLayout(root) {
 
   return {
     toolbar: wrapper.querySelector('.workspace__toolbar'),
+    inference: wrapper.querySelector('.workspace__inference'),
     navigator: wrapper.querySelector('.workspace__navigator'),
     sidebarLeft: wrapper.querySelector('.workspace__sidebar-left'),
     canvas: wrapper.querySelector('.workspace__canvas'),
@@ -369,15 +370,21 @@ export class Workspace {
       this.#sidebarLeft.init(layout.sidebarLeft, moduleConfig);
 
       this.#toolbar = new Toolbar();
-      this.#toolbar.init(layout.toolbar, projectData, {
-        ...moduleConfig,
-        versionPresentation: versionPresentation(projectData),
-      });
+      this.#toolbar.init(
+        layout.toolbar,
+        projectData,
+        {
+          ...moduleConfig,
+          versionPresentation: versionPresentation(projectData),
+        },
+        layout.inference,
+      );
 
       this.#navigator = new WorkspaceNavigator();
       this.#navigator.init(layout.navigator, projectData, moduleConfig, this.#canvas);
 
       this.#chat = new Chat();
+      this.#editor.setParagraphDropTarget(this.#chat.paragraphDropTarget());
       this.#chat.init(layout.chat, {
         setEditingBusy: (busy) => {
           this.#editor.setAgentBusy(busy);
@@ -434,7 +441,11 @@ export class Workspace {
         executeCharacterAction: (action, transport) => this.#editor.executeCharacterAction(action, transport),
         executeScenarioAction: (action, transport) => this.#editor.executeScenarioAction(action, transport),
         executeCoverAction: (action) => this.#editor.executeCoverAction(action),
-        attachCharacterPhoto: (file) => this.#editor.attachCharacterPhoto(file),
+        // Attaching a photo to the character is a function of the character assistant only; every other
+        // assistant attaches images for the model to see (chat.js).
+        ...(AppState.currentProject?.type === 'character'
+          ? { attachCharacterPhoto: (file) => this.#editor.attachCharacterPhoto(file) }
+          : {}),
       });
 
       this.#autosave = new Autosave();

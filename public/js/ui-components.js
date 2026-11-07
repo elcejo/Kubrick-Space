@@ -502,10 +502,10 @@ export const Alert = {
         <button type="button" class="btn btn-warning btn-block" id="alert-del-session" aria-describedby="alert-del-trash-help">
           Mover a la papelera
         </button>
-        <p id="alert-del-trash-help">Conserva sus archivos. Podrás restaurarlo desde la papelera de Inicio.</p>
+        <p id="alert-del-trash-help">Conserva sus archivos. Podrás restaurarlo desde la papelera de Mi espacio.</p>
       </div>
       <button type="button" class="btn btn-danger btn-block" id="alert-del-full-toggle" aria-expanded="false" aria-controls="alert-full-section">
-        Eliminar el proyecto completo
+        Eliminar el asset completo
       </button>
 
       <div class="alert-full-confirm" id="alert-full-section" hidden>
@@ -525,7 +525,7 @@ export const Alert = {
     const checkboxEl = content.querySelector('#alert-del-checkbox');
     const isConfirmed = () => inputEl.value.trim().toLowerCase() === CONFIRM_PHRASE && checkboxEl.checked;
     const dialog = Modal.show({
-      title: 'Eliminar proyecto',
+      title: 'Eliminar asset',
       content,
       initialFocus: '#alert-del-session',
       actions: [
@@ -585,7 +585,7 @@ export const Alert = {
     const content = document.createElement('div');
     content.className = 'alert-delete-project';
     content.innerHTML = safeHTML(`
-      <p>Se eliminarán <strong>${names.length === 1 ? '1 proyecto' : names.length + ' proyectos'}</strong> y todos sus archivos.</p>
+      <p>Se eliminarán <strong>${names.length === 1 ? '1 asset' : names.length + ' assets'}</strong> y todos sus archivos.</p>
       <ul class="alert-delete-project__names">${names.map((name) => `<li>${escapeHTML(name)}</li>`).join('')}</ul>
       <div class="alert-full-confirm">
         ${characters ? '<label class="checkbox-label"><input type="checkbox" id="alert-keep-props" checked /><span>Conservar rasgos, ropa y props de los personajes en la biblioteca universal.</span></label>' : ''}

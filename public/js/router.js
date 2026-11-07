@@ -14,6 +14,10 @@
 
 /** @type {RouteEntry[]} */
 const ROUTES = [
+  { pattern: /^#\/profile\/folders\/([^/]+)\/?$/, view: 'profile', paramNames: ['folderId'] },
+  { pattern: /^#\/profile\/projects\/?$/, view: 'profile', paramNames: [], tab: 'projects' },
+  { pattern: /^#\/profile\/?$/, view: 'profile', paramNames: [] },
+  { pattern: /^#\/wizard\/([^/]+)\/([^/]+)\/?$/, view: 'wizard', paramNames: ['type', 'category'] },
   { pattern: /^#\/wizard\/?$/, view: 'wizard', paramNames: [] },
   { pattern: /^#\/workspace\/([^/]+)\/?$/, view: 'workspace', paramNames: ['id'] },
   { pattern: /^#?\/?$/, view: 'home', paramNames: [] }, // catch-all: empty, #, #/
@@ -89,6 +93,7 @@ export class Router {
         route.paramNames.forEach((name, i) => {
           params[name] = decodeURIComponent(match[i + 1]);
         });
+        if (route.tab) params.tab = route.tab;
         Router._mountView?.(route.view, params);
         return;
       }

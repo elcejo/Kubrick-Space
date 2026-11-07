@@ -2,10 +2,6 @@
 
 > A local, AI-assisted studio to write stories and screenplays, design characters and places, and turn a script into a film, scene by scene.
 
-<video src="assets/promo/kubrick-space-promo.mp4" controls muted playsinline width="100%"></video>
-
-*If the video does not play in your browser, [open it directly](assets/promo/kubrick-space-promo.mp4).*
-
 Kubrick Space runs on your computer (a Node.js server on `127.0.0.1`, a browser interface, and an optional local generation engine).
 Your projects stay in a folder on your disk. Text, image and video generation can run **fully locally** or through an API, and you choose per project.
 The interface is currently in Spanish.
@@ -122,8 +118,8 @@ Some models cannot be used commercially. Kubrick Space does not grant you any ri
 
 ### 6. Configure
 
-* **Home → Configuración** (Settings): enter API keys if you want cloud models, and review the system prompts and models per function.
-* In the top bar of every project, choose **API**, **Local** or **Hybrid** inference.
+* **Home → Configuración** (Settings): enter API keys if you want cloud models, and review the read-only system prompts.
+* In each workspace’s lower-left model bar, choose **API** or **Local**, then select the text, image and (for films) video models. Selections are saved per asset. The play/stop control loads or unloads the local language model.
 * Your data lives in `projects/` and `api_keys.json` inside the project folder (both are ignored by Git). Set `KUBRICK_SPACE_DATA_DIR` to keep them elsewhere.
 
 ### Troubleshooting
@@ -136,75 +132,16 @@ Some models cannot be used commercially. Kubrick Space does not grant you any ri
 
 ## What it does
 
-* **Story Book** — long-form writing with chapters, a visual timeline with a calendar, and linked world elements.
-* **Screenplay** — scenes with headings, shots, action, characters, dialogue, parentheticals and voices (V.O., O.S., O.C.); links to characters and places; DOCX export.
-* **Characters** — typed character sheets, AI-assisted creation (from a description, a photo, catalogue options or linked ingredients), a visual library of traits, clothes and props
-  (one piece per group), photo history with a recoverable trash, and consistency checks when outfits change.
-* **Scenarios** — a place sheet with a 360° panorama and four camera angles, created from a description or a photograph, with a recoverable trash.
-* **Film (feature)** — turn a screenplay into a film, one clip per scene (never longer than 10 seconds):
-  1. link the screenplay, characters and scenarios as ingredients;
-  2. every scene becomes a video node with its generation parameters beside it;
-  3. the language model writes an H3 prompt per scene (shot, dialogue, voice-overs, places), citing characters by name (`<Marta>`) with their main photo as reference;
-  4. conditioning for all scenes is computed once with the text encoder loaded a single time and saved to files;
-  5. previews are generated at 0.4 MP, 4 steps, with audio, one at a time from the saved conditioning;
-  6. each preview can be **approved** or **redone**; a redo jumps the queue and runs right after the clip in progress.
-* **Music** — song, album and soundtrack projects.
-* **Ingredients and versions** — any project can be linked to another as a versioned "ingredient"; saved versions, autosaved drafts and a trash for every project type.
-* **AI assistant** — a chat that knows the open project and its ingredients and can propose structured edits.
-* **Inference modes** — cloud models through OpenRouter, local models through ComfyUI (Qwen 3.5, FLUX 3 Klein Turbo, MiniMax H3), or a per-function mix. There is no silent fallback from local to cloud.
-* **Durable jobs** — long generations run as server jobs with checkpoints; you can close the tab, and a job resumes or can be retried.
-
-## How it is built
-
-A modular monolith: one Node.js server (`server/`, Express, CommonJS) and a framework-free ES-module client (`public/js`) that share portable contracts
-(`public/js/contracts`) for documents, validation and prompts. Generation is delegated to a pinned ComfyUI process (`local-generation/comfyui`) extended with a small
-custom node package (`kubrick_space`). Icons, fonts and the interface are original.
-
-## Roadmap
-
-**Done in 0.1.3**
-
-* **Screenplays of any length.** Ask the assistant to generate the screenplay from the linked Story Book (the menu entry was removed). It works unit by unit: it plans the book first, adapts each unit with a continuity memory, saves after every round, can be stopped and resumed, and shows the plan, the progress and an **Undo adaptation** button. A screenplay with scenes already written from the book can be **updated** when the book changes: only the scenes whose paragraphs changed are rewritten and new text is added in place. Very long screenplays are edited through a window (the outline of every scene plus the scenes in focus) instead of being sent whole
-* **One shot format.** Every shot always has its action and its transition (empty when there is nothing to write); older screenplays gain them when opened, without touching what was written. A scene holds 1 to 24 shots and the model is told that every scene needs at least one
-* **Characters and places are linked by name.** What the assistant writes as "Marta" or a linked place is tied to the ingredient with that name; ambiguous names are never guessed. A character on screen without speaking is recorded as a **silent presence** (an acotación and no line), so it stays linked to the shot and is used as a reference for the film
-* **Read while the assistant edits.** The document can be scrolled while it is being edited (it stays locked for typing)
-* **Related ingredients.** Linking a project as an ingredient offers the ingredients of that project that the receiving project lacks, all selected, so a screenplay can bring in the characters and places of its book in one step
-* **Project trash.** Select several projects (or all) and restore them or delete them permanently with a single confirmation, in a redesigned dialog
-* Stricter checks of what the model proposes (framing names, durations, intervention rules) with precise messages, and a request without a chosen model is refused instead of using a default one
-
-**Done in 0.1.2**
-
-* **Local is a provider, not a mode.** The API/Local switch is gone: LLM, image and video lists show Local first, next to the cloud providers. Each project keeps one setting for text and another for images, so an OpenRouter LLM can write while FLUX 3 Klein draws locally (or the other way round). Film previews depend only on the local video model
-* **Edit the open project by elements.** The assistant can edit a Story Book or a Screenplay in rounds with the full, current text as context, create the supporting characters and places the story needs (description, narrative, first photo, then their props) and link them as ingredients. Before generating an image it asks which model to use (Local or API) for each new resource. Jobs are durable: they survive a restart, can be stopped, resumed or retried, and the book is only changed through checked, reversible patches
-* **Resuming no longer mixes resources.** A fix for a resumed edit that could treat a character it had just created as one from another story and attach the wrong description or photo to it. Props of a new character are retried once if the model fails
-* **Character library: 21 new groups.** Clothing adds bras, baby dolls, tunics, robes, capes, turbans and leggings; props add cameras, notebooks, books, pencils and pens, wands, toys, balls, fanny packs, rackets, bats, banners, flashlights, towels and pets. Pieces already saved under a general group move to the new one by name
-* **Ingredients** get unique, readable names and a name check in the creation wizard; Story Book now writes plain prose by default
-* **More local text models (optional).** `Qwen 3.8 27B` and `Gemma 4 E4B` (INT8 ConvRot) are recognised in `models/llm/<name>/model.safetensors`, with a native tool protocol for Gemma. They are not required, and their sources are not listed here yet; the SHA-256 expected by the app is in `local-generation/comfyui/models.json`
-* **OpenRouter** model lists have a reload button, and the Muse Image models are detected correctly
-
-**Done in 0.1.1**
-
-* Film previews follow the top bar: they only run in Local mode with the local video model (MiniMax H3) chosen there; screenplay-linked characters with a main photo become references
-* Screenplay editor: explanatory tooltips on every control, themed selectors, and lists of only the places and characters linked as ingredients
-* The API-key store module is now `apiKeyVault` (same behaviour), and long HTML templates were split, to stop security scanners from misreading them
-
-**Done in 0.1.0**
-
-* Story Book, Screenplay, Characters, Scenarios, Music and Film workspaces with versioned ingredients, autosave and trash
-* Local text/vision (Qwen 3.5), local images (FLUX 3 Klein Turbo) and OpenRouter cloud models, with durable background jobs
-* Film pipeline: scene nodes, LLM-written H3 prompts with named references, saved conditioning, 0.4 MP previews with approve / redo and a priority queue
-* H3 optimization (memory and speed) and latent-upscaler nodes for the engine
-
-**Next**
-
-* Latent-upscale the approved scenes to 1 MP (4 steps) from the film board
-* Audio-aware tokenizer for dialogue versus video audio, with custom tags
-* Assemble the approved clips into the final film
-* Local music generation
-* Linux and macOS support for the local engine; SageAttention and Triton for more speed
-* Clean-room MIT rewrite of the one GPL-derived engine file (`h3_optimization.py`)
-
-The detailed, dated log is in [ROADMAP.md](ROADMAP.md) (in Spanish).
+* **Home and profile** — direct creation shortcuts, an asset library and project folders. The community galleries are interface previews; sign-in and online publishing are not implemented.
+* **Story Book** — chapters, topics, paragraphs, timeline, versions and visual reordering. Drag a paragraph, topic or chapter into the assistant to scope the next edit.
+* **Screenplay** — scenes containing shots, action, dialogues, parentheticals and voices. Links to character/place ingredients, shot framing, camera movement, duration and DOCX export. A white SCREENPLAY cover is generated automatically.
+* **Characters** — creation from a description or photograph, photo gallery, narrative sheet and an outfit library of traits, clothing and props, with reusable pieces and independent trash. Options/ingredients creation remain marked Coming soon.
+* **Scenarios** — a place sheet with panorama, camera angles and recoverable images.
+* **Film** — one video clip per screenplay shot, grouped by scene. Custom cinema player, per-scene camera/lens/aperture/palette controls, previews and final-video workflow. Shot duration, framing and movement are inherited from a linked screenplay. Preview resolution: 0.1–0.6 MP; final: 0.5–2 MP. Final assembly and soundtrack generation are not yet implemented.
+* **Ingredients and versions** — link assets using saved versions, detect updates, autosave drafts and manage recoverable trash.
+* **Assistant** — structured, iterative edits of the open asset, progress reporting and saved chats scoped to assets or shared with a project folder.
+* **Inference** — local ComfyUI models or connected API providers, selected per asset; no silent fallback from local to cloud. Supported local files and optional text models are listed in `local-generation/comfyui/models.json`.
+* **Background jobs** — generations run on the server with progress, cancellation and a persistent task history. No model weights, keys, assets or chats are bundled.
 
 ## About security scanners
 
@@ -215,9 +152,3 @@ Automated scanners can flag this project because it legitimately does things tha
 Kubrick Space is released under the [MIT License](LICENSE), with one exception: `local-generation/comfyui/kubrick_space/h3_optimization.py` is derived from KJNodes and stays under the GPL-3.0.
 Third-party software, its licenses, and the code adapted from other projects are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the license texts are in [licenses/](licenses/).
 AI model weights are **not** covered by this license (see the Models table above).
-
-## Credits
-
-Thanks to Claude, Antigravity and Codex: they were my AI-assisted programming help for the most complicated tasks.
-
-Atte: Roberto Badillo

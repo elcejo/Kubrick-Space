@@ -11,6 +11,7 @@ const {
 } = require('./modules/ai/index.cjs');
 const {
   createImageCatalog,
+  createTextModelCatalog,
   openrouterModels,
   artificialAnalysisModels,
   registerConfigurationRoutes,
@@ -44,7 +45,12 @@ function createApp({
   fetchImpl,
 } = {}) {
   const app = express();
-  const inference = createInference({ appRoot, fetchImpl, findModel: openrouterModels.findModel });
+  const inference = createInference({
+    appRoot,
+    fetchImpl,
+    findModel: openrouterModels.findModel,
+    getApiKeys: () => getApiKeys(),
+  });
 
   // OpenRouter documents up to 128k completion tokens for Luna Pro. Keep this
   // as the provider ceiling instead of imposing a small application-wide cap;
@@ -86,6 +92,7 @@ function createApp({
     }
   };
   const imageCatalog = createImageCatalog({ getApiKeys, fetchImpl });
+  const textModelCatalog = createTextModelCatalog({ getApiKeys, fetchImpl });
   const getLLMConfig = () => inference.configure(readLLMConfig());
   const modelCatalog = {
     ...openrouterModels,
@@ -227,6 +234,7 @@ function createApp({
   registerConversationRoutes(app, { assertProject, security, chatStore });
   registerConfigurationRoutes(app, {
     imageCatalog,
+    textModelCatalog,
     fetchImpl,
     localModels: inference.models,
     getApiKeys,

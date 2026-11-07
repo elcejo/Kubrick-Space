@@ -1,7 +1,12 @@
 import { mountScreenplayInsertion } from './screenplay-insertion.js';
 import { syncScreenplayRemoval } from './screenplay-removal.js';
 import { screenplayProjectionNodes, arrangeScreenplayBlocks } from './screenplay-layout.js';
-import { mountScreenplayShot, SHOT_HELP } from './screenplay-shot-controls.js';
+import {
+  mountScreenplayShot,
+  mountScreenplayTransition,
+  placeSceneTransitions,
+  SHOT_HELP,
+} from './screenplay-shot-controls.js';
 import {
   SCREENPLAY_SHOTS,
   SCREENPLAY_VOICES,
@@ -13,11 +18,8 @@ import {
 } from './screenplay-document.js';
 import { renderIcon } from '../../icons.js';
 import { safeHTML, escapeHTML } from '../../safe-html.js';
-import { editSceneOrigin } from './screenplay-sources.js';
 import { AppState } from '../../app-state.js';
-import { Toast } from '../../ui-components.js';
 import { enhanceSelect } from '../../custom-select.js';
-import { versionDialog } from '../ingredients/ingredient-version-dialogs.js';
 import { ingredientPortrait } from '../ingredients/ingredient-portrait.js';
 
 const INTERIOR_HELP = {
@@ -72,6 +74,39 @@ export function linkedProjects(type) {
       portrait: ingredientPortrait(item),
     }))
     .filter((item) => (seen.has(item.id) ? false : seen.add(item.id)));
+}
+
+/**
+ * A round picture for the index: the initial of the name and, on top of it, the image of the linked project (the face
+ * of a humanoid character, falling back to the whole picture). `item` may have no portrait: the initial stays.
+ */
+function portraitDisc(doc, item, label, className) {
+  const disc = doc.createElement('span');
+  disc.className = 'screenplay-navigation__disc ' + className;
+  disc.setAttribute('role', 'img');
+  disc.setAttribute('aria-label', label);
+  disc.title = label;
+  disc.textContent = (String(item.name || '').trim()[0] || '?').toLocaleUpperCase();
+  if (item.color1 && item.color2) {
+    disc.style.setProperty('--disc-color1', item.color1);
+    disc.style.setProperty('--disc-color2', item.color2);
+  }
+  if (item.portrait) {
+    const image = doc.createElement('img');
+    image.alt = '';
+    image.loading = 'lazy';
+    image.src = item.portrait.url;
+    image.addEventListener(
+      'error',
+      () => {
+        if (image.src !== item.portrait.source && item.portrait.face) image.src = item.portrait.source;
+        else image.remove();
+      },
+      { once: true },
+    );
+    disc.append(image);
+  }
+  return disc;
 }
 
 /** Themed select (never the browser's) that keeps typing inside it from reaching the editor. */
@@ -532,14 +567,14 @@ function appendScreenplayShot(shell, context, before = null) {
     const initial = doc.createElement('h6');
     initial.dataset.kaiId = screenplayId();
     initial.contentEditable = 'true';
-    initial.textContent = `PLANO 1 — ${scene.heading.shot || 'Plano general'}; cámara fija; 8 s`;
+    initial.textContent = `PLANO 1 — ${scene.heading.shot || 'Plano general'}; 8 s`;
     body.prepend(initial);
   }
   const number = (explicit.length || (scene.blocks.length ? 1 : 0)) + 1;
   const heading = doc.createElement('h6');
   heading.dataset.kaiId = screenplayId();
   heading.contentEditable = 'true';
-  heading.textContent = `PLANO ${number} — Plano general; cámara fija; 8 s`;
+  heading.textContent = `PLANO ${number} — Plano general; 8 s`;
   const nodes = [heading];
   for (const tag of ['p', 'h3', 'h4', 'blockquote', 'h5']) {
     const field = doc.createElement(tag);
@@ -721,7 +756,7 @@ export function organizeScreenplayScenes(surface, context, editable) {
     }
   }
   if (editable)
-    for (const body of surface.querySelectorAll('.screenplay-scene__body')) {
+    for (const [sceneIndex, body] of [...surface.querySelectorAll('.screenplay-scene__body')].entries()) {
       const legacyPicker = body
         .closest('.screenplay-scene')
         ?.querySelector('[data-scene-heading="shot"]')
@@ -731,6 +766,13 @@ export function organizeScreenplayScenes(surface, context, editable) {
       for (const block of screenplayProjectionNodes(body).filter((node) => node.nodeType === 1)) {
         if (block.matches('[data-screenplay-controls]')) continue;
         if (block.tagName === 'H6') mountScreenplayShot(block, ++shotNumber, () => context.emitChange());
+        else if (block.tagName === 'H5')
+          mountScreenplayTransition(
+            block,
+            () => context.emitChange(),
+            sceneIndex === 0 && shotNumber <= 1,
+            sceneIndex > 0 && shotNumber <= 1,
+          );
         else if (block.tagName === 'H3') mountScreenplayCharacter(block, editable);
         else {
           block.contentEditable = 'true';
@@ -740,21 +782,22 @@ export function organizeScreenplayScenes(surface, context, editable) {
               BLOCKQUOTE: 'Diálogo',
               H4: 'Acotación',
               H5: 'Transición',
-              H6: 'PLANO — encuadre; ángulo; movimiento; duración',
+              H6: 'PLANO — encuadre; movimiento; duración',
             }[block.tagName] || '';
           block.title =
             {
-              H6: 'Plano: una toma continua de esta escena. Indica encuadre, ángulo, movimiento y segundos; Enter añade su acción.',
+              H6: 'Plano: una toma continua de esta escena. Se elige su encuadre, su movimiento de cámara y su duración; el metraje los hereda.',
               P: 'Acción: describe lo que se ve y sucede en la escena, en presente.',
               BLOCKQUOTE: 'Diálogo: lo que dice el personaje indicado justo encima.',
               H4: 'Acotación: indicación breve entre paréntesis sobre cómo se dice el diálogo.',
-              H5: 'Transición: cómo pasa la película a la siguiente escena, por ejemplo CORTE A.',
+              H5: 'Transición: cómo se une este plano al anterior en el metraje.',
             }[block.tagName] || '';
         }
       }
       syncShotDialogueActions(body, context);
       arrangeScreenplayBlocks(body);
     }
+  if (editable) placeSceneTransitions(surface);
   if (editable)
     syncScreenplayRemoval(surface, {
       changed: () => {
@@ -779,6 +822,54 @@ export function moveScreenplayScene(surface, sourceId, targetId) {
   return true;
 }
 
+/**
+ * Moves a whole shot (its heading, action, speeches and transition) inside its scene or into another scene, before the
+ * shot `beforeShotId` or last. A scene that is left without shots is removed: it cannot exist empty.
+ * Returns { moved, removed }.
+ */
+export function moveScreenplayShot(
+  surface,
+  shotId,
+  targetSceneId,
+  beforeShotId = null,
+  releaseSelects = () => {},
+) {
+  const shotsOf = (container) => [
+    ...container.querySelectorAll(':scope > .screenplay-scene__body > .screenplay-shot'),
+  ];
+  const shot = [...surface.querySelectorAll('.screenplay-shot')].find(
+    (item) => item.dataset.shotId === shotId,
+  );
+  const target = screenplayGroups(surface).find((group) => group.id === targetSceneId)?.container;
+  const source = shot?.closest('.screenplay-scene');
+  if (!shot || !target || !source) return { moved: false, removed: false };
+  const body = target.querySelector(':scope > .screenplay-scene__body');
+  const before = beforeShotId ? shotsOf(target).find((item) => item.dataset.shotId === beforeShotId) : null;
+  if (beforeShotId && !before) return { moved: false, removed: false };
+  const last =
+    shotsOf(target)
+      .filter((item) => item !== shot)
+      .at(-1) || null;
+  // Dropped where it already is: nothing to do.
+  if (
+    source === target &&
+    (before
+      ? before === shot.nextElementSibling || before === shot
+      : last === shot.previousElementSibling && !shot.nextElementSibling)
+  )
+    return { moved: false, removed: false };
+  if (before) body.insertBefore(shot, before);
+  else if (last) last.after(shot);
+  else body.append(shot);
+  let removed = false;
+  if (source !== target && !shotsOf(source).length) {
+    releaseSelects(source);
+    source.remove();
+    removed = true;
+  }
+  return { moved: true, removed };
+}
+
 export function mountScreenplayNavigation(node, surface, context, editable) {
   const doc = surface.ownerDocument;
   const nav = doc.createElement('nav');
@@ -798,27 +889,189 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
   list.className = 'screenplay-navigation__list';
   details.append(summary, search, list);
   nav.append(details);
-  if (editable) {
-    const add = doc.createElement('button');
-    add.type = 'button';
-    add.className = 'screenplay-navigation__add';
-    add.textContent = 'Añadir escena';
-    add.title =
-      'Añadir escena: crea un primer plano con acción, personaje/voz, acotación, diálogo y transición vacíos.';
-    add.addEventListener('click', () => {
-      appendScreenplayScene(surface, context);
-      render();
-    });
-    nav.append(add);
-  }
   node.insertBefore(nav, surface);
   context.indexNode = nav;
   const collapsed = new Set(),
     cleanups = new Set();
   let disposed = false,
     queued = false,
-    dragged = null,
     fingerprint = '';
+  /**
+   * A drag with the pointer inside the index, visible: the item follows the pointer as a floating copy, the place it
+   * leaves is dimmed and a line shows where it will land. `locate(y)` says the slot under the pointer, `show(slot)`
+   * draws the line there, `clear()` removes it and `drop(slot)` is the only thing that edits the screenplay. Escape,
+   * losing the pointer or cancelling puts everything back.
+   */
+  const dragWithPointer = (event, grip, item, { locate, show, clear, drop }) => {
+    if (event.button !== 0 || event.isPrimary === false) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const win = doc.defaultView;
+    const pointerId = event.pointerId;
+    const start = { x: event.clientX, y: event.clientY };
+    let ghost = null,
+      started = false,
+      slot = null,
+      offset = { x: 0, y: 0 };
+    const follow = (x, y) => {
+      if (!ghost) return;
+      ghost.style.left = x - offset.x + 'px';
+      ghost.style.top = y - offset.y + 'px';
+    };
+    const begin = (x, y) => {
+      started = true;
+      const box = item.getBoundingClientRect();
+      const scale = item.offsetWidth ? box.width / item.offsetWidth : 1;
+      offset = { x: start.x - box.left, y: start.y - box.top };
+      // The copy lives in the body, outside the scaled canvas, so that it is drawn at the size of the item.
+      ghost = item.cloneNode(true);
+      ghost.className = 'screenplay-navigation__ghost';
+      ghost.classList.toggle('is-shot', item.matches('.screenplay-navigation__shot'));
+      for (const key of ['sceneId', 'shotId']) delete ghost.dataset[key];
+      ghost.setAttribute('aria-hidden', 'true');
+      ghost.style.width = item.offsetWidth + 'px';
+      ghost.style.transform = 'scale(' + scale + ')';
+      doc.body.append(ghost);
+      item.classList.add('is-dragging');
+      list.classList.add('is-sorting');
+      follow(x, y);
+    };
+    const place = (y) => {
+      slot = locate(y);
+      show(slot);
+    };
+    const finish = (dropIt) => {
+      win.removeEventListener('pointermove', move);
+      win.removeEventListener('pointerup', up, true);
+      win.removeEventListener('pointercancel', cancel);
+      win.removeEventListener('blur', cancel);
+      win.removeEventListener('keydown', key, true);
+      try {
+        grip.releasePointerCapture?.(pointerId);
+      } catch {
+        /* A detached control has nothing to release. */
+      }
+      ghost?.remove();
+      clear();
+      item.classList.remove('is-dragging');
+      list.classList.remove('is-sorting');
+      if (started && dropIt && slot) drop(slot);
+    };
+    const move = (e) => {
+      if (e.pointerId !== pointerId) return;
+      e.preventDefault();
+      if (!started && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) return;
+      if (!started) begin(e.clientX, e.clientY);
+      follow(e.clientX, e.clientY);
+      place(e.clientY);
+    };
+    const up = (e) => {
+      if (e.pointerId !== pointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (started) place(e.clientY);
+      finish(true);
+    };
+    const cancel = () => finish(false);
+    const key = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      finish(false);
+    };
+    win.addEventListener('pointermove', move, { passive: false });
+    win.addEventListener('pointerup', up, true);
+    win.addEventListener('pointercancel', cancel);
+    win.addEventListener('blur', cancel);
+    win.addEventListener('keydown', key, true);
+    try {
+      grip.setPointerCapture?.(pointerId);
+    } catch {
+      /* A detached control cannot capture. */
+    }
+  };
+  const boxOf = (element) => {
+    const box = element.getBoundingClientRect();
+    return { element, top: box.top, bottom: box.top + box.height, middle: box.top + box.height / 2 };
+  };
+  /** A whole scene of the index: it ends where the line was, before the row that follows it or last. */
+  const beginSceneDrag = (event, grip, row, sourceId) => {
+    const marker = doc.createElement('li');
+    marker.className = 'screenplay-navigation__drop';
+    marker.setAttribute('aria-hidden', 'true');
+    // The rows are measured once, before the line shifts them.
+    const rows = [...list.children]
+      .filter((item) => item !== row && item.dataset.sceneId && !item.hidden)
+      .map(boxOf);
+    dragWithPointer(event, grip, row, {
+      locate: (y) => {
+        let at = rows.findIndex((item) => y < item.middle);
+        if (at < 0) at = rows.length;
+        return { at, before: rows[at]?.element || null };
+      },
+      show: (slot) => list.insertBefore(marker, slot.before),
+      clear: () => marker.remove(),
+      drop: (slot) => {
+        const groups = screenplayGroups(surface);
+        const from = groups.findIndex((group) => group.id === sourceId);
+        const at = slot.before
+          ? groups.findIndex((group) => group.id === slot.before.dataset.sceneId)
+          : groups.length;
+        const to = from < at ? at - 1 : at;
+        if (from < 0 || to === from || to < 0 || to >= groups.length) return;
+        if (moveScreenplayScene(surface, sourceId, groups[to].id)) {
+          context.emitChange();
+          render();
+          refocus(sourceId, 'Arrastrar escena completa');
+        }
+      },
+    });
+  };
+  /**
+   * A shot of the index: inside its scene or into another one. The slots are the places between the shots of every
+   * scene; the nearest one to the pointer wins. A scene left without shots is removed, as a scene cannot exist empty.
+   */
+  const beginShotDrag = (event, grip, item, shotId) => {
+    const marker = doc.createElement('div');
+    marker.className = 'screenplay-navigation__drop';
+    marker.setAttribute('aria-hidden', 'true');
+    const slots = [];
+    for (const container of list.querySelectorAll('.screenplay-navigation__shots')) {
+      const items = [...container.querySelectorAll('.screenplay-navigation__shot')].filter(
+        (entry) => entry !== item,
+      );
+      const boxes = items.map(boxOf);
+      const own = container.getBoundingClientRect();
+      boxes.forEach((box) =>
+        slots.push({ y: box.top, container, sceneId: container.dataset.sceneId, before: box.element }),
+      );
+      slots.push({
+        y: boxes.length ? boxes.at(-1).bottom : own.top,
+        container,
+        sceneId: container.dataset.sceneId,
+        before: null,
+      });
+    }
+    dragWithPointer(event, grip, item, {
+      locate: (y) =>
+        slots.reduce((best, slot) => (Math.abs(slot.y - y) < Math.abs(best.y - y) ? slot : best), slots[0]),
+      show: (slot) => slot && slot.container.insertBefore(marker, slot.before),
+      clear: () => marker.remove(),
+      drop: (slot) => {
+        const result = moveScreenplayShot(
+          surface,
+          shotId,
+          slot.sceneId,
+          slot.before?.dataset.shotId ?? null,
+          releaseSelects,
+        );
+        if (!result.moved) return;
+        context.emitChange();
+        render();
+        refocus(shotId, 'Arrastrar plano');
+      },
+    });
+  };
   const button = (label, icon, action) => {
     const el = doc.createElement('button');
     el.type = 'button';
@@ -871,45 +1124,6 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     }
     fingerprint = '';
     render();
-  };
-  const chooseLocation = async (scene) => {
-    const baseline = JSON.stringify(context.screenplayDocument);
-    const ingredientBaseline = JSON.stringify(AppState.currentProject?.ingredients);
-    const stages = (AppState.currentProject?.ingredients || []).filter(
-      (item) => item.type === 'stage' && item.importedProjectId,
-    );
-    const select = doc.createElement('select');
-    select.setAttribute('aria-label', 'Escenario de la escena');
-    for (const stage of [{ importedProjectId: '', importedProjectName: 'Sin escenario' }, ...stages]) {
-      const option = doc.createElement('option');
-      option.value = stage.importedProjectId;
-      option.textContent = stage.importedProjectName || stage.label;
-      select.append(option);
-    }
-    select.value = scene.locationId || '';
-    const content = doc.createElement('div');
-    content.append(select);
-    let control;
-    const pending = versionDialog({
-      title: 'Escenario de la escena',
-      content,
-      cleanups,
-      dispose: () => control?.destroy({ restore: false }),
-      options: [
-        { label: 'Cancelar', value: null },
-        { label: 'Vincular escenario', primary: true, value: () => select.value },
-      ],
-    });
-    control = enhanceSelect(select);
-    const value = await pending;
-    if (value !== null && !disposed) {
-      if (
-        JSON.stringify(context.screenplayDocument) !== baseline ||
-        JSON.stringify(AppState.currentProject?.ingredients) !== ingredientBaseline
-      )
-        throw new Error('El guión o sus ingredientes cambiaron. Abre de nuevo el escenario.');
-      context.setScreenplayMetadata(scene.id, { locationId: value });
-    }
   };
   const render = () => {
     if (disposed) return;
@@ -966,6 +1180,8 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
       }
     }
     list.replaceChildren();
+    const characters = linkedProjects('character');
+    const stages = linkedProjects('stage');
     groups.forEach((group, index) => {
       const row = doc.createElement('li');
       row.dataset.sceneId = group.id;
@@ -1015,11 +1231,28 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
       );
       collapse.setAttribute('aria-expanded', String(!collapsed.has(group.id)));
       row.append(collapse, jump);
+      const modelScene = context.screenplayDocument.scenes.find((item) => item.id === group.id);
+      const stage = modelScene?.locationId && stages.find((item) => item.id === modelScene.locationId);
+      if (stage)
+        row.append(
+          portraitDisc(doc, stage, `Escenario: ${stage.name}`, 'screenplay-navigation__disc--stage'),
+        );
       const shotLinks = doc.createElement('div');
       shotLinks.className = 'screenplay-navigation__shots';
-      const modelScene = context.screenplayDocument.scenes.find((item) => item.id === group.id);
+      shotLinks.dataset.sceneId = group.id;
       for (const [shotIndex, shot] of screenplayShots(modelScene).entries()) {
         if (!shot.explicit) continue;
+        const item = doc.createElement('div');
+        item.className = 'screenplay-navigation__shot';
+        item.dataset.shotId = shot.markerId || shot.id;
+        if (editable) {
+          const handle = button('Arrastrar plano', 'grip', () => {});
+          handle.title = 'Arrastrar plano: colócalo en otro lugar de esta escena o en otra escena.';
+          handle.addEventListener('pointerdown', (event) =>
+            beginShotDrag(event, handle, item, item.dataset.shotId),
+          );
+          item.append(handle);
+        }
         const link = button(`Ir al plano ${shotIndex + 1}`, 'video', () => {
           setCollapsed(group, false);
           const heading = [...group.container.querySelectorAll('h6')].find(
@@ -1027,91 +1260,36 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
           );
           heading?.scrollIntoView?.({ block: 'nearest' });
         });
+        link.classList.add('screenplay-navigation__shot-link');
         link.textContent = `${shotIndex + 1}. ${shot.title}`;
-        shotLinks.append(link);
+        item.append(link);
+        // Who speaks in the shot: a round picture each, a character with a line of dialogue and no more.
+        const speakers = new Map();
+        for (const block of shot.blocks) {
+          if (block.type !== 'dialogue' || !block.text.trim() || !block.speakerId) continue;
+          const speaker = shot.blocks.find((item) => item.id === block.speakerId);
+          if (!speaker || speakers.has(speaker.id)) continue;
+          const name = screenplayCharacter(speaker.text).name || speaker.text;
+          const linked = speaker.characterId && characters.find((item) => item.id === speaker.characterId);
+          speakers.set(speaker.id, linked || { name });
+        }
+        if (speakers.size) {
+          const faces = doc.createElement('span');
+          faces.className = 'screenplay-navigation__faces';
+          for (const person of speakers.values())
+            faces.append(
+              portraitDisc(doc, person, `Habla: ${person.name}`, 'screenplay-navigation__disc--character'),
+            );
+          item.append(faces);
+        }
+        shotLinks.append(item);
       }
       if (shotLinks.childNodes.length) row.append(shotLinks);
       if (editable) {
-        row.append(
-          button('Añadir plano a esta escena', 'plus', () => {
-            appendScreenplayShot(group.container, context);
-            render();
-          }),
-        );
-        for (const [delta, label, icon] of [
-          [-1, 'Subir escena', 'chevron-up'],
-          [1, 'Bajar escena', 'chevron-down'],
-        ]) {
-          const move = button(label, icon, () => {
-            if (moveScreenplayScene(surface, group.id, groups[index + delta]?.id)) {
-              context.emitChange();
-              render();
-              refocus(group.id, label);
-            }
-          });
-          move.disabled = !groups[index + delta];
-          row.append(move);
-        }
-        const origin = button('Vincular origen del libro', 'link', async () => {
-          try {
-            const scene = context.screenplayDocument.scenes.find((item) => item.id === group.id);
-            const baseline = JSON.stringify(context.screenplayDocument);
-            const result = await editSceneOrigin(
-              scene,
-              AppState.currentProject?.ingredients || [],
-              cleanups,
-              () => !disposed,
-            );
-            if (result && !disposed) {
-              if (JSON.stringify(context.screenplayDocument) !== baseline)
-                throw new Error('La escena cambió. Abre de nuevo su origen.');
-              context.setScreenplayMetadata(group.id, {
-                origins: [
-                  ...(scene.origins || []).filter((origin) => origin.projectId !== result.projectId),
-                  result,
-                ],
-              });
-              Toast.show('Origen vinculado.', 'success');
-            }
-          } catch (error) {
-            if (!disposed) Toast.show(error.message, 'error');
-          }
-        });
-        row.append(
-          origin,
-          button('Vincular escenario', 'stage', () =>
-            chooseLocation(context.screenplayDocument.scenes.find((item) => item.id === group.id)).catch(
-              (error) => Toast.show(error.message, 'error'),
-            ),
-          ),
-        );
         const grip = button('Arrastrar escena completa', 'grip', () => {});
-        grip.draggable = true;
-        grip.addEventListener('dragstart', (event) => {
-          dragged = group.id;
-          event.dataTransfer.setData('application/x-kubrick-space-scene', group.id);
-          event.dataTransfer.effectAllowed = 'move';
-        });
-        grip.addEventListener('dragend', () => {
-          dragged = null;
-        });
+        grip.title = 'Arrastrar escena completa: suéltala donde quieras colocarla.';
+        grip.addEventListener('pointerdown', (event) => beginSceneDrag(event, grip, row, group.id));
         row.append(grip);
-        row.addEventListener('dragover', (event) => {
-          if (dragged) {
-            event.preventDefault();
-            event.stopPropagation();
-          }
-        });
-        row.addEventListener('drop', (event) => {
-          if (!dragged) return;
-          event.preventDefault();
-          event.stopPropagation();
-          if (moveScreenplayScene(surface, dragged, group.id)) {
-            context.emitChange();
-            render();
-          }
-          dragged = null;
-        });
       }
       list.append(row);
     });
@@ -1166,6 +1344,12 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     }
   });
   observer.observe(surface, { childList: true, subtree: true, characterData: true });
+  // The scene-change buttons depend on the width of the surface (the slugline wraps): they follow it.
+  const resize =
+    typeof doc.defaultView.ResizeObserver === 'function'
+      ? new doc.defaultView.ResizeObserver(() => placeSceneTransitions(surface))
+      : null;
+  resize?.observe(surface);
   doc.addEventListener('selectionchange', active);
   surface.addEventListener('scroll', active);
   render();
@@ -1185,6 +1369,7 @@ export function mountScreenplayNavigation(node, surface, context, editable) {
     for (const cancel of [...cleanups]) cancel();
     releaseSelects(surface);
     observer.disconnect();
+    resize?.disconnect();
     surface.removeEventListener('beforeinput', preserveField);
     surface.removeEventListener('pointerdown', positionEmptyCaret);
     doc.removeEventListener('selectionchange', active);

@@ -7,7 +7,7 @@ const {
   createProjectChatStore: createChatStore,
   createContextManager,
 } = require('./modules/ai/index.cjs');
-const { createProjectRepository } = require('./modules/library/index.cjs');
+const { createProjectRepository, createLibrarySpace } = require('./modules/library/index.cjs');
 const { createDocumentStore } = require('./modules/documents/index.cjs');
 const {
   createUniversalPropStore,
@@ -60,7 +60,11 @@ function createServices(dataRoot, appRoot = path.resolve(__dirname, '..')) {
     getVersion: (id, version) => decorateRecord(rawDocumentStore.getVersion(id, version), id),
     getVersions: (id) => rawDocumentStore.getVersions(id).map((record) => decorateRecord(record, id)),
   };
-  const chatStore = createChatStore(PROJECTS_DIR);
+  const librarySpace = createLibrarySpace({ ROOT_DIR, repository, security });
+  const chatStore = createChatStore(PROJECTS_DIR, {
+    listAssets: () => repository.read().projects,
+    listFolders: () => librarySpace.get().body.folders,
+  });
   const aiContexts = createContextManager({
     readProject: repository.get,
     readVersion: (id, versionId) => documentStore.getVersion(id, versionId),

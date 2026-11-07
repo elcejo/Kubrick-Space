@@ -41,7 +41,10 @@ export function mountScreenplayInsertion(node, surface, insert) {
   const symbol = button.querySelector('svg');
   symbol.setAttribute('viewBox', '0 6 24 12');
   symbol.setAttribute('height', '32');
-  overlay.append(button);
+  // When the transition button of the shot below sits on the line, the line is cut around it: the button comes first.
+  const segments = [doc.createElement('span'), doc.createElement('span')];
+  for (const segment of segments) segment.className = 'story-book-insertion__segment';
+  overlay.append(button, ...segments);
   node.append(overlay);
   let boundary = null,
     frame = null,
@@ -69,6 +72,27 @@ export function mountScreenplayInsertion(node, surface, insert) {
       overlay.style.left = (left - parent.left) / scale + 'px';
       overlay.style.top = ((a.bottom + b.top) / 2 - parent.top) / scale + 'px';
       overlay.style.width = (right - left) / scale + 'px';
+      const total = (right - left) / scale;
+      const transition =
+        candidate.kind === 'shot'
+          ? candidate.after.querySelector(':scope > h5:not([hidden]) .screenplay-transition__button')
+          : candidate.kind === 'scene'
+            ? candidate.after.querySelector(
+                ':scope > .screenplay-scene__body > .screenplay-shot:first-child > h5:not([hidden]) .screenplay-transition__button',
+              )
+            : null;
+      const box = transition?.getBoundingClientRect();
+      const cut = box && box.width && Math.abs(box.top + box.height / 2 - (a.bottom + b.top) / 2) < 30;
+      overlay.classList.toggle('has-cut', Boolean(cut));
+      if (cut) {
+        const from = (box.left - left) / scale - 10;
+        const to = (box.right - left) / scale + 10;
+        const centre = total / 2 + 32;
+        segments[0].style.left = centre + 'px';
+        segments[0].style.width = Math.max(0, from - centre) + 'px';
+        segments[1].style.left = to + 'px';
+        segments[1].style.width = Math.max(0, total - to) + 'px';
+      }
       const name = { scene: 'escena', shot: 'plano', dialogue: 'diálogo' }[candidate.kind];
       button.setAttribute('aria-label', 'Insertar ' + name + ' aquí');
       button.title = 'Insertar ' + name;

@@ -37,7 +37,7 @@ function createCharacterAssetDirectionOperation({
     const key = getApiKeys().openrouter || '';
     const config = getLLMConfig();
     const limits = llmConfig.functionConfig(config, 'character_asset_direction');
-    if (!key && !llmConfig.isLocalModel(limits.model))
+    if (!key && llmConfig.needsOpenRouterKey(limits.model))
       throw security.fail('Configura OpenRouter para interpretar la referencia.', 428);
     const info = openrouterModels?.findModel(limits.model);
     if (info?.inputModalities?.length && !info.inputModalities.includes('image'))

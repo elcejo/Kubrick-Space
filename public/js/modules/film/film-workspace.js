@@ -9,6 +9,8 @@ import {
   FILM_CONTINUITY_MODES,
   FILM_FRAME_OPTIONS,
   FILM_MAX_SECONDS,
+  FILM_PREVIEW_MEGAPIXELS,
+  FILM_FINAL_MEGAPIXELS,
   filmDimensions,
   filmContinuityMode,
   filmFinalBlocked,
@@ -27,9 +29,21 @@ import {
   prepareFilmProject,
   validateFilmDocument,
 } from '../../contracts/film.js';
-import { filmRecomposePrompt } from '../../contracts/film-prompt.js';
+import {
+  filmRecomposePrompt,
+  filmShotName,
+  filmShotWithFraming,
+  parseFilmShotNote,
+} from '../../contracts/film-prompt.js';
+import { SCREENPLAY_SHOTS } from '../../contracts/screenplay.js';
 import { enhanceSelect } from '../../custom-select.js';
+import { createPaletteEditor, paletteStrip } from './film-palette-editor.js';
+import { FILM_OPTICS_GROUPS, FILM_OPTICS_KEYS, filmOpticsOf } from '../../contracts/film-optics.js';
+import { FILM_PALETTES } from '../../contracts/film-palettes.js';
+import { FILM_MOVEMENTS } from '../../contracts/film-movements.js';
+import { FILM_MODE_HELP as MODE_HELP } from '../../contracts/film-transitions.js';
 import { FilmJobs } from './film-jobs.js';
+import { FilmCinemaPlayer } from './film-cinema-player.js';
 
 const RUNNING_STATES = ['queued', 'running'];
 const STATUS_LABELS = Object.freeze({
@@ -71,10 +85,6 @@ function iconButton(label, icon, onClick, className = '') {
   return button;
 }
 const duration = (seconds) => `${String(seconds).replace('.', ',')} s`;
-/** The resolutions offered for the final video, in megapixels (1 MP = 1024 × 1024). */
-const FINAL_MEGAPIXELS = Object.freeze([0.5, 0.8, 1, 1.5, 2, 3, 4]);
-/** The resolutions offered for the previews, the quick low-resolution pass. */
-const PREVIEW_MEGAPIXELS = Object.freeze([0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1]);
 /** A rectangle with the proportion of `ratio` ('16:9'), from the registered aspect-frame drawing. */
 function aspectFrame(ratio, size = 18) {
   const span = el('span', 'film-aspect');
@@ -92,17 +102,6 @@ function aspectFrame(ratio, size = 18) {
   }
   return span;
 }
-/** What each way of joining the previous clip does, as the tooltip of the mode selector says it. */
-const MODE_HELP = Object.freeze({
-  auto: 'Automática: el sistema elige por ti según el guión. Otra escena = escena nueva; otro plano de la misma escena = corte con continuidad. El primer clip de la película no sigue a nadie.',
-  take: 'Continuación (misma toma): para un plano que sigue la misma toma que el anterior, sin cambio de cámara (por ejemplo una acción larga que partiste en dos planos). Se genera con 22 fotogramas extra que repiten el final del clip anterior y guían su arranque; esos fotogramas no se reproducen. Necesita el clip anterior de su escena, se genera después de él y queda desactualizado si lo rehaces.',
-  cut: 'Corte con continuidad: otro plano de la misma escena con cambio de encuadre (de general a primer plano). El modelo escribe una nota con cómo está la acción al empezar (dónde está cada personaje, su postura, gesto y mirada, y de dónde viene la luz) a partir del final del clip anterior; puedes editarla. Opcionalmente, el último fotograma del anterior viaja como referencia.',
-  keyframe:
-    'Con fotograma inicial: el modelo de imagen genera un fotograma de arranque para este plano a partir del final del anterior, las fotos de los personajes y el escenario. Lo ves y lo cambias o regeneras antes de gastar GPU en el video, y el video arranca de él. Es el modo con más control; necesita el modelo de imagen de la barra superior.',
-  new: 'Escena nueva: otro lugar o momento, sin continuidad de postura ni de gesto con el clip anterior. Solo se conserva el aspecto de la escena (luz, clima, vestuario y objetos).',
-});
-/** Where a clip starts playing: after the frames that repeat the end of the clip it continues. */
-const playFrom = (media) => (media.overlap ? `#t=${(media.overlap / 24).toFixed(3)}` : '');
 const sceneKey = (projectId) => `kubrick-film-scene:${projectId}`;
 
 /** Printable outline for the shared exporter: scenes and their prompts, no media. */
@@ -145,6 +144,7 @@ export class FilmWorkspace {
     this.noticeKeys = new Set();
     this.board = null;
     this.header = null;
+    this.camera = null;
     this.rows = new Map();
     this.scriptId = '';
     this.sceneId = '';
@@ -155,6 +155,7 @@ export class FilmWorkspace {
     }
     this.footerNav = null;
     this.selectControls = [];
+    this.editingPalette = null;
     this.sceneMode = '';
     this.sceneVideo = null;
     this.node.classList.add('film-anchor');
@@ -183,6 +184,9 @@ export class FilmWorkspace {
     this.destroyed = true;
     EventBus.off('state:change', this.settingsListener);
     this.jobs?.destroy();
+    this.sceneVideo?.player.destroy();
+    this.camera?.remove();
+    this.camera = null;
     this.board?.remove();
     this.board = null;
     for (const { control } of this.selectControls) control.destroy({ restore: false });
@@ -207,9 +211,17 @@ export class FilmWorkspace {
     this.commit();
   }
   scripts() {
-    return (this.project().ingredients || []).filter(
-      (item) => item.active !== false && item.type === 'book' && item.importedProjectId,
-    );
+    return (this.project().ingredients || []).filter((item) => {
+      if (item.active === false || item.type !== 'book' || !item.importedProjectId) return false;
+      const project = AppState.projects?.find((entry) => entry.id === item.importedProjectId);
+      if (project) return project.type === 'book' && project.category === 'screenplay';
+      // Newly linked ingredients can arrive before the library summary refreshes.
+      try {
+        return JSON.parse(item.value || '').schema === 'code-kai.screenplay';
+      } catch {
+        return false;
+      }
+    });
   }
   hasScenes() {
     return this.document.scenes.length > 0;
@@ -273,8 +285,13 @@ export class FilmWorkspace {
     if (this.header) this.header.replaceWith(header);
     else this.board.prepend(header);
     this.header = header;
+    const camera = !intro && group ? this.buildCamera(group) : null;
+    if (this.camera) this.camera.remove();
+    this.camera = camera;
+    if (camera) this.board.before(camera);
     const sceneNode = intro ? null : this.syncSceneVideo(group);
     if (!sceneNode) {
+      this.sceneVideo?.player.destroy();
       this.sceneVideo?.node.remove();
       this.sceneVideo = null;
     } else if (sceneNode.nextSibling !== header) this.board.insertBefore(sceneNode, header);
@@ -309,6 +326,7 @@ export class FilmWorkspace {
     this.footerNav = intro ? null : this.buildSceneNav(groups, group);
     if (this.footerNav) this.board.append(this.footerNav);
     this.rows = wanted;
+    this.board.style.gridRow = intro ? '1' : `1 / span ${wanted.size + 3}`;
     this.sweepSelects();
     this.updateBoard();
   }
@@ -349,81 +367,49 @@ export class FilmWorkspace {
     const versions = {
       preview: live.map((clip) =>
         clip.preview && !filmPreviewOutdated(clip, params, filmGuideKey(this.document, clip))
-          ? `${clip.preview.url}?v=${clip.preview.version}${playFrom(clip.preview)}`
+          ? clip.preview
           : null,
       ),
-      final: live.map((clip) =>
-        clip.final && filmFinalState(clip, params) === 'ready'
-          ? `${clip.final.url}?v=${clip.final.version}${playFrom(clip.final)}`
-          : null,
-      ),
+      final: live.map((clip) => (clip.final && filmFinalState(clip, params) === 'ready' ? clip.final : null)),
     };
     const complete = (mode) => live.length > 0 && versions[mode].every(Boolean);
     const mode = this.sceneMode || (complete('final') ? 'final' : 'preview');
-    const signature = JSON.stringify([group.id, mode, versions]);
+    const signature = JSON.stringify([group.id, group.number, mode, versions, params.aspectRatio]);
     if (this.sceneVideo?.signature === signature) return this.sceneVideo.node;
-    const section = el('section', 'character-node film-node film-node--scene');
-    section.setAttribute('aria-label', `Video de la escena ${group.number}`);
-    const header = el('header', 'film-node__header');
-    header.append(el('h2', 'character-eyebrow', `VIDEO DE LA ESCENA ${group.number}`));
-    const nav = el('nav', 'film-scene-nav');
-    nav.setAttribute('aria-label', 'Versión de la escena completa');
-    const previous = iconButton('Ver la escena en previsualización', 'chevron-left', () =>
-      this.showSceneVersion('preview'),
+    const section = el('section', 'film-node film-node--scene');
+    section.setAttribute('aria-label', `Modo cine · Escena ${group.number}`);
+    const previous = iconButton(
+      'Ver la escena en previsualización',
+      'chevron-left',
+      () => this.showSceneVersion('preview'),
+      'film-cinema-arrow film-cinema-arrow--previous',
     );
     previous.dataset.sceneVersion = 'preview';
     previous.disabled = mode === 'preview';
-    const next = iconButton('Ver la escena en resolución final', 'chevron-right', () =>
-      this.showSceneVersion('final'),
+    const next = iconButton(
+      'Ver la escena en resolución final',
+      'chevron-right',
+      () => this.showSceneVersion('final'),
+      'film-cinema-arrow film-cinema-arrow--next',
     );
     next.dataset.sceneVersion = 'final';
     next.disabled = mode === 'final';
-    const label = el('p', 'film-scene-nav__label');
-    label.append(
-      el('strong', null, 'ESCENA COMPLETA'),
-      el('span', null, mode === 'final' ? 'Resolución final' : 'Previsualización'),
-    );
-    label.setAttribute('aria-live', 'polite');
-    nav.append(previous, label, next);
-    const frame = el('div', 'film-video-frame film-video-frame--scene');
-    const urls = versions[mode];
-    const missing = urls.filter((url) => !url).length;
-    const caption = el('p', 'film-node__state');
-    caption.setAttribute('role', 'status');
-    if (complete(mode)) {
-      frame.classList.add('has-video');
-      const video = el('video', 'film-video');
-      video.controls = true;
-      video.playsInline = true;
-      video.preload = 'metadata';
-      video.setAttribute('aria-label', `Escena ${group.number} completa`);
-      let at = 0;
-      const show = () => {
-        video.src = urls[at];
-        caption.textContent = `Clip ${at + 1} de ${urls.length}`;
-      };
-      // The clips follow one another; after the last one the scene is ready to play again from the first.
-      video.addEventListener('ended', () => {
-        const last = at >= urls.length - 1;
-        at = last ? 0 : at + 1;
-        show();
-        if (!last) void video.play?.()?.catch?.(() => {});
-      });
-      show();
-      frame.append(video);
-    } else {
-      frame.setAttribute('role', 'img');
-      frame.setAttribute('aria-label', 'La escena completa aún no está disponible');
-      frame.append(glyph('video', 56), el('span', 'film-video-frame__text', 'Escena aún no disponible'));
-      caption.textContent = !live.length
-        ? 'Esta escena no tiene clips.'
-        : mode === 'final'
-          ? `Faltan ${missing} de ${urls.length} videos finales para ver la escena completa en resolución final.`
-          : `Faltan ${missing} de ${urls.length} previsualizaciones para ver la escena completa.`;
-    }
-    section.append(header, nav, frame, caption);
+    const media = versions[mode];
+    const player = new FilmCinemaPlayer({
+      clips: media.map((item, index) =>
+        item ? { ...item, url: `${item.url}?v=${item.version}` } : { frames: live[index].frames },
+      ),
+      sceneNumber: group.number,
+      mode,
+      missing: media.filter((item) => !item).length,
+      aspectRatio: media.find(Boolean)
+        ? `${media.find(Boolean).width}:${media.find(Boolean).height}`
+        : params.aspectRatio,
+    });
+    section.append(previous, player.element, next);
+    this.sceneVideo?.player.destroy();
     if (this.sceneVideo?.node.isConnected) this.sceneVideo.node.replaceWith(section);
-    this.sceneVideo = { signature, node: section };
+    this.sceneVideo = { signature, node: section, player };
     return section;
   }
   showSceneVersion(mode) {
@@ -451,8 +437,104 @@ export class FilmWorkspace {
     nav.append(previous, label, next);
     return nav;
   }
+  /** Camera choices remain scene-scoped; only their canvas surface is separate from the control node. */
+  buildCamera(group) {
+    const camera = el('section', 'character-node film-camera');
+    camera.setAttribute('aria-label', 'Cámara');
+    camera.append(el('h2', 'character-eyebrow', 'CÁMARA'), this.buildOptics(group));
+    return camera;
+  }
+  /** The camera, the lens, the aperture and the palette of the scene, as list selects with the drawing of each option. */
+  buildOptics(group) {
+    const optics = filmOpticsOf(this.document, group.id);
+    const box = el('section', 'film-optics');
+    box.setAttribute('aria-label', 'Óptica y color de la escena');
+    const labels = { camera: 'Cámara', lens: 'Lente', aperture: 'Apertura' };
+    for (const key of FILM_OPTICS_KEYS)
+      box.append(
+        this.field(
+          labels[key],
+          FILM_OPTICS_GROUPS[key].map((item) => ({
+            value: item.id,
+            text: item.name,
+            icon: item.icon,
+            title: item.hint,
+          })),
+          optics[key],
+          (value) => this.setOptics(group.id, { [key]: value }),
+        ),
+      );
+    const custom = optics.colors?.length > 0;
+    const editing = this.editingPalette === group.id || optics.palette === 'custom';
+    box.append(
+      this.field(
+        'Paleta de color',
+        [
+          {
+            value: 'auto',
+            text: 'Auto',
+            icon: 'palette',
+            title: 'La paleta la decide la escena: no se añade ninguna.',
+          },
+          ...FILM_PALETTES.map((item) => ({
+            value: item.id,
+            text: item.name,
+            colors: item.colors,
+            title: item.hint,
+          })),
+          {
+            value: 'custom',
+            text: custom ? 'Personalizada' : 'Nueva paleta',
+            icon: 'plus',
+            title: 'Escribe hasta 12 colores en hexadecimal para crear tu propia paleta.',
+          },
+        ],
+        editing && !custom ? 'custom' : optics.palette,
+        (value) => {
+          if (value === 'custom' && !custom) {
+            this.editingPalette = group.id;
+            this.mount();
+            return;
+          }
+          this.editingPalette = null;
+          this.setOptics(group.id, {
+            palette: value,
+            ...(value === 'custom' ? { colors: optics.colors } : {}),
+          });
+        },
+        { searchable: true },
+      ),
+    );
+    if (editing)
+      box.append(
+        createPaletteEditor({
+          colors: optics.colors,
+          disabled: this.busy,
+          onApply: (colors) => {
+            this.editingPalette = null;
+            this.setOptics(group.id, { palette: 'custom', colors });
+          },
+        }),
+      );
+    return box;
+  }
+  /** Changes one choice of the optics of a scene and writes the prompts of its clips again with it. */
+  setOptics(sceneId, patch) {
+    this.change((document) => {
+      document.optics ??= {};
+      const base = filmOpticsOf(document, sceneId);
+      const next = { ...base, ...patch };
+      if (next.palette !== 'custom') delete next.colors;
+      if ([...FILM_OPTICS_KEYS, 'palette'].every((item) => next[item] === 'auto'))
+        delete document.optics[sceneId];
+      else document.optics[sceneId] = next;
+      for (const node of document.scenes)
+        if (node.sourceSceneId === sceneId) node.prompt = filmRecomposePrompt(document, node);
+    });
+    this.mount();
+  }
   buildHeader(intro, groups = [], group = null) {
-    const header = el('header', 'character-node film-header');
+    const header = el('header', `character-node film-header${intro ? '' : ' film-header--console'}`);
     const title = el('div', 'film-header__title');
     title.append(el('h2', 'character-eyebrow', intro ? 'PELÍCULA' : 'CONTROL DE ESCENA'));
     if (intro) {
@@ -461,7 +543,7 @@ export class FilmWorkspace {
         el(
           'p',
           'film-header__text',
-          'Cada plano del guión se convierte en un clip independiente de como máximo 10 segundos, agrupado por su escena, con su prompt para MiniMax H3. Vincula el guión, los personajes y los escenarios como ingredientes.',
+          'Cada plano del guión se convierte en un clip independiente de como máximo 15 segundos, agrupado por su escena, con su prompt para MiniMax H3. Vincula el guión, los personajes y los escenarios como ingredientes.',
         ),
       );
     } else {
@@ -471,33 +553,53 @@ export class FilmWorkspace {
       const approved = live.filter((scene) => scene.approved).length;
       const finals = live.filter((scene) => filmFinalState(scene, this.document.params) === 'ready').length;
       const failed = live.filter((scene) => scene.status === 'failed').length;
-      title.append(
-        el(
-          'p',
-          'film-header__text',
-          `${groups.length} ${groups.length === 1 ? 'escena' : 'escenas'} · ${summary.total} ${summary.total === 1 ? 'clip' : 'clips'} · ${summary.ready} con prompt${failed ? ` · ${failed} sin poder escribirse` : ''} · ${previews} previsualizados · ${approved} aprobados · ${finals} en video final · ${duration(Math.round(summary.seconds))} de metraje`,
-        ),
-      );
+      const chips = el('p', 'film-header__text film-chips');
+      const addChip = (count, text, tone = '') => {
+        const chip = el('span', `film-chip${tone ? ` film-chip--${tone}` : ''}`);
+        chip.append(el('strong', null, String(count)), ` ${text}`);
+        chips.append(chip);
+      };
+      addChip(groups.length, groups.length === 1 ? 'escena' : 'escenas');
+      addChip(summary.total, summary.total === 1 ? 'clip' : 'clips');
+      addChip(summary.ready, 'con prompt');
+      if (failed) addChip(failed, 'sin poder escribirse', 'warning');
+      addChip(previews, 'previsualizados');
+      addChip(approved, 'aprobados');
+      addChip(finals, 'en video final');
+      addChip(duration(Math.round(summary.seconds)), 'de metraje');
+      title.append(chips);
     }
-    header.append(title);
-    if (!intro && group) header.append(this.buildSceneNav(groups, group));
+    const overview = el('div', 'film-header__overview');
+    overview.append(title);
+    if (!intro && group) {
+      const navigation = this.buildSceneNav(groups, group);
+      navigation.classList.add('film-scene-nav--external');
+      overview.append(navigation);
+    }
+    header.append(overview);
     const fields = el('div', 'film-header__fields');
     const scripts = this.scripts();
-    if (scripts.length > 1) {
-      const label = this.field(
-        'Guión',
-        scripts.map((item) => ({
-          value: item.importedProjectId,
-          text: item.importedProjectName || item.label || 'Guión',
-        })),
-        this.scriptId || this.document.source?.projectId || scripts[0].importedProjectId,
-        (value) => {
-          this.scriptId = value;
-        },
-      );
-      this.scriptSelect = label.querySelector('select');
-      fields.append(label);
-    } else this.scriptSelect = null;
+    const requestedScriptId = this.scriptId || this.document.source?.projectId;
+    const selectedScript = scripts.find((item) => item.importedProjectId === requestedScriptId) || scripts[0];
+    const label = this.field(
+      'Guión',
+      scripts.length
+        ? scripts.map((item) => ({
+            value: item.importedProjectId,
+            text: item.importedProjectName || item.label || 'Guión',
+          }))
+        : [{ value: '', text: 'Vincula un guión', disabled: true }],
+      selectedScript?.importedProjectId || '',
+      (value) => {
+        this.scriptId = value;
+      },
+    );
+    this.scriptSelect = label.querySelector('select');
+    if (!scripts.length) {
+      this.scriptSelect.dataset.locked = '1';
+      this.scriptSelect.disabled = true;
+    }
+    fields.append(label);
     if (!intro) fields.append(...this.buildResolutionFields());
     const controls = el('div', 'film-header__controls');
     this.generateButton = action(
@@ -534,9 +636,6 @@ export class FilmWorkspace {
       this.cancelButton,
     );
     header.append(fields, controls, this.status, this.hint);
-    const look = group && this.document.looks[group.id];
-    if (!intro && look)
-      header.append(el('p', 'film-header__hint film-header__look', `Aspecto de la escena · ${look.text}`));
     const failed = this.document.scenes.filter((scene) => scene.status === 'failed' && !scene.sourceRemoved);
     if (failed.length) header.append(this.buildFailures(failed));
     return header;
@@ -553,7 +652,10 @@ export class FilmWorkspace {
       const option = el('option', null, choice.text);
       option.value = choice.value;
       if (choice.aspect) option.dataset.aspect = choice.aspect;
+      if (choice.icon) option.dataset.icon = choice.icon;
+      if (choice.colors) option.dataset.colors = choice.colors.join(',');
       if (choice.title) option.title = choice.title;
+      option.disabled = Boolean(choice.disabled);
       select.append(option);
     }
     select.value = value;
@@ -563,10 +665,22 @@ export class FilmWorkspace {
     this.enhance(select, {
       searchable,
       label: (option) => {
-        if (!option?.dataset.aspect) return null;
-        const row = el('span', 'film-aspect-option');
-        row.append(aspectFrame(option.dataset.aspect), el('span', null, option.textContent));
-        return row;
+        if (option?.dataset.aspect) {
+          const row = el('span', 'film-aspect-option');
+          row.append(aspectFrame(option.dataset.aspect), el('span', null, option.textContent));
+          return row;
+        }
+        if (option?.dataset.icon || option?.dataset.colors) {
+          const row = el('span', 'film-aspect-option film-rich-option');
+          row.append(
+            option.dataset.colors
+              ? paletteStrip(option.dataset.colors.split(','))
+              : glyph(option.dataset.icon, 20),
+            el('span', null, option.textContent),
+          );
+          return row;
+        }
+        return null;
       },
     });
     return label;
@@ -590,10 +704,13 @@ export class FilmWorkspace {
       const { width, height } = filmDimensions({ ...params, megapixels });
       return `${String(megapixels).replace('.', ',')} MP · ${width}×${height}`;
     };
-    const megapixelChoices = (list, current) =>
-      [...new Set([...list, current])]
-        .sort((a, b) => a - b)
-        .map((value) => ({ value: String(value), text: sizeLabel(value) }));
+    const megapixelChoices = (list, current) => {
+      const choices = list.map((value) => ({ value: String(value), text: sizeLabel(value) }));
+      // Do not silently change an existing render setting just by opening its project.
+      if (!list.includes(current))
+        choices.unshift({ value: String(current), text: `${sizeLabel(current)} · Anterior`, disabled: true });
+      return choices;
+    };
     const aspects = FILM_ASPECT_RATIOS.some((item) => item.value === params.aspectRatio)
       ? FILM_ASPECT_RATIOS
       : [...FILM_ASPECT_RATIOS, { value: params.aspectRatio, name: 'Personalizada' }];
@@ -617,13 +734,13 @@ export class FilmWorkspace {
       ),
       this.field(
         'Resolución previsualización',
-        megapixelChoices(PREVIEW_MEGAPIXELS, params.megapixels),
+        megapixelChoices(FILM_PREVIEW_MEGAPIXELS, params.megapixels),
         String(params.megapixels),
         set('megapixels'),
       ),
       this.field(
         'Resolución final',
-        megapixelChoices(FINAL_MEGAPIXELS, params.finalMegapixels),
+        megapixelChoices(FILM_FINAL_MEGAPIXELS, params.finalMegapixels),
         String(params.finalMegapixels),
         set('finalMegapixels'),
       ),
@@ -847,7 +964,7 @@ export class FilmWorkspace {
     const section = el('section', 'character-node film-node film-node--params');
     section.setAttribute('aria-label', `Parámetros del plano ${index + 1}`);
     const header = el('header', 'film-node__header');
-    header.append(el('h2', 'character-eyebrow', 'PARÁMETROS DE GENERACIÓN'));
+    header.append(el('h2', 'character-eyebrow', `PARÁMETROS PLANO ${index + 1}`));
     const chip = el('span', `film-chip film-chip--${scene.status}`, this.statusOf(scene));
     header.append(chip);
     section.append(header);
@@ -868,8 +985,8 @@ export class FilmWorkspace {
     area.spellcheck = false;
     area.addEventListener('change', () => this.editPrompt(scene.id, area.value));
     prompt.append(area);
-    section.append(prompt);
-
+    const fromScript = Boolean(this.document.source) || this.scripts().length > 0;
+    const locked = fromScript || scene.sourceRemoved;
     const grid = el('div', 'film-params');
     const length = el('label', 'film-field');
     length.append(el('span', 'film-field__label', 'Duración'));
@@ -881,11 +998,15 @@ export class FilmWorkspace {
     }
     select.value = String(scene.frames);
     select.setAttribute('aria-describedby', `film-limit-${scene.id}`);
-    select.addEventListener('change', () =>
-      this.change((document) => {
-        document.scenes.find((item) => item.id === scene.id).frames = Number(select.value);
-      }),
-    );
+    select.disabled = locked;
+    if (locked) select.dataset.locked = '1';
+    if (fromScript) length.title = 'La duración viene del guión vinculado: se cambia en el guión.';
+    select.addEventListener('change', () => {
+      if (locked || this.busy) return;
+      this.updateClip(scene.id, (node) => {
+        node.frames = Number(select.value);
+      });
+    });
     length.append(
       select,
       Object.assign(el('small', 'film-field__help', `Máximo ${FILM_MAX_SECONDS} s por plano.`), {
@@ -893,22 +1014,34 @@ export class FilmWorkspace {
       }),
     );
     this.enhance(select, { searchable: false });
-    const shot = el('label', 'film-field');
-    shot.append(el('span', 'film-field__label', 'Plano'));
-    const shotInput = el('input', 'input');
-    shotInput.value = scene.shot;
-    shotInput.readOnly = true;
-    shotInput.setAttribute('aria-readonly', 'true');
-    shot.append(shotInput);
+    const framing = parseFilmShotNote(scene.shot).framing || filmShotName(scene.shot).split(';')[0].trim();
+    const framings = ['', ...SCREENPLAY_SHOTS];
+    if (framing && !framings.includes(framing)) framings.push(framing);
+    const shot = this.field(
+      'Encuadre',
+      framings.map((value) => ({ value, text: value || 'Tipo de plano' })),
+      framing,
+      (value) => {
+        if (locked || this.busy) return;
+        this.updateClip(scene.id, (node) => {
+          node.shot = filmShotWithFraming(node.shot, value);
+        });
+      },
+    );
+    shot.classList.add('film-field--framing');
+    const shotSelect = shot.querySelector('select');
+    shotSelect.disabled = locked;
+    if (locked) shotSelect.dataset.locked = '1';
+    if (fromScript) shot.title = 'El encuadre viene del guión vinculado: se cambia en el guión.';
     const seed = el('label', 'film-field');
-    seed.append(el('span', 'film-field__label', 'Semilla'));
+    seed.append(el('span', 'film-field__label', 'Seed'));
     const seedInput = el('input', 'input');
     seedInput.value = String(scene.preview?.seed ?? scene.seed);
     seedInput.readOnly = true;
     seedInput.setAttribute('aria-readonly', 'true');
     seed.append(seedInput);
-    grid.append(length, shot, seed);
-    section.append(grid);
+    grid.append(length, shot, this.buildMovement(scene), seed);
+    section.append(grid, prompt);
 
     const references = el('div', 'film-references');
     references.append(el('span', 'film-field__label', 'Referencias'));
@@ -946,7 +1079,6 @@ export class FilmWorkspace {
       warning.setAttribute('role', 'note');
       references.append(warning);
     }
-    section.append(references);
 
     if (scene.error) {
       const error = el('p', 'film-node__error', scene.error);
@@ -963,7 +1095,7 @@ export class FilmWorkspace {
     write.disabled = this.busy || scene.sourceRemoved;
     write.dataset.sceneAction = 'regenerate';
     buttons.append(write);
-    section.append(buttons);
+    section.append(buttons, references);
     return section;
   }
 
@@ -975,6 +1107,32 @@ export class FilmWorkspace {
       node.prompt = filmRecomposePrompt(document, node);
     });
     this.mount();
+  }
+  /** The camera movement of the shot, as a list select. Changing it rewrites the technical line of the prompt. */
+  buildMovement(scene) {
+    const fromScript = Boolean(this.document.source) || this.scripts().length > 0;
+    const box = el('div', 'film-movement');
+    const label = this.field(
+      'Movimiento de cámara',
+      FILM_MOVEMENTS.map((move) => ({ value: move.id, text: move.name, icon: move.icon, title: move.hint })),
+      scene.movement || 'auto',
+      (value) => {
+        if (fromScript || scene.sourceRemoved || this.busy) return;
+        this.updateClip(scene.id, (node) => {
+          node.movement = value;
+        });
+      },
+      { searchable: true },
+    );
+    // The screenplay owns inherited movement.
+    const select = label.querySelector('select');
+    select.disabled = scene.sourceRemoved || fromScript;
+    if (fromScript || scene.sourceRemoved) select.dataset.locked = '1';
+    if (fromScript) {
+      label.title = 'El movimiento viene del guión vinculado: se cambia en el guión.';
+    }
+    box.append(label);
+    return box;
   }
   /** How the clip joins the previous one: the mode, the note, the last frame as a reference and the start frame. */
   buildContinuity(scene) {
@@ -996,13 +1154,19 @@ export class FilmWorkspace {
       text: value === 'auto' ? `Automática · ${names[mode]}` : names[value],
       title: MODE_HELP[value],
     }));
-    box.append(
-      this.field('Modo', choices, scene.continuity.mode, (value) =>
-        this.updateClip(scene.id, (node) => {
-          node.continuity.mode = value;
-        }),
-      ),
+    const modeField = this.field('Modo', choices, scene.continuity.mode, (value) =>
+      this.updateClip(scene.id, (node) => {
+        node.continuity.mode = value;
+      }),
     );
+    // The transition is chosen in the screenplay: with one linked the film inherits it and does not edit it here.
+    if (Boolean(this.document.source) || this.scripts().length > 0) {
+      const select = modeField.querySelector('select');
+      select.disabled = true;
+      select.dataset.locked = '1';
+      modeField.title = 'La transición viene del guión vinculado: se cambia en el guión.';
+    }
+    box.append(modeField);
     const hint = {
       take: 'El clip sigue la misma toma: se genera con 22 fotogramas más que repiten el final del anterior y guían su arranque. Esos fotogramas no se reproducen.',
       cut: 'Otro plano de la misma escena: la nota describe cómo está la acción al empezar, y el último fotograma del anterior puede ir como referencia.',
@@ -1249,7 +1413,11 @@ export class FilmWorkspace {
     this.renderButton.disabled = this.busy || !this.canRender() || !this.videoReady();
     this.finalButton.disabled = this.busy || !this.canFinalize() || !this.videoReady();
     this.discardRemovedButton.disabled = this.busy;
-    for (const { select } of this.selectControls) select.disabled = this.busy;
+    for (const { select } of this.selectControls)
+      select.disabled = this.busy || select.dataset.locked === '1';
+    for (const input of this.camera?.querySelectorAll('.film-palettes__input') || [])
+      input.disabled = this.busy;
+    this.camera?.setAttribute('aria-busy', String(this.busy));
     this.retryButton.hidden = !failed || this.busy;
     this.retryFailedButton.hidden =
       this.busy || !this.document.scenes.some((scene) => scene.status === 'failed' && !scene.sourceRemoved);
@@ -1277,7 +1445,7 @@ export class FilmWorkspace {
     for (const button of this.board.querySelectorAll('[data-scene-action]'))
       button.disabled = this.busy || button.closest('.film-row')?.classList.contains('is-removed');
     for (const field of this.board.querySelectorAll('.film-row textarea, .film-row select'))
-      field.disabled = this.busy;
+      field.disabled = this.busy || field.dataset.locked === '1';
     this.wrapper?.classList.toggle('editor-layout-wrapper--film-empty', intro);
   }
 

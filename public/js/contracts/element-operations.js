@@ -1,5 +1,9 @@
+import { SCREENPLAY_SHOTS } from './screenplay.js';
 import { SCENARIO_FIELDS } from './scenario.js';
-import { FILM_FRAME_OPTIONS } from './film.js';
+import { FILM_FRAME_OPTIONS, FILM_PREVIEW_MEGAPIXELS, FILM_FINAL_MEGAPIXELS } from './film.js';
+import { FILM_OPTICS_GROUPS } from './film-optics.js';
+import { FILM_PALETTES, FILM_PALETTE_MAX_COLORS } from './film-palettes.js';
+import { FILM_MOVEMENTS } from './film-movements.js';
 import { inlineDefinitions, INLINE_BRANCHES } from './inline-operations.js';
 import { validateSchema, explainSchemaErrors, pruneUndeclared } from './json-schema.js';
 import {
@@ -230,9 +234,9 @@ function videoDefinitions() {
       pattern: '^\\d{1,3}:\\d{1,3}$',
       'x-hint': 'La proporción se escribe como «16:9» (también «37:20» para 1,85:1, etc.).',
     }),
-    SetMegapixels: field('megapixels', { type: 'number', minimum: 0.1, maximum: 16 }),
+    SetMegapixels: field('megapixels', { type: 'number', enum: FILM_PREVIEW_MEGAPIXELS }),
     SetSteps: field('steps', { type: 'integer', minimum: 1, maximum: 10 }),
-    SetFinalMegapixels: field('finalMegapixels', { type: 'number', minimum: 0.1, maximum: 16 }),
+    SetFinalMegapixels: field('finalMegapixels', { type: 'number', enum: FILM_FINAL_MEGAPIXELS }),
     SetScenePrompt: {
       type: 'object',
       required: ['op', 'id', 'prompt'],
@@ -267,7 +271,55 @@ function videoDefinitions() {
       'x-hint':
         'remove_scene descarta un clip que ya no está en el guión (sourceRemoved); un clip que sigue en el guión no se descarta: se cambia el guión y se actualiza la película.',
     },
+    SetSceneOptics: {
+      type: 'object',
+      required: ['op', 'id'],
+      additionalProperties: false,
+      properties: {
+        op: { const: 'set_scene_optics' },
+        id: { $ref: '#/$defs/Id' },
+        camera: { enum: FILM_OPTICS_GROUPS.camera.map((item) => item.id) },
+        lens: { enum: FILM_OPTICS_GROUPS.lens.map((item) => item.id) },
+        aperture: { enum: FILM_OPTICS_GROUPS.aperture.map((item) => item.id) },
+        palette: { enum: ['auto', 'custom', ...FILM_PALETTES.map((item) => item.id)] },
+        colors: {
+          type: 'array',
+          maxItems: FILM_PALETTE_MAX_COLORS,
+          items: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$' },
+        },
+      },
+      'x-hint':
+        'set_scene_optics cambia la óptica de una escena del metraje, como sus selectores: id es el de cualquier clip de esa escena; camera, lens y aperture eligen una opción de su catálogo (auto deja que decida el plano) y palette una paleta de color (auto, una del catálogo o custom con colors, hasta ' +
+        FILM_PALETTE_MAX_COLORS +
+        ' valores #rrggbb). Los prompts de todos los clips de la escena se componen de nuevo con la óptica.',
+    },
+    SetSceneFraming: {
+      type: 'object',
+      required: ['op', 'id', 'framing'],
+      additionalProperties: false,
+      properties: {
+        op: { const: 'set_scene_framing' },
+        id: { $ref: '#/$defs/Id' },
+        framing: { enum: ['', ...SCREENPLAY_SHOTS] },
+      },
+      'x-hint':
+        'set_scene_framing {id,framing} elige el encuadre del catálogo del guión. Duración, encuadre y movimiento son heredados y no se cambian en metraje mientras exista un guión vinculado: edita el guión y actualiza desde él. Sin guión vinculado pueden editarse aquí.',
+    },
+    SetSceneMovement: {
+      type: 'object',
+      required: ['op', 'id', 'movement'],
+      additionalProperties: false,
+      properties: {
+        op: { const: 'set_scene_movement' },
+        id: { $ref: '#/$defs/Id' },
+        movement: { enum: FILM_MOVEMENTS.map((item) => item.id) },
+      },
+      'x-hint':
+        'Solo sin guión vinculado: set_scene_movement elige el movimiento de cámara de un plano (id es el del clip): auto deja que lo elija el modelo; cualquier otro lo escribe en la línea técnica del prompt y el modelo lo desarrolla al escribir la descripción.',
+    },
     SetSceneFrames: {
+      'x-hint':
+        'Duración heredada: solo se cambia sin guión vinculado. Con guión, edita su plano y actualiza el metraje.',
       type: 'object',
       required: ['op', 'id', 'frames'],
       additionalProperties: false,
@@ -276,7 +328,7 @@ function videoDefinitions() {
         id: { $ref: '#/$defs/Id' },
         frames: {
           enum: [...FILM_FRAME_OPTIONS],
-          'x-hint': 'Los fotogramas a 24 por segundo: ' + FILM_FRAME_OPTIONS.join(', ') + ' (hasta 10 s).',
+          'x-hint': 'Los fotogramas a 24 por segundo: ' + FILM_FRAME_OPTIONS.join(', ') + ' (hasta 15 s).',
         },
       },
     },
@@ -289,6 +341,9 @@ const VIDEO = [
   'SetFinalMegapixels',
   'SetScenePrompt',
   'SetSceneFrames',
+  'SetSceneFraming',
+  'SetSceneOptics',
+  'SetSceneMovement',
   'SetSceneContinuity',
   'RemoveScene',
   'CreateResource',
@@ -315,7 +370,7 @@ const KINDS = {
     defs: videoDefinitions,
     branches: () => VIDEO,
     hint: () =>
-      'set_field edita un parámetro del metraje: id aspectRatio ("16:9"), megapixels (0.1 a 16, de la previsualización), finalMegapixels (0.1 a 16, del video final escalado) o steps (1 a 10) y value su valor; set_scene_prompt {id,prompt} escribe el prompt de un plano, set_scene_frames {id,frames} cambia su duración y set_scene_continuity {id,mode,note,frame} cambia cómo sigue al plano anterior; remove_scene {id} descarta un clip que ya no está en el guión.',
+      'set_field edita un parámetro del metraje: id aspectRatio ("16:9"), megapixels (0.1 a 0.6, de la previsualización, en pasos de 0.1), finalMegapixels (0.5 a 2, del video final escalado, en pasos de 0.1) o steps (1 a 10) y value su valor; set_scene_prompt {id,prompt} escribe el prompt de un plano, set_scene_frames {id,frames} cambia su duración, set_scene_framing {id,framing} cambia el encuadre del catálogo del guión y set_scene_continuity {id,mode,note,frame} cambia cómo sigue al plano anterior; remove_scene {id} descarta un clip que ya no está en el guión.',
   },
 };
 

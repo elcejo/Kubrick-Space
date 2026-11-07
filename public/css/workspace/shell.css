@@ -36,6 +36,37 @@
   pointer-events: auto;
 }
 
+/* Inference stays outside the canvas transform and leaves its empty area clickable. */
+.workspace__inference {
+  position: absolute;
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: var(--workspace-navigator-width);
+  right: var(--workspace-chat-collapsed-width);
+  z-index: 20;
+  pointer-events: none;
+  transition: right var(--transition-slow) ease;
+}
+
+.workspace-inference-toolbar {
+  display: flex;
+  align-items: flex-end;
+  padding: 10px 16px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.workspace__inference
+  :is(button, input, select, [role='option'], .settings-model-popover, .kai-select__menu) {
+  pointer-events: auto;
+}
+
+.workspace-inference-toolbar :is(.settings-model-popover, .kai-select__menu) {
+  --liquid-glass-tint: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  background: var(--liquid-glass-tint);
+  backdrop-filter: blur(var(--liquid-glass-blur, 2px));
+  -webkit-backdrop-filter: blur(var(--liquid-glass-blur, 2px));
+}
+
 .workspace__navigator {
   position: absolute;
   top: 0;
@@ -912,10 +943,12 @@
 
 .toolbar-inference-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  pointer-events: auto;
+  max-width: 100%;
+  pointer-events: none;
 }
 
 .toolbar-inference-controls .kai-select {
@@ -961,6 +994,12 @@
     padding: 6px 10px;
     flex-wrap: wrap;
     gap: 2px;
+  }
+  .workspace-inference-toolbar {
+    padding: 6px 10px;
+  }
+  .toolbar-inference-controls .kai-select {
+    width: clamp(110px, 26vw, 180px);
   }
   .toolbar-left {
     flex: 1 0 100%;

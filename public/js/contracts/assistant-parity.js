@@ -37,6 +37,12 @@ export const missing = (kind, area, capability, batch, note = '') => ({
 
 export const ASSISTANT_PARITY = Object.freeze([
   // Story Book
+  covered(
+    'story-book',
+    'Texto',
+    'Expandir o corregir el párrafo, tema o capítulo adjunto sin salir de su alcance',
+    ['replace_text', 'insert_paragraph', 'insert_theme'],
+  ),
   covered('story-book', 'Texto', 'Escribir y corregir el título, los capítulos, los temas y los párrafos', [
     'replace_text',
   ]),
@@ -161,12 +167,25 @@ export const ASSISTANT_PARITY = Object.freeze([
     note: 'el archivo o la dirección los aporta la persona; el asistente genera las imágenes (ESCENARIO)',
   },
   // Largometraje
+  {
+    kind: 'film',
+    area: 'Reproducción',
+    capability:
+      'Modo Cine: reproducir la escena completa, buscar entre clips, regular audio y abrir pantalla completa',
+    status: 'excluded',
+    note: 'controles de reproducción transitorios de la persona; no modifican el documento ni generan contenido',
+  },
   covered('film', 'Parámetros', 'Cambiar proporción, megapíxeles y pasos', ['set_field']),
   covered('film', 'Escenas', 'Cambiar la duración de un plano y escribir su prompt a mano', [
     'set_scene_frames',
     'set_scene_prompt',
   ]),
   covered('film', 'Escenas', 'Descartar un clip que ya no está en el guión', ['remove_scene']),
+  covered('film', 'Óptica', 'Elegir la cámara, la lente, la apertura y la paleta de color de una escena', [
+    'set_scene_optics',
+  ]),
+  covered('film', 'Escenas', 'Elegir el encuadre del plano sin guión vinculado', ['set_scene_framing']),
+  covered('film', 'Escenas', 'Elegir el movimiento de cámara de un plano', ['set_scene_movement']),
   covered(
     'film',
     'Continuidad',
@@ -211,6 +230,13 @@ export const ASSISTANT_PARITY = Object.freeze([
     ['PERSONAJE'],
   ),
   // Cualquier proyecto
+  missing(
+    'project',
+    'Conversaciones',
+    'Guardar y compartir chats con assets o carpetas de proyecto',
+    5,
+    'Interfaz y API implementadas; pendiente una herramienta del asistente para administrar el uso compartido.',
+  ),
   covered('project', 'Proyectos', 'Crear un proyecto', ['CREAR_PROYECTO']),
   covered('project', 'Proyectos', 'Leer el contenido de otro proyecto', ['LEER_PROYECTO']),
   covered('project', 'Calidad', 'Revisar la continuidad', ['CONTINUIDAD']),
@@ -292,6 +318,7 @@ export function assistantParityMarkdown(rows = ASSISTANT_PARITY) {
     '2. Mover y reordenar en libro y guión, y gestión de proyectos: renombrar, papelera y restaurar (hecho). El tipo del escenario y la categoría de un proyecto no se cambian a mano, así que no figuran.',
     '3. Formato, términos y protección del texto en libro y guión; portadas, ingredientes y versiones; imágenes y referencias de escenarios (hecho).',
     '4. Largometraje: duración y prompt de cada plano, generación, previsualizaciones, aprobación y control del trabajo (hecho). Las previsualizaciones necesitan el modelo de video local que elige la persona en la barra superior.',
+    '5. Administración de conversaciones guardadas y su uso compartido por assets/carpetas (pendiente).',
     '',
   );
   return lines.join('\n');

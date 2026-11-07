@@ -67,10 +67,18 @@ import { captureScroll, restoreScroll } from './reader-scroll.js';
  * ed.init(canvasTransformContainer, projectData);
  */
 export class Editor {
+  #paragraphDropTarget = null;
+  setParagraphDropTarget(target) {
+    this.#paragraphDropTarget = target;
+  }
+
   #storyEditing = new StoryBookEditing(this.#storyEditingContext());
   #storyEditingContext() {
     const editor = this;
     return {
+      get paragraphDropTarget() {
+        return editor.#paragraphDropTarget;
+      },
       isStoryBook: (...args) => editor.#isStoryBook(...args),
       ensureStoryBookTimelinePorts: (...args) => editor.#ensureStoryBookTimelinePorts(...args),
       syncStoryBookTimelineVisualState: (...args) => editor.#syncStoryBookTimelineVisualState(...args),
@@ -1422,7 +1430,11 @@ export class Editor {
     if (!this.#surface) return;
     if (this.#mode === Mode.WYSIWYG) {
       if (this.#isStoryBook()) {
-        this.#storyBookDocument = storyBookDocumentFromHTML(this.#surface.innerHTML, this.#storyBookDocument);
+        // Autosave or context reads during a drag must see the last committed order.
+        this.#storyBookDocument = storyBookDocumentFromHTML(
+          this.#storyEditing.stableHTML(this.#surface),
+          this.#storyBookDocument,
+        );
         this.#htmlContent = safeContent(storyBookDocumentToHTML(this.#storyBookDocument));
       } else if (this.#isScreenplay()) {
         this.#screenplayDocument = screenplayFromHTML(

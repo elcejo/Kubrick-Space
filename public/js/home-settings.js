@@ -6,7 +6,9 @@ import { TaskHistory } from './task-history.js';
 const providers = [
   ['openrouter', 'OpenRouter', 'Texto e imágenes'],
   ['replicate', 'Replicate', 'Generación multimedia'],
+  ['gemini', 'Google Gemini', 'Texto e imágenes de Gemini'],
   ['openai', 'OpenAI', 'Servicios de OpenAI'],
+  ['opencode', 'OpenCode Zen', 'Modelos de texto de OpenCode'],
   ['minimax', 'MiniMax', 'Servicios de MiniMax'],
   ['artificial-analysis', 'Artificial Analysis', 'Rankings y benchmark de inteligencia'],
 ];
@@ -26,7 +28,7 @@ export class HomeSettings {
     dialog.className = 'studio-settings';
     dialog.setAttribute('aria-labelledby', 'settings-title');
     dialog.innerHTML = safeHTML(`
-      <header class="settings-header"><div><h2 id="settings-title">Configuración</h2></div><div class="settings-header-actions"><a class="settings-docs-link" href="/roadmap.html" target="_blank" rel="noopener">${renderIcon('timeline')} Roadmap</a><button type="button" class="settings-close" aria-label="Cerrar configuración">${renderIcon('close', 18)}</button></div></header>
+      <header class="settings-header"><div><h2 id="settings-title">Configuración</h2></div><div class="settings-header-actions"><button type="button" class="settings-close" aria-label="Cerrar configuración">${renderIcon('close', 18)}</button></div></header>
       <div class="settings-tabs" role="tablist" aria-label="Secciones de configuración"><button type="button" id="settings-api-tab" role="tab" aria-selected="true" aria-controls="settings-api">Claves API</button></div>
       <section id="settings-api" role="tabpanel" aria-labelledby="settings-api-tab"><div class="settings-intro"><p>Conecta tus proveedores con una clave API.</p><details class="settings-storage-help"><summary>Almacenamiento y privacidad</summary><p>Las claves se guardan en esta computadora sin cifrado de aplicación. No compartas la carpeta del proyecto. Los campos vacíos conservan la clave actual.</p></details></div><form id="settings-key-form" autocomplete="off"><div class="settings-providers"></div><footer class="settings-footer"><p role="status" aria-live="polite" data-key-status>Cargando estado de las claves…</p><button class="studio-button studio-primary" type="submit" disabled>Guardar claves</button></footer></form></section>`);
     const historyTab = document.createElement('button');

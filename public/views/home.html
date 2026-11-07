@@ -1,156 +1,202 @@
-<section class="studio-home" id="home-view-container" aria-label="Inicio de Kubrick Space">
-  <aside class="studio-nav">
-    <div class="studio-nav-content">
-      <a class="studio-brand" href="#/" aria-label="Kubrick Space, inicio"
+<section class="studio-home space-home" id="home-view-container" aria-label="Inicio de Kubrick Space">
+  <header class="k-header">
+    <a class="studio-brand" href="#/" aria-label="Kubrick Space, inicio"
+      ><span class="brand-logo" aria-hidden="true"><span class="brand-logo__initial">K</span>ubrick</span></a
+    >
+    <nav class="k-navigation" aria-label="Navegación principal">
+      <a href="#/" data-nav="explore">Explorar</a><a href="#/profile" data-nav="profile">Mi espacio</a
+      ><a href="#/profile/projects" data-nav="projects">Proyectos</a>
+    </nav>
+    <div class="k-header-actions">
+      <button class="k-icon-button" data-action="theme" aria-label="Cambiar tema" title="Cambiar tema">
+        <span data-home-icon="sun"></span></button
+      ><button class="k-icon-button" data-action="settings" aria-label="Configuración" title="Configuración">
+        <span data-home-icon="settings"></span></button
+      ><button class="studio-button k-create-button" data-action="new">
+        <span data-home-icon="plus"></span><span>Crear asset</span></button
+      ><a class="k-avatar" href="#/profile" aria-label="Mi perfil"><span data-home-icon="kubrick"></span></a>
+    </div>
+  </header>
+  <main class="k-main">
+    <div id="home-load-error" role="alert" hidden></div>
+    <section class="k-hero" aria-labelledby="discovery-title">
+      <img
+        class="k-hero-image"
+        src="/assets/home/orbit.png"
+        alt="Un explorador ante un portal violeta en un paisaje cinematográfico"
+        fetchpriority="high"
+      />
+      <div class="k-hero-copy">
+        <span class="k-kicker">IMAGINA. CREA. HAZ CINE.</span>
+        <h1 id="discovery-title">Aquí empieza<br />tu próximo <em>universo.</em></h1>
+        <p>De la primera idea al último plano.<br />Un espacio para todas tus historias.</p>
+        <a class="studio-button k-hero-button" href="#/wizard/video/feature"
+          >Crear una película <span data-home-icon="arrow-up-right"></span
+        ></a>
+      </div>
+      <div class="k-hero-caption"><span class="k-live-dot"></span> TU IMAGINACIÓN, SIN LÍMITES</div>
+    </section>
+    <section class="discovery-section" id="create-section" aria-labelledby="creation-title">
+      <div class="k-section-heading">
+        <div>
+          <span class="k-kicker">TU SIGUIENTE GRAN IDEA</span>
+          <h2 id="creation-title">¿Qué vamos a crear?</h2>
+        </div>
+        <a href="#/wizard">Explorar formatos <span data-home-icon="arrow-right"></span></a>
+      </div>
+      <div id="creation-grid" class="creation-grid"></div>
+      <div class="k-sub-links">
+        <span>Diseña cada rincón de tu historia.</span
+        ><a href="#/wizard/stage/interior">Escenario interior <span data-home-icon="arrow-up-right"></span></a
+        ><a href="#/wizard/stage/exterior"
+          >Escenario exterior <span data-home-icon="arrow-up-right"></span
+        ></a>
+      </div>
+    </section>
+    <section id="home-resume" class="discovery-section" aria-label="Continuar trabajando"></section>
+    <section class="discovery-section k-next-section" aria-labelledby="next-title">
+      <div class="k-section-heading">
+        <div>
+          <span class="k-kicker">EL ESPACIO SIGUE CRECIENDO</span>
+          <h2 id="next-title">Lo próximo en tu estudio.</h2>
+        </div>
+      </div>
+      <div class="k-upcoming-grid">
+        <article class="upcoming-card upcoming-card--audio">
+          <img src="/assets/home/soundtrack.webp" alt="" loading="lazy" />
+          <div>
+            <span class="k-badge">Coming soon</span>
+            <h3>Crea el sonido<br />de tu historia.</h3>
+            <p>Soundtracks para universos que aún no existen.</p>
+          </div>
+          <span class="k-upcoming-symbol" data-home-icon="music"></span>
+        </article>
+        <article class="upcoming-card upcoming-card--short">
+          <img src="/assets/home/influencer.webp" alt="" loading="lazy" />
+          <div>
+            <span class="k-badge">Coming soon</span>
+            <h3>Una idea.<br />Un short extraordinario.</h3>
+            <p>Tu próximo formato de influencer.</p>
+          </div>
+          <span class="k-upcoming-symbol" data-home-icon="video"></span>
+        </article>
+      </div>
+    </section>
+    <section class="discovery-section" aria-labelledby="community-title">
+      <div class="k-section-heading">
+        <div>
+          <span class="k-kicker">HISTORIAS QUE MERECEN PANTALLA</span>
+          <h2 id="community-title">Cine hecho con imaginación.</h2>
+        </div>
+        <span class="k-badge">Comunidad · Vista previa</span>
+      </div>
+      <p class="k-section-intro">
+        Así se verá el espacio para descubrir películas de otros creadores. Obras de demostración.
+      </p>
+      <div id="community-grid" class="showcase-grid"></div>
+    </section>
+    <section class="discovery-section" aria-labelledby="shorts-title">
+      <div class="k-section-heading">
+        <div>
+          <span class="k-kicker">OTRAS MIRADAS, NUEVAS IDEAS</span>
+          <h2 id="shorts-title">Pequeñas historias. Gran pantalla.</h2>
+        </div>
+        <span class="k-badge">Videos publicados · Vista previa</span>
+      </div>
+      <div id="shorts-grid" class="shorts-grid"></div>
+    </section>
+    <section class="k-personal-callout discovery-section">
+      <div>
+        <span class="k-kicker">TODO TIENE SU LUGAR</span>
+        <h2>Tu estudio, a tu manera.</h2>
+        <p>
+          Historias, personajes y escenarios. Reúne tus assets en proyectos y vuelve a crear cuando quieras.
+        </p>
+      </div>
+      <a class="studio-button k-hero-button" href="#/profile"
+        >Entrar a mi espacio <span data-home-icon="arrow-up-right"></span
+      ></a>
+    </section>
+    <div class="space-hidden-library" hidden>
+      <nav id="home-type-nav"></nav>
+      <section class="studio-library" aria-labelledby="home-library-title">
+        <div class="studio-library-heading">
+          <div>
+            <h2 id="home-library-title">Todos los assets <span id="project-count"></span></h2>
+            <p id="home-library-description">Cada pieza de tu próximo gran relato.</p>
+          </div>
+          <div class="studio-view-switch" role="group" aria-label="Vista de assets">
+            <button data-view="library" aria-pressed="true">Biblioteca</button
+            ><button data-view="map" aria-pressed="false">Mapa</button>
+          </div>
+        </div>
+        <div class="studio-tools">
+          <label class="studio-search"
+            ><svg
+              class="kai-icon"
+              data-icon="search"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <circle cx="10.5" cy="10.5" r="6" />
+              <path d="m15 15 5 5" /></svg
+            ><input
+              id="home-search"
+              type="search"
+              placeholder="Buscar por nombre o categoría…"
+              aria-label="Buscar assets"
+              autocomplete="off"
+          /></label>
+          <label class="studio-sort"
+            >Ordenar por
+            <select id="home-sort">
+              <option value="recent">Última modificación</option>
+              <option value="name">Nombre: A–Z</option>
+              <option value="oldest">Más antiguos</option>
+            </select></label
+          >
+        </div>
+        <p id="home-result-count" class="studio-result-count" role="status" aria-live="polite"></p>
+        <div id="project-list-container" class="studio-grid"></div>
+        <div id="home-map" class="studio-map-layout" hidden>
+          <div class="studio-map-stage">
+            <div class="studio-map-caption">
+              CONEXIONES DE TU UNIVERSO<span>Selecciona un asset para explorar sus relaciones.</span>
+            </div>
+            <div id="bubble-map-canvas-container">
+              <svg id="bubble-map-svg" aria-hidden="true"></svg>
+              <div id="bubble-map-nodes"></div>
+            </div>
+            <div id="home-map-legend" class="studio-map-legend" aria-label="Leyenda del mapa"></div>
+          </div>
+          <aside
+            id="home-map-detail"
+            class="studio-map-detail"
+            aria-label="Detalle del asset seleccionado"
+          ></aside>
+        </div>
+        <div id="home-empty" class="studio-empty" hidden></div>
+      </section>
+    </div>
+    <div id="space-profile-name" hidden></div>
+    <footer class="k-footer">
+      <a class="studio-brand" href="#/" aria-label="Kubrick Space"
         ><span class="brand-logo" aria-hidden="true"
           ><span class="brand-logo__initial">K</span>ubrick</span
         ></a
       >
-      <div class="studio-nav-label">ESPACIO CREATIVO</div>
-      <nav id="home-type-nav" aria-label="Tipos de proyecto"></nav>
-      <div class="studio-home-tools">
-        <button class="studio-button" data-action="settings">
-          <svg
-            class="kai-icon"
-            data-icon="settings"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path
-              d="M10.4 4.47 10.51 2.62h2.98l.11 1.85 2.59 1.07 1.39-1.23 2.11 2.11-1.23 1.39 1.07 2.59 1.85.11v2.98l-1.85.11-1.07 2.59 1.23 1.39-2.11 2.11-1.39-1.23-2.59 1.07-.11 1.85h-2.98l-.11-1.85-2.59-1.07-1.39 1.23-2.11-2.11 1.23-1.39-1.07-2.59-1.85-.11v-2.98l1.85-.11 1.07-2.59-1.23-1.39 2.11-2.11 1.39 1.23 2.59-1.07Z"
-            />
-            <circle cx="12" cy="12" r="3.25" />
-          </svg>
-          Configuración</button
-        ><button class="studio-button" data-action="trash">
-          <svg
-            class="kai-icon"
-            data-icon="trash"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6" /></svg
-          >Papelera
-        </button>
-      </div>
-      <div class="studio-nav-bottom">
-        <span class="studio-local-dot"></span> Espacio personal
-        <span class="studio-local-label">Guardado en tu computadora</span>
-      </div>
-    </div>
-  </aside>
-  <main class="studio-main">
-    <header class="studio-heading">
+      <p>Un espacio para imaginar. Un lugar para crear.</p>
       <div>
-        <p class="studio-eyebrow">TU ESTUDIO · TUS HISTORIAS</p>
-        <h1>Tu universo creativo<span>.</span></h1>
-        <p class="studio-description">Historias, personajes y mundos. Todo comienza aquí.</p>
+
       </div>
-      <button class="studio-button studio-primary" id="btn-new-project">
-        <span aria-hidden="true"
-          ><svg
-            class="kai-icon"
-            data-icon="plus"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <path d="M12 5v14M5 12h14" /></svg
-        ></span>
-        Nuevo proyecto
-      </button>
-    </header>
-    <div id="home-load-error" role="alert" hidden></div>
-    <section id="home-resume" aria-label="Continuar trabajando"></section>
-    <section class="studio-library" aria-labelledby="home-library-title">
-      <div class="studio-library-heading">
-        <div>
-          <h2 id="home-library-title">Todos los proyectos <span id="project-count"></span></h2>
-          <p id="home-library-description">Cada pieza de tu próximo gran relato.</p>
-        </div>
-        <div class="studio-view-switch" role="group" aria-label="Vista de proyectos">
-          <button data-view="library" aria-pressed="true">Biblioteca</button
-          ><button data-view="map" aria-pressed="false">Mapa</button>
-        </div>
-      </div>
-      <div class="studio-tools">
-        <label class="studio-search"
-          ><svg
-            class="kai-icon"
-            data-icon="search"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <circle cx="10.5" cy="10.5" r="6" />
-            <path d="m15 15 5 5" /></svg
-          ><input
-            id="home-search"
-            type="search"
-            placeholder="Buscar por nombre o categoría…"
-            aria-label="Buscar proyectos"
-            autocomplete="off"
-        /></label>
-        <label class="studio-sort"
-          >Ordenar por
-          <select id="home-sort">
-            <option value="recent">Última modificación</option>
-            <option value="name">Nombre: A–Z</option>
-            <option value="oldest">Más antiguos</option>
-          </select></label
-        >
-      </div>
-      <p id="home-result-count" class="studio-result-count" role="status" aria-live="polite"></p>
-      <div id="project-list-container" class="studio-grid"></div>
-      <div id="home-map" class="studio-map-layout" hidden>
-        <div class="studio-map-stage">
-          <div class="studio-map-caption">
-            CONEXIONES DE TU UNIVERSO<span>Selecciona un proyecto para explorar sus relaciones.</span>
-          </div>
-          <div id="bubble-map-canvas-container">
-            <svg id="bubble-map-svg" aria-hidden="true"></svg>
-            <div id="bubble-map-nodes"></div>
-          </div>
-          <div id="home-map-legend" class="studio-map-legend" aria-label="Leyenda del mapa"></div>
-        </div>
-        <aside
-          id="home-map-detail"
-          class="studio-map-detail"
-          aria-label="Detalle del proyecto seleccionado"
-        ></aside>
-      </div>
-      <div id="home-empty" class="studio-empty" hidden></div>
-    </section>
-    <footer class="studio-footer">Un espacio para imaginar. Un lugar para crear.</footer>
+    </footer>
   </main>
 </section>

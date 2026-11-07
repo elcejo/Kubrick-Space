@@ -6,6 +6,7 @@ const {
   FILM_FRAME_OPTIONS,
   FILM_MAX_SECONDS,
   filmContinuityMode,
+  FILM_DEFAULT_CONTINUITY,
   filmHash,
   filmLookKey,
   filmNoteKey,
@@ -23,9 +24,12 @@ const {
   filmComposePrompt,
   filmRecomposePrompt,
   filmSceneRequest,
+  filmShotMovement,
   parseFilmPrompt,
   parseFilmShotNote,
 } = require('../../../public/js/contracts/film-prompt.js');
+const { filmOpticsOf } = require('../../../public/js/contracts/film-optics.js');
+const { filmTransitionFromNote } = require('../../../public/js/contracts/film-transitions.js');
 const { filmDialogueCapacity, filmDialogueWords } = require('../../../public/js/contracts/film-split.js');
 const {
   parseCharacterDocument,
@@ -277,6 +281,11 @@ function createFilmJobs(deps, { infer, readImage, videoFrames, makeOperations })
               // The duration of the shot, when the screenplay states one; otherwise the model proposes it.
               frames: seconds ? snapFilmFrames(Math.min(seconds, FILM_MAX_SECONDS)) : null,
               shot: (shot.explicit ? shot.title : scene.heading.shot || '').slice(0, 400),
+              movement: filmShotMovement(shot.explicit ? shot.title : ''),
+              continuity: {
+                ...FILM_DEFAULT_CONTINUITY,
+                mode: filmTransitionFromNote(shot.blocks.find((block) => block.type === 'transition')?.text),
+              },
               seed: randomInt(0, 2 ** 31),
               references: [],
               referenceNotes: [],
@@ -296,6 +305,8 @@ function createFilmJobs(deps, { infer, readImage, videoFrames, makeOperations })
             versionNumber: script.ingredient.importedVersionNumber || 0,
           };
           film.scenes = reconcileFilmScenes(film.scenes, incoming, randomUUID);
+          // The movement and the transition of a shot are in its prompt: put it together again with what was inherited.
+          for (const node of film.scenes) node.prompt = filmRecomposePrompt(film, node);
           return film;
         });
         return { scenes: incoming.length };
@@ -556,6 +567,7 @@ function createFilmJobs(deps, { infer, readImage, videoFrames, makeOperations })
           references,
           previous,
           duration: statedSeconds,
+          movement: scene.movement,
         });
         const tags = references.map((reference) => reference.tag);
         const ask = (extra = '') =>
@@ -651,6 +663,8 @@ function createFilmJobs(deps, { infer, readImage, videoFrames, makeOperations })
             seconds,
             look,
             continuity: note,
+            optics: filmOpticsOf(now, scene.sourceSceneId),
+            movement: scene.movement,
             creative: parsed.prompt,
           }),
         };

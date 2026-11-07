@@ -3,8 +3,9 @@ const { AsyncLocalStorage } = require('node:async_hooks');
 const { createLocalProvider, LOCAL_ID } = require('./local-provider.cjs');
 const llmConfig = require('./config.cjs');
 const { startLocalEngine } = require('./local-engine.cjs');
+const { createTextProviders } = require('./text-providers.cjs');
 
-function createInference({ appRoot, fetchImpl, findModel = () => null }) {
+function createInference({ appRoot, fetchImpl, findModel = () => null, getApiKeys = () => ({}) }) {
   const scope = new AsyncLocalStorage();
   const sourceFetch = fetchImpl || ((...args) => fetch(...args));
   const local = createLocalProvider({
@@ -12,6 +13,7 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
     fetchImpl: sourceFetch,
     startEngine: !fetchImpl ? () => startLocalEngine(appRoot) : undefined,
   });
+  const textProviders = createTextProviders({ fetchImpl: sourceFetch, getApiKeys });
   const currentMode = () => scope.getStore()?.mode || 'hybrid';
   // Text and image can run on different providers: a project may keep an LLM on OpenRouter and FLUX locally.
   const currentImageMode = () => {
@@ -88,6 +90,25 @@ function createInference({ appRoot, fetchImpl, findModel = () => null }) {
         return Response.json(
           { error: { message: error.message }, code: error.code },
           { status: error.status || 502 },
+        );
+      }
+    }
+    if (!imageCall && llmConfig.isExternalProviderModel(body?.model)) {
+      if (currentMode() === 'local')
+        return Response.json(
+          {
+            error: { message: 'El modo local no admite modelos de proveedores externos.' },
+            code: 'INFERENCE_MODE_MISMATCH',
+          },
+          { status: 422 },
+        );
+      try {
+        return await textProviders.run(body, options);
+      } catch (error) {
+        if (options.signal?.aborted) throw error;
+        return Response.json(
+          { error: { message: error.message }, code: 'AI_PROVIDER_CONNECTION_FAILED' },
+          { status: 502 },
         );
       }
     }

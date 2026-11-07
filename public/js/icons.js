@@ -1179,7 +1179,7 @@ export const ICONS = Object.freeze({
   ],
   stop: [
     'Cancelar tarea',
-    'Panel Tareas activas · detener un trabajo del servidor; toolbar · descargar modelo local de VRAM',
+    'Panel Tareas activas · detener un trabajo del servidor; toolbar · descargar modelo local de VRAM; compositor del asistente general · detener respuesta o ciclo agéntico',
     '<rect x="5" y="5" width="14" height="14" rx="3"/><rect x="9" y="9" width="6" height="6" rx=".8" fill="currentColor" stroke="none"/>',
   ],
   code: ['Código', 'Navigator · editor HTML', '<path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/>'],
@@ -1196,7 +1196,11 @@ export const ICONS = Object.freeze({
     'Reescribir · sincronizar ingrediente · Generar Otra propuesta del personaje y compararla con la principal · regenerar una pieza Outfit · restaurar foto de personaje · reintentar solicitud fallida del ayudante de personajes · recargar catálogos de modelos API',
     '<path d="M20 4v6h-6M4 20v-6h6M20 10a8 8 0 0 0-14-5M4 14a8 8 0 0 0 14 5"/>',
   ],
-  'arrow-right': ['Avanzar', 'Wizard · acciones', '<path d="M3 12h18m-7-7 7 7-7 7"/>'],
+  'arrow-right': [
+    'Avanzar',
+    'Wizard · acciones; asistente general · enviar mensaje, orientado hacia arriba',
+    '<path d="M3 12h18m-7-7 7 7-7 7"/>',
+  ],
   'arrow-up-right': ['Abrir', 'Inicio · documentación', '<path d="M5 19 19 5M6 5h13v13"/>'],
   'arrow-down': ['Ir abajo', 'Documentación', '<path d="M12 3v18m-7-7 7 7 7-7"/>'],
   sort: ['Ordenar', 'Listas · documentación', '<path d="M8 3v18m-4-4 4 4 4-4M16 21V3m-4 4 4-4 4 4"/>'],
@@ -1315,6 +1319,296 @@ export const ICONS = Object.freeze({
     'Relación de aspecto',
     'Selector de proporción del largometraje: el rectángulo se ajusta a cada relación de aspecto',
     '<rect class="aspect-frame__shape" x="2" y="6" width="20" height="12" rx="2"/>',
+  ],
+  'camera-digital': [
+    'Cámara digital moderna',
+    'Selector de cámara de la escena del largometraje',
+    '<rect x="3" y="8" width="13" height="10" rx="2"/><path d="M16 11l5-2.5v9L16 15M6 8V6h5v2M6 12h4"/>',
+  ],
+  'camera-35mm': [
+    'Película de 35 mm',
+    'Selector de cámara de la escena del largometraje',
+    '<circle cx="8" cy="6" r="3"/><circle cx="15" cy="6" r="3"/><rect x="3" y="9" width="14" height="10" rx="1.5"/><path d="M17 12l4-2v8l-4-2"/>',
+  ],
+  'camera-16mm': [
+    'Película de 16 mm',
+    'Selector de cámara de la escena del largometraje',
+    '<circle cx="9" cy="6" r="3"/><rect x="3" y="9" width="13" height="10" rx="2"/><circle cx="19" cy="14" r="2.5"/>',
+  ],
+  'camera-8mm': [
+    'Película de 8 mm',
+    'Selector de cámara de la escena del largometraje',
+    '<rect x="3" y="6" width="14" height="9" rx="2"/><path d="M17 9l4-1.5v6L17 12M8 15v5h4v-5M6 9h4"/>',
+  ],
+  'camera-65mm': [
+    'Gran formato de 65 mm',
+    'Selector de cámara de la escena del largometraje',
+    '<rect x="2" y="9" width="15" height="10" rx="1.5"/><rect x="4" y="3" width="11" height="6" rx="3"/><path d="M17 12l5-2v8l-5-2"/>',
+  ],
+  'camera-dv': [
+    'Videocámara DV',
+    'Selector de cámara de la escena del largometraje',
+    '<rect x="3" y="8" width="12" height="9" rx="2"/><path d="M15 10l4-2v9l-4-2M6 8l1-3h5l1 3M6 20h8"/>',
+  ],
+  'camera-vhs': [
+    'Cinta VHS',
+    'Selector de cámara de la escena del largometraje',
+    '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/><path d="M7 18l1.5-3h7L17 18"/>',
+  ],
+  'camera-phone': [
+    'Teléfono móvil',
+    'Selector de cámara de la escena del largometraje',
+    '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><circle cx="12" cy="8" r="2"/><path d="M11 18.5h2"/>',
+  ],
+  'camera-cctv': [
+    'Cámara de vigilancia',
+    'Selector de cámara de la escena del largometraje',
+    '<path d="M3 8l13-3 3 6-13 3-3-6Z"/><path d="M19 11l2 3M6 14l-.5 5M3 19h5"/>',
+  ],
+  'camera-bw': [
+    'Película en blanco y negro',
+    'Selector de cámara de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/>',
+  ],
+  'lens-auto': [
+    'Lente automática',
+    'Selector de lente de la escena del largometraje',
+    '<path d="M4 8h5v8H4zM9 6h8v12H9zM17 9h3v6h-3z"/>',
+  ],
+  'lens-clean': [
+    'Lente nítida y limpia',
+    'Selector de lente de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2"/>',
+  ],
+  'lens-anamorphic': [
+    'Lente anamórfica',
+    'Selector de lente de la escena del largometraje',
+    '<rect x="3" y="7" width="18" height="10" rx="5"/><ellipse cx="12" cy="12" rx="3.5" ry="2"/><path d="M1 12h1.5M21.5 12H23"/>',
+  ],
+  'lens-vintage-anamorphic': [
+    'Lente anamórfica antigua',
+    'Selector de lente de la escena del largometraje',
+    '<ellipse cx="12" cy="12" rx="9" ry="6"/><ellipse cx="12" cy="12" rx="4.5" ry="3"/><path d="M1 12h2M21 12h2M12 2.5v1.5"/>',
+  ],
+  'lens-warm': [
+    'Lente antigua cálida',
+    'Selector de lente de la escena del largometraje',
+    '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
+  ],
+  'lens-halation': [
+    'Lente con halación',
+    'Selector de lente de la escena del largometraje',
+    '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="6.5" stroke-dasharray="2 3"/><circle cx="12" cy="12" r="10" stroke-dasharray="1 4"/>',
+  ],
+  'lens-soft': [
+    'Filtro de difusión suave',
+    'Selector de lente de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M6 10c2-2 4 2 6 0s4 2 6 0M6 14c2-2 4 2 6 0s4 2 6 0"/>',
+  ],
+  'lens-wide': [
+    'Gran angular',
+    'Selector de lente de la escena del largometraje',
+    '<path d="M12 20 3 5h18L12 20Z"/><circle cx="12" cy="9" r="1"/>',
+  ],
+  'lens-tele': [
+    'Teleobjetivo',
+    'Selector de lente de la escena del largometraje',
+    '<rect x="2" y="9" width="14" height="6" rx="1"/><path d="M16 7v10h4V7h-4M5 9V7h4v2"/>',
+  ],
+  'lens-macro': [
+    'Lente macro',
+    'Selector de lente de la escena del largometraje',
+    '<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6M8 10h4M10 8v4"/>',
+  ],
+  'lens-fisheye': [
+    'Ojo de pez',
+    'Selector de lente de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M3 12c3-4 15-4 18 0M3 12c3 4 15 4 18 0M12 3c-4 3-4 15 0 18M12 3c4 3 4 15 0 18"/>',
+  ],
+  'aperture-auto': [
+    'Apertura automática',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9" stroke-dasharray="3 2.4"/><path d="M12 8.2L15.29 10.1L15.29 13.9L12 15.8L8.71 13.9L8.71 10.1Z"/><path d="M12 8.2L16.31 4.1M15.29 10.1L21 11.79M15.29 13.9L16.68 19.69M12 15.8L7.69 19.9M8.71 13.9L3 12.21M8.71 10.1L7.32 4.31"/>',
+  ],
+  'aperture-f1-4': [
+    'Apertura f/1.4',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 5.6L17.54 8.8L17.54 15.2L12 18.4L6.46 15.2L6.46 8.8Z"/><path d="M12 5.6L16.31 4.1M17.54 8.8L21 11.79M17.54 15.2L16.68 19.69M12 18.4L7.69 19.9M6.46 15.2L3 12.21M6.46 8.8L7.32 4.31"/>',
+  ],
+  'aperture-f2': [
+    'Apertura f/2',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 6.3L16.94 9.15L16.94 14.85L12 17.7L7.06 14.85L7.06 9.15Z"/><path d="M12 6.3L16.31 4.1M16.94 9.15L21 11.79M16.94 14.85L16.68 19.69M12 17.7L7.69 19.9M7.06 14.85L3 12.21M7.06 9.15L7.32 4.31"/>',
+  ],
+  'aperture-f2-8': [
+    'Apertura f/2.8',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 7L16.33 9.5L16.33 14.5L12 17L7.67 14.5L7.67 9.5Z"/><path d="M12 7L16.31 4.1M16.33 9.5L21 11.79M16.33 14.5L16.68 19.69M12 17L7.69 19.9M7.67 14.5L3 12.21M7.67 9.5L7.32 4.31"/>',
+  ],
+  'aperture-f4': [
+    'Apertura f/4',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 7.8L15.64 9.9L15.64 14.1L12 16.2L8.36 14.1L8.36 9.9Z"/><path d="M12 7.8L16.31 4.1M15.64 9.9L21 11.79M15.64 14.1L16.68 19.69M12 16.2L7.69 19.9M8.36 14.1L3 12.21M8.36 9.9L7.32 4.31"/>',
+  ],
+  'aperture-f5-6': [
+    'Apertura f/5.6',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 8.5L15.03 10.25L15.03 13.75L12 15.5L8.97 13.75L8.97 10.25Z"/><path d="M12 8.5L16.31 4.1M15.03 10.25L21 11.79M15.03 13.75L16.68 19.69M12 15.5L7.69 19.9M8.97 13.75L3 12.21M8.97 10.25L7.32 4.31"/>',
+  ],
+  'aperture-f8': [
+    'Apertura f/8',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 9.2L14.42 10.6L14.42 13.4L12 14.8L9.58 13.4L9.58 10.6Z"/><path d="M12 9.2L16.31 4.1M14.42 10.6L21 11.79M14.42 13.4L16.68 19.69M12 14.8L7.69 19.9M9.58 13.4L3 12.21M9.58 10.6L7.32 4.31"/>',
+  ],
+  'aperture-f11': [
+    'Apertura f/11',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 9.9L13.82 10.95L13.82 13.05L12 14.1L10.18 13.05L10.18 10.95Z"/><path d="M12 9.9L16.31 4.1M13.82 10.95L21 11.79M13.82 13.05L16.68 19.69M12 14.1L7.69 19.9M10.18 13.05L3 12.21M10.18 10.95L7.32 4.31"/>',
+  ],
+  'move-auto': [
+    'Movimiento automático',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>',
+  ],
+  'move-static': [
+    'Cámara fija',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="6" y="3" width="12" height="7" rx="1.5"/><path d="M12 10v4M12 14l-5 7M12 14l5 7M12 14v7"/>',
+  ],
+  'move-pan-left': [
+    'Panorámica a la izquierda',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M21 12H5M5 12l5-5M5 12l5 5"/><path d="M21 5v14" stroke-dasharray="2 3"/>',
+  ],
+  'move-pan-right': [
+    'Panorámica a la derecha',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M3 12h16M19 12l-5-5M19 12l-5 5"/><path d="M3 5v14" stroke-dasharray="2 3"/>',
+  ],
+  'move-tilt-up': [
+    'Cabeceo hacia arriba',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M12 21V5M12 5 7 10M12 5l5 5"/><path d="M5 21h14" stroke-dasharray="2 3"/>',
+  ],
+  'move-tilt-down': [
+    'Cabeceo hacia abajo',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M12 3v16M12 19l-5-5M12 19l5-5"/><path d="M5 3h14" stroke-dasharray="2 3"/>',
+  ],
+  'move-zoom-in': [
+    'Zoom de acercamiento',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9M10.5 7.5v6M7.5 10.5h6"/>',
+  ],
+  'move-zoom-out': [
+    'Zoom de alejamiento',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9M7.5 10.5h6"/>',
+  ],
+  'move-push-in': [
+    'Avance hacia el sujeto',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="8" y="3" width="8" height="5" rx="1"/><path d="M12 21V11M12 11l-4 4M12 11l4 4"/>',
+  ],
+  'move-pull-out': [
+    'Retroceso del sujeto',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="8" y="16" width="8" height="5" rx="1"/><path d="M12 13V3M12 3 8 7M12 3l4 4"/>',
+  ],
+  'move-tracking': [
+    'Seguimiento',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="17" cy="6" r="2"/><path d="M17 8v6M15 21l2-7 2 7M3 12h8M3 12l3-3M3 12l3 3"/>',
+  ],
+  'move-side-tracking': [
+    'Seguimiento lateral',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="12" cy="6" r="2"/><path d="M12 8v6M10 21l2-7 2 7M2 12h5m-2-2 2 2-2 2M22 12h-5m2-2-2 2 2 2"/>',
+  ],
+  'move-crane-up': [
+    'Grúa hacia arriba',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M4 21h8M8 21V9l9-5"/><rect x="15" y="3" width="6" height="4" rx="1"/><path d="M19 21v-8M19 13l-2.5 2.5M19 13l2.5 2.5"/>',
+  ],
+  'move-crane-down': [
+    'Grúa hacia abajo',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M4 21h8M8 21V9l9-5"/><rect x="15" y="3" width="6" height="4" rx="1"/><path d="M19 13v8M19 21l-2.5-2.5M19 21l2.5-2.5"/>',
+  ],
+  'move-pedestal-up': [
+    'Elevación vertical',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="7" y="10" width="10" height="6" rx="1.5"/><path d="M12 21v-5M12 8V3M12 3 9.5 5.5M12 3l2.5 2.5"/>',
+  ],
+  'move-pedestal-down': [
+    'Descenso vertical',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="7" y="8" width="10" height="6" rx="1.5"/><path d="M12 3v5M12 16v5M12 21l-2.5-2.5M12 21l2.5-2.5"/>',
+  ],
+  'move-handheld': [
+    'Cámara en mano',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="8" y="3" width="8" height="5" rx="1"/><path d="M3 15c2-4 3 4 5 0s3 4 5 0 3 4 5 0 2 2 3 0"/>',
+  ],
+  'move-drone-orbit': [
+    'Órbita de dron',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="12" cy="12" r="2"/><ellipse cx="12" cy="12" rx="9" ry="4.5"/><path d="M19.5 9.5l1.5 2-2.4.4"/>',
+  ],
+  'move-arc': [
+    'Arco alrededor del sujeto',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M4 17a9 9 0 0 1 16 0"/><path d="M20 17l-.5-3.5M20 17l-3.2-1"/><circle cx="12" cy="15" r="1.5"/>',
+  ],
+  'move-whip-pan': [
+    'Barrido rápido',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M3 8h14M3 12h18M3 16h14"/><path d="M21 12l-4-3M21 12l-4 3"/>',
+  ],
+  'move-rack-focus': [
+    'Cambio de foco',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="8" cy="11" r="4"/><circle cx="17" cy="11" r="3" stroke-dasharray="2 2"/><path d="M6 20h11M14 18l3 2-3 2"/>',
+  ],
+  'move-pov': [
+    'Punto de vista',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  ],
+  'move-snorricam': [
+    'Snorricam',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<circle cx="12" cy="5" r="2.5"/><path d="M12 8v7M8 11h8M10 21l2-6 2 6"/><rect x="10" y="9.5" width="4" height="3" rx=".7"/>',
+  ],
+  'move-robot-arm': [
+    'Brazo robótico',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<path d="M5 21h7M8 21v-6l7-6"/><circle cx="8" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><rect x="16" y="3" width="5" height="4" rx="1"/>',
+  ],
+  'move-dolly-zoom': [
+    'Dolly zoom',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="8" y="8" width="8" height="8"/><path d="M3 3l5 5M21 3l-5 5M3 21l5-5M21 21l-5-5"/>',
+  ],
+  'move-roll': [
+    'Giro sobre el eje',
+    'Selector de movimiento de cámara de un plano del largometraje',
+    '<rect x="5" y="7" width="14" height="10" rx="1.5" transform="rotate(-15 12 12)"/><path d="M19 4a9 9 0 0 1 2 5l-3-1"/>',
+  ],
+  palette: [
+    'Paleta de color',
+    'Selector de paleta de la escena del largometraje',
+    '<path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 1.5-2.2-.5-1.3.3-2.3 1.7-2.3H17a4 4 0 0 0 4-4c0-5-4-9.5-9-9.5Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/>',
+  ],
+  'transition-down': [
+    'Transición entre planos',
+    'Botón de transición de cada plano del guión: la unión con el plano anterior',
+    '<path d="M9.5 3h5v8.5H19L12 21 5 11.5h4.5V3Z" fill="currentColor" stroke-width="2.4"/>',
+  ],
+  'aperture-f16': [
+    'Apertura f/16',
+    'Selector de apertura de la escena del largometraje',
+    '<circle cx="12" cy="12" r="9"/><path d="M12 10.6L13.21 11.3L13.21 12.7L12 13.4L10.79 12.7L10.79 11.3Z"/><path d="M12 10.6L16.31 4.1M13.21 11.3L21 11.79M13.21 12.7L16.68 19.69M12 13.4L7.69 19.9M10.79 12.7L3 12.21M10.79 11.3L7.32 4.31"/>',
   ],
 });
 

@@ -490,7 +490,7 @@ function createCharacterOperations(dependencies) {
         limits = llmConfig.functionConfig(config, 'generate_character');
       const model = limits.model,
         info = openrouterModels.findModel(model);
-      if (!key && !llmConfig.isLocalModel(model))
+      if (!key && llmConfig.needsOpenRouterKey(model))
         throw security.fail('Configura OpenRouter en Inicio → Configuración.', 428);
       if (
         (imageData || attachmentData || galleryData.length) &&

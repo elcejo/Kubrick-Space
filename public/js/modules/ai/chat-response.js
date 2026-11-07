@@ -167,6 +167,7 @@ export function storyBookIntent(source) {
       text,
     );
   return act ||
+    /\brevisa\s+(?:la\s+)?(?:ortografia|gramatica|puntuacion)\b/.test(text) ||
     implied ||
     /\bquiero que\b[\s\S]*\b(?:mas largo|mas extensa?|mas larga|dure|duracion)\b/.test(text)
     ? 'edit'

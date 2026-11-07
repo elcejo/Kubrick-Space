@@ -111,7 +111,7 @@ function createCharacterImagePromptOperation({
       const limits = llmConfig.functionConfig(config, 'character_image_prompt'),
         model = limits.model,
         info = openrouterModels.findModel(model);
-      if (!key && !llmConfig.isLocalModel(model))
+      if (!key && llmConfig.needsOpenRouterKey(model))
         throw security.fail('Configura OpenRouter en Inicio → Configuración.', 428);
       const tool = {
         type: 'function',

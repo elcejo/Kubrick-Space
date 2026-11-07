@@ -92,7 +92,7 @@ function createCharacterVisualLibraryOperation(dependencies) {
       const limits = llmConfig.functionConfig(config, 'character_visual_library');
       const model = limits.model,
         info = openrouterModels.findModel(model);
-      if (!key && !llmConfig.isLocalModel(model))
+      if (!key && llmConfig.needsOpenRouterKey(model))
         throw security.fail('Configura OpenRouter en Inicio → Configuración.', 428);
       if (info?.inputModalities?.length && !info.inputModalities.includes('image'))
         throw security.fail(

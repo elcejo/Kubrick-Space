@@ -6,11 +6,25 @@ const {
   upgradeScreenplayDocument,
   screenplayShots,
   SCREENPLAY_SHOTS,
+  SCREENPLAY_SHOT_SECONDS,
   SCREENPLAY_VOICES,
 } = require('../../../public/js/contracts/screenplay.js');
 const { validateScenarioDocument, SCENARIO_FIELDS } = require('../../../public/js/contracts/scenario.js');
 const { validateFilmDocument, FILM_FRAME_OPTIONS } = require('../../../public/js/contracts/film.js');
-const { filmRecomposePrompt } = require('../../../public/js/contracts/film-prompt.js');
+const {
+  filmRecomposePrompt,
+  filmShotWithFraming,
+  parseFilmShotNote,
+} = require('../../../public/js/contracts/film-prompt.js');
+const {
+  FILM_OPTICS_KEYS,
+  filmOpticsOf,
+  isFilmOpticsChoice,
+} = require('../../../public/js/contracts/film-optics.js');
+const { isFilmPaletteChoice, filmPaletteColors } = require('../../../public/js/contracts/film-palettes.js');
+const { isFilmMovement, FILM_MOVEMENT_NAMES } = require('../../../public/js/contracts/film-movements.js');
+const { FILM_TRANSITION_NAMES } = require('../../../public/js/contracts/film-transitions.js');
+const { shotBlockProblem } = require('../../../public/js/contracts/screenplay-shot-format.js');
 const { calendarDate, compareCalendarDates } = require('../../../public/js/contracts/calendar-date.js');
 const { applyInlineOperation, INLINE_OPERATIONS } = require('./inline-marks.cjs');
 const {
@@ -75,11 +89,20 @@ function shot(value = {}) {
   if (value.type && !SCREENPLAY_SHOTS.includes(value.type))
     fail('Tipo de plano inválido: usa exactamente uno de ' + SCREENPLAY_SHOTS.join(', ') + '.');
   const seconds = value.seconds ?? 8;
-  if (typeof seconds !== 'number' || seconds < 1 || seconds > 10 || (seconds * 2) % 1)
-    fail('La duración debe estar entre 1 y 10 segundos en pasos de 0,5.');
+  if (!SCREENPLAY_SHOT_SECONDS.includes(seconds))
+    fail(
+      'La duración de un plano debe ser una de: ' +
+        SCREENPLAY_SHOT_SECONDS.join(', ') +
+        ' segundos (clips de H3).',
+    );
+  const camera = txt(value.camera || '', 1000).trim();
+  if (camera && !FILM_MOVEMENT_NAMES.includes(camera))
+    fail('El movimiento de cámara debe estar vacío o ser uno de: ' + FILM_MOVEMENT_NAMES.join(', ') + '.');
+  if (value.transition && !FILM_TRANSITION_NAMES.includes(value.transition))
+    fail('La transición debe estar vacía o ser una de: ' + FILM_TRANSITION_NAMES.join(', ') + '.');
   const marker = block(
     'shot',
-    `PLANO 1 — ${value.type || 'Plano general'}; ${txt(value.camera || '', 1000)}; ${seconds}s`,
+    `PLANO 1 — ${value.type || 'Plano general'}; ${camera ? camera + '; ' : ''}${seconds}s`,
   );
   const dialogues = value.dialogues === undefined ? [{}] : value.dialogues;
   if (!Array.isArray(dialogues)) fail('dialogues debe ser una lista (vacía si el plano no tiene diálogo).');
@@ -271,6 +294,13 @@ function timelineOperation(next, op) {
   syncStoryBookTimelineMetadata(next);
   return true;
 }
+/** True when the film is built from a linked screenplay: the movement and the transition of a shot are then the screenplay's. */
+const filmFromScreenplay = (project, film) =>
+  Boolean(film?.source) ||
+  (project?.ingredients || []).some(
+    (item) => item.active !== false && item.type === 'book' && item.importedProjectId,
+  );
+
 function applyElementPatch(project, document, operations, { maxOperations = 8, maxCharacters = 24000 } = {}) {
   if (
     !Array.isArray(operations) ||
@@ -307,6 +337,10 @@ function applyElementPatch(project, document, operations, { maxOperations = 8, m
         const scene = next.scenes.find((item) => item.id === op.id);
         if (!scene || scene.sourceRemoved) fail('El plano indicado no existe en el metraje.');
         const continuity = { ...scene.continuity };
+        if (op.mode !== undefined && op.mode !== continuity.mode && filmFromScreenplay(project, next))
+          fail(
+            'La transición viene del guión vinculado: cámbiala en el guión (el bloque transition del plano).',
+          );
         if (op.mode !== undefined) continuity.mode = op.mode;
         if (op.frame !== undefined) continuity.frame = op.frame === true;
         if (op.note !== undefined) {
@@ -319,13 +353,63 @@ function applyElementPatch(project, document, operations, { maxOperations = 8, m
         scene.prompt = filmRecomposePrompt(next, scene);
         continue;
       }
+      if (op.op === 'set_scene_framing') {
+        const scene = next.scenes.find((item) => item.id === op.id);
+        if (!scene || scene.sourceRemoved) fail('El plano indicado no existe en el metraje.');
+        if (!['', ...SCREENPLAY_SHOTS].includes(op.framing)) fail('Encuadre inválido.');
+        if (op.framing !== parseFilmShotNote(scene.shot).framing && filmFromScreenplay(project, next))
+          fail('El encuadre viene del guión vinculado: cámbialo en el guión.');
+        if (!filmFromScreenplay(project, next)) scene.shot = filmShotWithFraming(scene.shot, op.framing);
+        scene.prompt = filmRecomposePrompt(next, scene);
+        continue;
+      }
+      if (op.op === 'set_scene_movement') {
+        const scene = next.scenes.find((item) => item.id === op.id);
+        if (!scene || scene.sourceRemoved) fail('El plano indicado no existe en el metraje.');
+        if (!isFilmMovement(op.movement)) fail('Movimiento de cámara inválido.');
+        if (op.movement !== scene.movement && filmFromScreenplay(project, next))
+          fail('El movimiento de cámara viene del guión vinculado: cámbialo en el guión (camera del plano).');
+        scene.movement = op.movement;
+        scene.prompt = filmRecomposePrompt(next, scene);
+        continue;
+      }
+      if (op.op === 'set_scene_optics') {
+        const clip = next.scenes.find((item) => item.id === op.id);
+        if (!clip) fail('El clip indicado no existe en el metraje.');
+        const sceneId = clip.sourceSceneId;
+        const optics = { ...filmOpticsOf(next, sceneId) };
+        for (const key of FILM_OPTICS_KEYS)
+          if (op[key] !== undefined) {
+            if (!isFilmOpticsChoice(key, op[key])) fail('Opción de óptica inválida.');
+            optics[key] = op[key];
+          }
+        if (op.palette !== undefined) {
+          if (!isFilmPaletteChoice(op.palette)) fail('Paleta inválida.');
+          optics.palette = op.palette;
+        }
+        if (optics.palette === 'custom') {
+          const colors = filmPaletteColors(op.colors ?? optics.colors);
+          if (!colors) fail('Una paleta personalizada necesita de 1 a 12 colores #rrggbb.');
+          optics.colors = colors;
+        } else delete optics.colors;
+        next.optics = { ...(next.optics || {}) };
+        if ([...FILM_OPTICS_KEYS, 'palette'].every((key) => optics[key] === 'auto'))
+          delete next.optics[sceneId];
+        else next.optics[sceneId] = optics;
+        for (const scene of next.scenes)
+          if (scene.sourceSceneId === sceneId) scene.prompt = filmRecomposePrompt(next, scene);
+        continue;
+      }
       if (op.op === 'set_scene_prompt' || op.op === 'set_scene_frames') {
         const scene = next.scenes.find((item) => item.id === op.id);
         if (!scene || scene.sourceRemoved) fail('El plano indicado no existe en el metraje.');
         if (op.op === 'set_scene_frames') {
           if (!FILM_FRAME_OPTIONS.includes(op.frames))
             fail('La duración debe ser una de: ' + FILM_FRAME_OPTIONS.join(', ') + ' fotogramas.');
+          if (op.frames !== scene.frames && filmFromScreenplay(project, next))
+            fail('La duración viene del guión vinculado: cámbiala en el guión.');
           scene.frames = op.frames;
+          scene.prompt = filmRecomposePrompt(next, scene);
         } else {
           // As writing the prompt by hand does: the prompt is the author's, and the clip has to be approved again.
           const prompt = txt(op.prompt, 6000).trim();
@@ -511,6 +595,10 @@ function applyElementPatch(project, document, operations, { maxOperations = 8, m
       if (!node || protectedNode(node) || node.type === 'shot')
         fail('Elemento inexistente, técnico o protegido.');
       node.text = txt(op.text);
+      if (node.type === 'transition') {
+        const problem = shotBlockProblem('transition', node.text);
+        if (problem) fail(problem);
+      }
       node.html = markedText(node, node.text);
     } else if (op.op === 'set_shot') {
       if (node?.type !== 'shot') fail('Plano inexistente.');

@@ -1,7 +1,15 @@
 const { endpoint } = require('../transport/index.cjs');
+const { createLibrarySpace } = require('./space.cjs');
 const { createLibraryOperations } = require('./operations.cjs');
 module.exports = function registerProjectRoutes(app, dependencies) {
   const operations = createLibraryOperations(dependencies);
+  const space = createLibrarySpace(dependencies);
+  app.get('/api/library-space', endpoint(space.get));
+  app.post('/api/library-space/assets/:id/folders', endpoint(space.assign));
+  app.patch('/api/library-space/profile', endpoint(space.profile));
+  app.post('/api/library-space/folders', endpoint(space.create));
+  app.patch('/api/library-space/folders/:id', endpoint(space.update));
+  app.delete('/api/library-space/folders/:id', endpoint(space.remove));
   app.get('/api/projects', endpoint(operations.listProjects));
   app.get('/api/trash', endpoint(operations.listTrash));
   app.post('/api/trash/:id/restore', endpoint(operations.restoreProject));

@@ -273,6 +273,17 @@ const isModelId = (value) =>
   value.length <= 200 &&
   /^[A-Za-z0-9][A-Za-z0-9._:@/-]*$/.test(value);
 const isLocalModel = (value) => typeof value === 'string' && value.startsWith('local:');
+/** Text providers other than OpenRouter and the local engine: their model ids carry the provider as a prefix. */
+const EXTERNAL_TEXT_PROVIDERS = ['openai', 'gemini', 'replicate', 'opencode'];
+const providerOf = (value) => {
+  if (typeof value !== 'string') return 'openrouter';
+  if (value.startsWith('local:')) return 'local';
+  const prefix = value.split(':', 1)[0];
+  return value.includes(':') && EXTERNAL_TEXT_PROVIDERS.includes(prefix) ? prefix : 'openrouter';
+};
+const isExternalProviderModel = (value) => EXTERNAL_TEXT_PROVIDERS.includes(providerOf(value));
+/** True when running this model needs the OpenRouter key (not local, not a model of another connected provider). */
+const needsOpenRouterKey = (value) => providerOf(value) === 'openrouter';
 
 function normalize(raw = {}) {
   const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
@@ -447,6 +458,10 @@ module.exports = {
   PRO_MODEL,
   isModelId,
   isLocalModel,
+  providerOf,
+  isExternalProviderModel,
+  needsOpenRouterKey,
+  EXTERNAL_TEXT_PROVIDERS,
   CONTEXT_DESCRIPTIONS,
   PROMPT_DEFINITIONS,
   normalize,

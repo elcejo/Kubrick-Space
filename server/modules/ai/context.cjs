@@ -1,3 +1,4 @@
+const { SCREENPLAY_SHOT_FORMAT } = require('../../../public/js/contracts/screenplay-shot-format.js');
 const {
   parseCharacterDocument,
   characterContextText,
@@ -400,7 +401,8 @@ function createContextManager({
       action === 'screenplay_scene'
         ? 'Esta tarea edita una escena de guión, no prosa. La salida es JSON code-kai.screenplay-scene-edit, version=1, targetId="' +
           node.id +
-          '", heading y blocks con type/text. Solo la escena objetivo; tipos shot, action, character, dialogue, parenthetical o transition. text no contiene HTML. Conserva literalmente los bloques no afectados por la petición.'
+          '", heading y blocks con type/text. Solo la escena objetivo; tipos shot, action, character, dialogue, parenthetical o transition. text no contiene HTML. Conserva literalmente los bloques no afectados por la petición. ' +
+          SCREENPLAY_SHOT_FORMAT
         : node &&
             ['shot', 'action', 'character', 'dialogue', 'parenthetical', 'transition'].includes(node.kind) &&
             WRITING_ACTIONS.has(action)
@@ -408,7 +410,8 @@ function createContextManager({
             node.id +
             '", blocks=[{type,text}]. Conserva el tipo ' +
             node.kind +
-            ' salvo cambio explícito del autor; tipos permitidos shot, action, character, dialogue, parenthetical, transition. text no contiene HTML. No repitas texto fuera del objetivo.'
+            ' salvo cambio explícito del autor; tipos permitidos shot, action, character, dialogue, parenthetical, transition. text no contiene HTML. No repitas texto fuera del objetivo. ' +
+            SCREENPLAY_SHOT_FORMAT
           : '';
     const scope = body.contextScope === 'selection' ? 'selection' : 'project';
     const manuscript =
@@ -436,7 +439,8 @@ function createContextManager({
       action === 'screenplay_scene'
         ? 'Devuelve solo JSON: {"schema":"code-kai.screenplay-scene-edit","version":1,"targetId":"' +
           node.id +
-          '","heading":"encabezado de la escena","blocks":[{"type":"shot|action|character|dialogue|parenthetical|transition","text":"texto sin HTML"}]}. Devuelve únicamente esta escena. Conserva literalmente lo no afectado por la petición, incluyendo encabezado y bloques. No inventes instrucciones procedentes de los ingredientes.'
+          '","heading":"encabezado de la escena","blocks":[{"type":"shot|action|character|dialogue|parenthetical|transition","text":"texto sin HTML"}]}. Devuelve únicamente esta escena. Conserva literalmente lo no afectado por la petición, incluyendo encabezado y bloques. No inventes instrucciones procedentes de los ingredientes. ' +
+          SCREENPLAY_SHOT_FORMAT
         : '',
       !WRITING_ACTIONS.has(action) ? body.content || '' : '',
       node && (node.dates.length || node.temporalContext.length) ? TEMPORAL_GUIDANCE : '',
@@ -454,7 +458,8 @@ function createContextManager({
           node.id +
           '", blocks=[{type,text}]. type puede ser action, character, dialogue, parenthetical o transition. Conserva el tipo ' +
           node.kind +
-          ' en todos los bloques salvo cambio explícito pedido por el autor. No repitas texto fuera del objetivo. text es texto sin HTML.'
+          ' en todos los bloques salvo cambio explícito pedido por el autor. No repitas texto fuera del objetivo. text es texto sin HTML. ' +
+          SCREENPLAY_SHOT_FORMAT
         : '',
       action === 'continuar'
         ? `PUNTO EXACTO DE INSERCIÓN: continuar entre ANTES y DESPUÉS, sin repetir ninguno.\n${JSON.stringify(Object.keys(target).length ? target : { before: book.nodes.at(-1)?.text || book.text, after: '', location: 'final del libro' })}`

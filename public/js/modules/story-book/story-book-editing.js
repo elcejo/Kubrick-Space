@@ -1,3 +1,4 @@
+import { StoryBookBlockDrag } from './story-book-reorder.js';
 import { Mode } from '../../contracts/editor-mode.js';
 import { canMoveNarrativeBlock } from '../../contracts/narrative-operations.js';
 
@@ -17,14 +18,21 @@ import {
 export class StoryBookEditing {
   collapsedStoryNodes = new Set();
   storyTreeSurfaces = new WeakSet();
+  paragraphDrags = new Map();
   constructor(context) {
     this.context = context;
   }
+  stableHTML(container) {
+    return this.paragraphDrags.get(container)?.state?.originalHTML ?? container.innerHTML;
+  }
   destroy() {
+    for (const drag of this.paragraphDrags.values()) drag.destroy();
+    this.paragraphDrags.clear();
     this.collapsedStoryNodes.clear();
   }
   prepareStoryBookTree(container) {
     if (!container || !this.context.isStoryBook()) return;
+    this.paragraphDrags.get(container)?.cancel();
     this.ensureStoryBookElementIds();
     const blockTags = new Set(['P', 'BLOCKQUOTE', 'PRE', 'UL', 'OL', 'H4']);
     const directNodes = [...container.childNodes];
@@ -151,10 +159,7 @@ export class StoryBookEditing {
       if (content) content.hidden = collapsed;
       const toggle = storyBookRow(heading)?.querySelector('.story-book-tree-toggle');
       const dragHandle = storyBookRow(heading)?.querySelector('.story-book-tree-drag-handle');
-      if (dragHandle)
-        dragHandle.draggable =
-          dragHandle.dataset.storyDragKind === 'chapter' ||
-          (group.classList.contains('story-book-tree-theme') && collapsed);
+      if (dragHandle) dragHandle.draggable = false;
       if (toggle) {
         toggle.setAttribute('aria-expanded', String(!collapsed));
         toggle.setAttribute(
@@ -170,6 +175,15 @@ export class StoryBookEditing {
       return;
     }
     this.storyTreeSurfaces.add(container);
+    this.paragraphDrags.set(
+      container,
+      new StoryBookBlockDrag(container, {
+        enabled: () => this.context.mode === Mode.WYSIWYG && !container.closest('[inert]'),
+        changed: () => this.context.emitChange(),
+        refresh: () => this.context.timeline.requestGeometryRefresh(),
+        externalDrop: () => this.context.paragraphDropTarget,
+      }),
+    );
     const replaceCrossSelection = (text) => {
       const selection = window.getSelection();
       if (!selection?.rangeCount) return false;
@@ -207,10 +221,7 @@ export class StoryBookEditing {
       group.draggable = false;
       content.hidden = collapsed;
       const dragHandle = storyBookRow(heading).querySelector('.story-book-tree-drag-handle');
-      if (dragHandle)
-        dragHandle.draggable =
-          dragHandle.dataset.storyDragKind === 'chapter' ||
-          (group.classList.contains('story-book-tree-theme') && collapsed);
+      if (dragHandle) dragHandle.draggable = false;
       const id = heading.dataset.kaiId;
       if (id) {
         if (collapsed) this.collapsedStoryNodes.add(id);
@@ -267,6 +278,9 @@ export class StoryBookEditing {
         event.dataTransfer?.setData('application/x-kubrick-space-story-node', 'paragraph');
         event.dataTransfer?.setData('text/plain', `paragraph:${block.dataset.kaiId || ''}`);
         if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+        const row = storyBookRow(block),
+          rect = row.getBoundingClientRect();
+        event.dataTransfer?.setDragImage?.(row, event.clientX - rect.left, event.clientY - rect.top);
         block.classList.add('is-dragging');
       } else if (
         themeGroup &&
@@ -281,7 +295,7 @@ export class StoryBookEditing {
       }
     });
     container.addEventListener('dragend', (event) => {
-      event.target.closest?.('.is-dragging')?.classList.remove('is-dragging');
+      container.querySelectorAll('.is-dragging').forEach((node) => node.classList.remove('is-dragging'));
       event.target.closest?.('.is-link-dragging')?.classList.remove('is-link-dragging');
       this.context.clearStoryBookTimelineDragPreview();
     });
@@ -313,6 +327,7 @@ export class StoryBookEditing {
       if (!isStoryDrag) return;
       event.stopPropagation();
       event.preventDefault();
+      container.querySelectorAll('.is-dragging').forEach((node) => node.classList.remove('is-dragging'));
       const value = event.dataTransfer?.getData('text/plain') || '';
       const [kind, sourceId] = value.split(':');
       if (!sourceId) return;
@@ -375,7 +390,7 @@ export class StoryBookEditing {
       handle.type = 'button';
       handle.className = 'story-book-tree-drag-handle';
       handle.contentEditable = 'false';
-      handle.draggable = true;
+      handle.draggable = false;
       handle.dataset.storyDragKind = kind;
       handle.setAttribute('aria-label', label);
       handle.title = label;
@@ -393,13 +408,13 @@ export class StoryBookEditing {
           kind === 'chapter'
             ? 'Arrastrar capítulo'
             : kind === 'theme'
-              ? 'Arrastrar tema colapsado'
+              ? 'Arrastrar tema'
               : 'Arrastrar párrafo',
           kind,
         );
         host.append(handle);
       }
-      handle.draggable = kind !== 'theme' || Boolean(row.closest('.story-book-tree-theme.is-collapsed'));
+      handle.draggable = false;
     });
   }
   storyBookStructuralId(headingId, nodeType) {

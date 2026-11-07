@@ -218,10 +218,9 @@
   background-color: var(--color-bg, #0f0f14);
 }
 
-.canvas-wrapper--panning,
-.canvas-wrapper--panning * {
+/* Pointer capture owns the cursor. Never restyle every input/SVG/filter at pan boundaries. */
+.canvas-wrapper--panning {
   cursor: grabbing !important;
-  user-select: none !important;
 }
 
 .canvas-transform {

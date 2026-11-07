@@ -1,5 +1,13 @@
 import { renderIcon } from './icons.js';
 import { safeHTML } from './safe-html.js';
+const PROVIDER_LABELS = {
+  openrouter: 'OpenRouter',
+  replicate: 'Replicate',
+  openai: 'OpenAI',
+  gemini: 'Google Gemini',
+  opencode: 'OpenCode Zen',
+  local: 'Local',
+};
 /** Preserve provider groups in both native selects and the searchable presentation. */
 export function appendModelGroups(select, models, { image = false } = {}) {
   const groups = new Map();
@@ -9,14 +17,7 @@ export function appendModelGroups(select, models, { image = false } = {}) {
     const provider = model.provider || 'openrouter';
     if (!groups.has(provider)) {
       const group = select.ownerDocument.createElement('optgroup');
-      group.label =
-        {
-          openrouter: 'OpenRouter',
-          replicate: 'Replicate',
-          openai: 'OpenAI',
-          gemini: 'Google Gemini',
-          local: 'Local',
-        }[provider] || provider;
+      group.label = PROVIDER_LABELS[provider] || provider;
       groups.set(provider, group);
       select.append(group);
     }
@@ -33,7 +34,13 @@ let sequence = 0;
 
 export function enhanceSelect(
   select,
-  { searchable = true, placeholder = 'Selecciona una opción', allowEmpty = false, label = null } = {},
+  {
+    searchable = true,
+    placeholder = 'Selecciona una opción',
+    allowEmpty = false,
+    label = null,
+    placement = 'auto',
+  } = {},
 ) {
   if (controls.has(select)) return controls.get(select);
   const doc = select.ownerDocument;
@@ -57,6 +64,7 @@ export function enhanceSelect(
   trigger.append(name, arrow);
   const menu = doc.createElement('div');
   menu.className = 'kai-select__menu';
+  menu.classList.toggle('kai-select__menu--above', placement === 'top');
   menu.hidden = true;
   const topLayer = typeof menu.showPopover === 'function';
   if (topLayer) menu.setAttribute('popover', 'manual');
@@ -108,7 +116,7 @@ export function enhanceSelect(
     const menuWidth = Math.min(Math.max(rect.width, 220), width - 24);
     const below = top + height - rect.bottom - 12,
       above = rect.top - top - 12;
-    const upwards = below < 180 && above > below;
+    const upwards = placement === 'top' || (below < 180 && above > below);
     const maxHeight = Math.max(80, Math.min(320, upwards ? above : below));
     menu.style.width = `${menuWidth}px`;
     menu.style.maxHeight = `${maxHeight}px`;
@@ -332,14 +340,15 @@ export function enhanceSelect(
   return control;
 }
 
-function formatModelPrice(value) {
+function formatModelPrice(value, max) {
   if (value == null || value === '') return '—';
   const amount = Number(value);
   if (!Number.isFinite(amount)) return '—';
   const perMillion = amount * 1_000_000;
   if (perMillion === 0) return 'gratis';
-  if (perMillion < 0.01) return `$${perMillion.toFixed(4)}`;
-  return `$${perMillion.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  const amountText = perMillion.toLocaleString('en-US', { maximumFractionDigits: 4 });
+  const rangeEnd = max == null ? '' : '–' + formatModelPrice(max);
+  return '$' + amountText + rangeEnd;
 }
 function formatIntelligenceScore(value) {
   if (value == null || value === '') return '—';
@@ -351,7 +360,14 @@ export function createModelPicker(
   prompt,
   models,
   currentModel,
-  { onChange = null, onReload = null, benchmarkAvailable = false, image = false, grouped = false } = {},
+  {
+    onChange = null,
+    onReload = null,
+    benchmarkAvailable = false,
+    image = false,
+    grouped = false,
+    placement = 'auto',
+  } = {},
 ) {
   const picker = document.createElement('div');
   picker.className = 'settings-model-picker';
@@ -380,6 +396,7 @@ export function createModelPicker(
   trigger.append(triggerName, triggerMeta, triggerArrow);
   const popover = document.createElement('div');
   popover.className = 'settings-model-popover';
+  popover.classList.toggle('settings-model-popover--above', placement === 'top');
   popover.hidden = true;
   const toolbar = document.createElement('div');
   toolbar.className = 'settings-model-toolbar';
@@ -462,7 +479,14 @@ export function createModelPicker(
     }
   });
   sort.append(reload);
-  toolbar.append(search, sort);
+  // Provider filter: one button per provider present in the catalogue (Local, OpenRouter, Replicate, OpenAI, Gemini…).
+  let providerFilter = '';
+  const providerRow = document.createElement('div');
+  providerRow.className = 'settings-model-providers';
+  providerRow.setAttribute('role', 'group');
+  providerRow.setAttribute('aria-label', 'Filtrar por proveedor');
+  providerRow.hidden = true;
+  toolbar.append(search, sort, providerRow);
   const list = document.createElement('div');
   list.className = 'settings-model-list';
   list.setAttribute('role', 'listbox');
@@ -506,6 +530,29 @@ export function createModelPicker(
       (value) => typeof value === 'string' && /(?:^|[^a-z0-9])batch(?:$|[^a-z0-9])/i.test(value),
     );
   let catalogModels = [];
+  function syncProviders() {
+    const present = [...new Set(catalogModels.map((model) => model.provider || 'openrouter'))].sort(
+      (a, b) => Number(b === 'local') - Number(a === 'local') || a.localeCompare(b),
+    );
+    if (providerFilter && !present.includes(providerFilter)) providerFilter = '';
+    providerRow.replaceChildren();
+    providerRow.hidden = present.length < 2;
+    for (const provider of ['', ...present]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'settings-model-sort-button settings-model-provider-filter';
+      button.dataset.modelProvider = provider;
+      button.textContent = provider ? PROVIDER_LABELS[provider] || provider : 'Todos';
+      button.classList.toggle('is-active', provider === providerFilter);
+      button.setAttribute('aria-pressed', String(provider === providerFilter));
+      button.addEventListener('click', () => {
+        providerFilter = provider;
+        syncProviders();
+        renderOptions();
+      });
+      providerRow.append(button);
+    }
+  }
   const replaceCatalog = (items) => {
     catalogModels = Array.isArray(items)
       ? items.filter((model) => !isBatchModel(model)).map((model) => ({ ...model }))
@@ -523,6 +570,7 @@ export function createModelPicker(
         description: 'Modelo guardado en la configuración actual.',
       });
     }
+    syncProviders();
   };
   replaceCatalog(models);
   let sortMode = 'name';
@@ -567,6 +615,7 @@ export function createModelPicker(
     const filtered = catalogModels.filter((model) => {
       if (!matchesSearch(search.value, model)) return false;
       if (visionOnly && !sees(model)) return false;
+      if (providerFilter && (model.provider || 'openrouter') !== providerFilter) return false;
       if (!rankingCheckbox.checked) return true;
       const score = model.artificialAnalysis;
       return Boolean(
@@ -618,14 +667,7 @@ export function createModelPicker(
       if (grouped && provider !== previousGroup) {
         const heading = document.createElement('div');
         heading.className = 'settings-model-group';
-        heading.textContent =
-          {
-            openrouter: 'OpenRouter',
-            replicate: 'Replicate',
-            openai: 'OpenAI',
-            gemini: 'Google Gemini',
-            local: 'Local',
-          }[provider] || provider;
+        heading.textContent = PROVIDER_LABELS[provider] || provider;
         list.append(heading);
         previousGroup = provider;
       }
@@ -664,18 +706,29 @@ export function createModelPicker(
       info.append(identity, id);
       const pricing = document.createElement('span');
       pricing.className = 'settings-model-option-pricing';
+      const rates = model.pricing || {};
       const inputPrice = document.createElement('span');
-      inputPrice.textContent =
-        model.provider === 'local' ? 'En este equipo' : `Entrada ${formatModelPrice(model.pricing?.prompt)}`;
-      const outputPrice = document.createElement('span');
-      outputPrice.textContent =
-        model.provider === 'local' ? 'Sin API' : `Salida ${formatModelPrice(model.pricing?.completion)}`;
       if (image) {
         inputPrice.textContent = model.label?.split(' · ').slice(1).join(' · ') || 'Costo variable / imagen';
         pricing.append(inputPrice);
-      } else {
+      } else if (model.provider === 'local') {
+        inputPrice.textContent = 'En este equipo';
+        const outputPrice = document.createElement('span');
+        outputPrice.textContent = 'Sin API';
         pricing.append(inputPrice, outputPrice);
-        pricing.title = 'USD por millón de tokens';
+      } else if (rates.perSecond != null) {
+        inputPrice.textContent = '$' + rates.perSecond + ' / s';
+        pricing.append(inputPrice);
+        pricing.title = ['USD por segundo de ejecución', rates.note].filter(Boolean).join('. ');
+      } else if (rates.prompt != null || rates.completion != null) {
+        inputPrice.textContent = 'Entrada ' + formatModelPrice(rates.prompt, rates.promptMax);
+        const outputPrice = document.createElement('span');
+        outputPrice.textContent = 'Salida ' + formatModelPrice(rates.completion, rates.completionMax);
+        pricing.append(inputPrice, outputPrice);
+        pricing.title = ['USD por millón de tokens', rates.note].filter(Boolean).join('. ');
+      } else {
+        inputPrice.textContent = 'Precio no disponible';
+        pricing.append(inputPrice);
       }
       option.append(info, pricing);
       const select = () => {
@@ -698,20 +751,24 @@ export function createModelPicker(
     activate(
       [...list.querySelectorAll('[role=option]')].findIndex((option) => option.dataset.modelId === activeId),
     );
+    if (picker.classList.contains('is-open')) positionPopover();
   };
   const positionPopover = () => {
     if (!picker.classList.contains('is-open') || !popover.showPopover) return;
     const rect = trigger.getBoundingClientRect();
     const view = document.defaultView;
-    const width = Math.min(Math.max(rect.width, 390), view.innerWidth - 24);
+    const preferredWidth = placement === 'top' ? 600 : 390;
+    const width = Math.min(Math.max(rect.width, preferredWidth), view.innerWidth - 24);
     const below = view.innerHeight - rect.bottom - 18;
     const above = rect.top - 18;
-    const placeAbove = below < Math.min(360, above);
+    const placeAbove = placement === 'top' || below < Math.min(360, above);
     const height = Math.max(0, Math.min(360, placeAbove ? above : below));
     popover.style.left = `${Math.max(12, Math.min(rect.left, view.innerWidth - width - 12))}px`;
-    popover.style.top = `${placeAbove ? Math.max(12, rect.top - height - 6) : rect.bottom + 6}px`;
-    popover.style.width = `${width}px`;
-    popover.style.maxHeight = `${height}px`;
+    popover.style.width = width + 'px';
+    popover.style.maxHeight = height + 'px';
+    const actualHeight = Math.min(popover.getBoundingClientRect().height, height);
+    const top = placeAbove ? Math.max(12, rect.top - actualHeight - 6) : rect.bottom + 6;
+    popover.style.top = top + 'px';
   };
   const closePicker = (restoreFocus = false) => {
     picker.classList.remove('is-open');
@@ -739,6 +796,7 @@ export function createModelPicker(
       .forEach((other) => other.closeModelPicker?.());
     picker.classList.add('is-open');
     popover.hidden = false;
+    renderOptions();
     trigger.setAttribute('aria-expanded', 'true');
     if (popover.showPopover) {
       popover.setAttribute('popover', 'manual');
@@ -748,7 +806,6 @@ export function createModelPicker(
       document.defaultView.addEventListener('scroll', positionPopover, true);
       picker.closest('dialog')?.addEventListener('scroll', positionPopover, true);
     }
-    renderOptions();
     if (focusList) {
       list.focus();
       activate(fromEnd ? list.querySelectorAll('[role=option]').length - 1 : 0);
@@ -903,7 +960,7 @@ export function createModelPicker(
 }
 
 /** Rich catalog UI backed by the original select, shared by project and character controls. */
-export function enhanceModelSelect(select, { image = false, onReload = null } = {}) {
+export function enhanceModelSelect(select, { image = false, onReload = null, placement = 'auto' } = {}) {
   const root = document.createElement('div');
   root.className = 'kai-select kai-model-select';
   select.before(root);
@@ -938,6 +995,7 @@ export function enhanceModelSelect(select, { image = false, onReload = null } = 
           {
             image,
             onReload,
+            placement,
             grouped: true,
             benchmarkAvailable: models.some((model) => model.artificialAnalysis),
             onChange(model) {
